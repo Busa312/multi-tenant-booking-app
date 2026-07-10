@@ -1,0 +1,41 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Full history so turbo can diff against the base branch for
+          # affected-only filtering (system_design.md §3).
+          fetch-depth: 0
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: ".nvmrc"
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # PRs: only lint/typecheck/test/build packages actually affected by the
+      # diff against the PR base, so a CMS-only change doesn't rebuild api/public-site.
+      - name: Affected checks
+        if: github.event_name == 'pull_request'
+        run: pnpm exec turbo run lint typecheck test build --filter="...[origin/${{ github.base_ref }}]"
+
+      # main: always run the full set, so main is never green on a stale cache.
+      - name: Full checks
+        if: github.event_name == 'push'
+        run: pnpm exec turbo run lint typecheck test build

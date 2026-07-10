@@ -1,0 +1,48 @@
+name: Deploy API
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "apps/api/**"
+      - "packages/shared-types/**"
+      - "packages/api-client/**"
+      - "packages/config/**"
+      - "pnpm-lock.yaml"
+      - ".github/workflows/deploy-api.yml"
+
+concurrency:
+  # Never cancel a migration mid-flight — queue instead.
+  group: deploy-api-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  migrate-and-deploy:
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: ".nvmrc"
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Prisma generate
+        run: pnpm --filter @booking/api prisma:generate
+
+      # Runs as the Neon owner/migration role (never the booking_app runtime
+      # role — table owners bypass RLS, see docker/postgres/init.sql).
+      # Gates the deploy: if this fails, Render never gets triggered below.
+      - name: Run migrations against production DB
+        run: pnpm --filter @booking/api prisma:deploy
+        env:
+          DATABASE_URL: ${{ secrets.PROD_DATABASE_URL }}
+
+      - name: Trigger Render deploy
+        run: curl -f -X POST "${{ secrets.RENDER_DEPLOY_HOOK_API }}"
