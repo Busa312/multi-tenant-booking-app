@@ -42,4 +42,10 @@ export class AuthService {
 
     return { accessToken: await this.jwt.signAsync(claims) };
   }
+
+  async logout(): Promise<boolean> {
+    // Invalidate the JWT token on the client side (e.g., by removing it from local storage or cookies).
+    // Since JWTs are stateless, we cannot invalidate them server-side without additional mechanisms.
+    return true;
+  }
 }
