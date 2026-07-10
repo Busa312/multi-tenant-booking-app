@@ -1,0 +1,1 @@
+Act as an lead software engineer. look into [[system_design]] and [[Unified Requirements and Data Model]] for references. Don't build anyting that contradicts these files.

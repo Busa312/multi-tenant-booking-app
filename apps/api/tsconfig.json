@@ -1,0 +1,9 @@
+{
+  "extends": "@booking/config/tsconfig/nestjs.json",
+  "compilerOptions": {
+    "baseUrl": "./",
+    "incremental": true,
+    "outDir": "dist"
+  },
+  "exclude": ["node_modules", "dist", "generated", "prisma"]
+}

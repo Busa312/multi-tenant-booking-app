@@ -1,0 +1,32 @@
+{
+  "name": "multi-tenant-booking-app",
+  "private": true,
+  "engines": {
+    "node": ">=20"
+  },
+  "packageManager": "pnpm@10.27.0",
+  "scripts": {
+    "setup": "bash scripts/setup-env.sh && pnpm install",
+    "build": "turbo run build",
+    "dev": "turbo run dev",
+    "lint": "turbo run lint",
+    "test": "turbo run test",
+    "typecheck": "turbo run typecheck",
+    "db:migrate": "pnpm --filter @booking/api prisma:migrate",
+    "db:generate": "pnpm --filter @booking/api prisma:generate",
+    "db:seed": "pnpm --filter @booking/api prisma:seed"
+  },
+  "devDependencies": {
+    "turbo": "^2.1.3",
+    "typescript": "^5.6.3"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "@nestjs/core",
+      "@prisma/client",
+      "@prisma/engines",
+      "esbuild",
+      "prisma"
+    ]
+  }
+}

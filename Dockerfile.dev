@@ -1,0 +1,13 @@
+# Shared dev image for apps/api, apps/cms, apps/public-site — docker-compose.yml
+# builds this once and overrides `command` per service. Not used in production
+# (system_design.md §10: prod runs on a PaaS/orchestrator with its own images).
+FROM node:20-alpine
+
+RUN corepack enable && corepack prepare pnpm@10.27.0 --activate
+
+WORKDIR /workspace
+
+COPY . .
+RUN pnpm install --frozen-lockfile=false
+
+CMD ["sh", "-c", "echo 'override command in docker-compose.yml' && sleep infinity"]

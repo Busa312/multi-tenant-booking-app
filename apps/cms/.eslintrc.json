@@ -1,0 +1,9 @@
+{
+  "root": true,
+  "extends": ["../../packages/config/eslint/base.js", "plugin:react-hooks/recommended"],
+  "plugins": ["react-refresh"],
+  "env": { "browser": true },
+  "rules": {
+    "react-refresh/only-export-components": ["warn", { "allowConstantExport": true }]
+  }
+}

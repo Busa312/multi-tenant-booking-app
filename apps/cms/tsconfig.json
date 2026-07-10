@@ -1,0 +1,8 @@
+{
+  "extends": "@booking/config/tsconfig/react-library.json",
+  "compilerOptions": {
+    "composite": true,
+    "outDir": "dist"
+  },
+  "include": ["src"]
+}

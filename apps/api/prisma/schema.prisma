@@ -1,0 +1,174 @@
+// Data model mirrors "Unified Requirements and Data Model.md" exactly.
+// RLS policies + the partial-unique-owner-per-tenant constraint aren't expressible
+// in Prisma's schema DSL and are added by hand in prisma/migrations/0002_rls/migration.sql.
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum TenantUserRole {
+  owner
+  professional
+
+  @@map("tenant_user_role")
+}
+
+enum AppointmentStatus {
+  booked
+  cancelled
+  completed
+  no_show
+
+  @@map("appointment_status")
+}
+
+model Tenant {
+  id               String    @id @default(uuid()) @db.Uuid
+  name             String
+  timezone         String
+  subdomain        String    @unique
+  customDomain     String?   @unique @map("custom_domain")
+  domainVerifiedAt DateTime? @map("domain_verified_at") @db.Timestamptz
+  configJson       Json      @default("{}") @map("config_json")
+  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  professionals   Professional[]
+  tenantUsers     TenantUser[]
+  services        Service[]
+  serviceProfessionals ServiceProfessional[]
+  businessHours   BusinessHours[]
+  timeOff         TimeOff[]
+  appointments    Appointment[]
+
+  @@map("tenant")
+}
+
+model Professional {
+  id        String   @id @default(uuid()) @db.Uuid
+  tenantId  String   @map("tenant_id") @db.Uuid
+  name      String
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  tenant               Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenantUser           TenantUser?
+  serviceProfessionals ServiceProfessional[]
+  businessHours        BusinessHours[]
+  timeOff              TimeOff[]
+  appointments         Appointment[]
+
+  @@index([tenantId])
+  @@map("professional")
+}
+
+model TenantUser {
+  id             String         @id @default(uuid()) @db.Uuid
+  tenantId       String         @map("tenant_id") @db.Uuid
+  professionalId String?        @unique @map("professional_id") @db.Uuid
+  email          String
+  passwordHash   String         @map("password_hash")
+  role           TenantUserRole
+  isActive       Boolean        @default(true) @map("is_active")
+  createdAt      DateTime       @default(now()) @map("created_at") @db.Timestamptz
+  lastLoginAt    DateTime?      @map("last_login_at") @db.Timestamptz
+
+  tenant       Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  professional Professional? @relation(fields: [professionalId], references: [id], onDelete: SetNull)
+
+  @@unique([tenantId, email])
+  @@index([tenantId])
+  @@map("tenant_user")
+}
+
+model Service {
+  id              String   @id @default(uuid()) @db.Uuid
+  tenantId        String   @map("tenant_id") @db.Uuid
+  name            String
+  durationMinutes Int      @map("duration_minutes")
+  price           Decimal  @db.Decimal(10, 2)
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  tenant               Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  serviceProfessionals ServiceProfessional[]
+  appointments         Appointment[]
+
+  @@index([tenantId])
+  @@map("service")
+}
+
+model ServiceProfessional {
+  serviceId      String @map("service_id") @db.Uuid
+  professionalId String @map("professional_id") @db.Uuid
+  tenantId       String @map("tenant_id") @db.Uuid
+
+  tenant       Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  service      Service      @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  professional Professional @relation(fields: [professionalId], references: [id], onDelete: Cascade)
+
+  @@id([serviceId, professionalId])
+  @@index([tenantId])
+  @@map("service_professional")
+}
+
+model BusinessHours {
+  id             String  @id @default(uuid()) @db.Uuid
+  tenantId       String  @map("tenant_id") @db.Uuid
+  professionalId String? @map("professional_id") @db.Uuid
+  dayOfWeek      Int     @map("day_of_week") @db.SmallInt
+  startTime      DateTime @map("start_time") @db.Time
+  endTime        DateTime @map("end_time") @db.Time
+
+  tenant       Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  professional Professional? @relation(fields: [professionalId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([tenantId, professionalId, dayOfWeek])
+  @@map("business_hours")
+}
+
+model TimeOff {
+  id             String   @id @default(uuid()) @db.Uuid
+  tenantId       String   @map("tenant_id") @db.Uuid
+  professionalId String?  @map("professional_id") @db.Uuid
+  startAt        DateTime @map("start_at") @db.Timestamptz
+  endAt          DateTime @map("end_at") @db.Timestamptz
+  reason         String?
+
+  tenant       Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  professional Professional? @relation(fields: [professionalId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([tenantId, professionalId, startAt, endAt])
+  @@map("time_off")
+}
+
+model Appointment {
+  id                    String            @id @default(uuid()) @db.Uuid
+  tenantId              String            @map("tenant_id") @db.Uuid
+  serviceId             String            @map("service_id") @db.Uuid
+  professionalId        String?           @map("professional_id") @db.Uuid
+  userName              String            @map("user_name")
+  phoneNumber           String            @map("phone_number")
+  email                 String
+  startAt               DateTime          @map("start_at") @db.Timestamptz
+  endAt                 DateTime          @map("end_at") @db.Timestamptz
+  price                 Decimal           @db.Decimal(10, 2)
+  status                AppointmentStatus @default(booked)
+  accessTokenHash       String?           @unique @map("access_token_hash")
+  accessTokenExpiresAt  DateTime?         @map("access_token_expires_at") @db.Timestamptz
+  createdAt             DateTime          @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt             DateTime          @updatedAt @map("updated_at") @db.Timestamptz
+
+  tenant       Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  service      Service       @relation(fields: [serviceId], references: [id])
+  professional Professional? @relation(fields: [professionalId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, startAt])
+  @@index([tenantId, professionalId, startAt])
+  @@map("appointment")
+}
