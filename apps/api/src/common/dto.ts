@@ -158,3 +158,18 @@ export class LoginResponseDto {
 export class UpdateTenantConfigRequestDto {
   @ApiProperty({ type: TenantConfigDto }) configJson!: TenantConfigDto;
 }
+
+export class OnboardTenantRequestDto {
+  @ApiProperty() name!: string;
+  @ApiProperty({ description: "IANA tz, e.g. Asia/Tbilisi" }) timezone!: string;
+  @ApiProperty({ description: 'e.g. "acme" for acme.platform.ge' }) subdomain!: string;
+  @ApiProperty() ownerEmail!: string;
+  @ApiProperty() ownerPassword!: string;
+}
+
+export class OnboardTenantResponseDto {
+  @ApiProperty() tenantId!: string;
+  @ApiProperty() subdomain!: string;
+  @ApiProperty() ownerUserId!: string;
+  @ApiProperty() ownerEmail!: string;
+}

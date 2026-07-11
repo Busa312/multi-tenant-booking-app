@@ -8,6 +8,7 @@ import { RequestContextMiddleware } from "./tenant/request-context.middleware.js
 import { AuthModule } from "./auth/auth.module.js";
 import { PublicModule } from "./public/public.module.js";
 import { CmsModule } from "./cms/cms.module.js";
+import { OnboardingModule } from "./internal/onboarding.module.js";
 
 @Module({
   imports: [
@@ -18,6 +19,7 @@ import { CmsModule } from "./cms/cms.module.js";
     AuthModule,
     PublicModule,
     CmsModule,
+    OnboardingModule,
   ],
 })
 export class AppModule implements NestModule {

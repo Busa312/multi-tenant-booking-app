@@ -62,3 +62,21 @@ export interface UpsertBusinessHoursRequest {
   startTime: string;
   endTime: string;
 }
+
+// Staff-only tenant onboarding (system_design.md §9 step 2) — not called by
+// either frontend app. Formalizes the internal script that used to create
+// Tenant + owner TenantUser by hand into a guarded API endpoint.
+export interface OnboardTenantRequest {
+  name: string;
+  timezone: string;
+  subdomain: string;
+  ownerEmail: string;
+  ownerPassword: string;
+}
+
+export interface OnboardTenantResponse {
+  tenantId: string;
+  subdomain: string;
+  ownerUserId: string;
+  ownerEmail: string;
+}
