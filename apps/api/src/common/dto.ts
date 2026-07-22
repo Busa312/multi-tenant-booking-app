@@ -147,6 +147,7 @@ export class AvailabilitySlotDto {
 }
 
 export class LoginRequestDto {
+  @ApiProperty() subdomain!: string;
   @ApiProperty() email!: string;
   @ApiProperty() password!: string;
 }

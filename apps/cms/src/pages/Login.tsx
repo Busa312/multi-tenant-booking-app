@@ -5,6 +5,7 @@ import { useAuth } from "../auth/AuthContext.js";
 import { cmsApiClient } from "../lib/api.js";
 
 export function LoginPage() {
+  const [subdomain, setSubdomain] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -17,11 +18,11 @@ export function LoginPage() {
     setError(null);
     setSubmitting(true);
     try {
-      const { accessToken } = await cmsApiClient.login({ email, password });
+      const { accessToken } = await cmsApiClient.login({ subdomain, email, password });
       login(accessToken);
       navigate("/");
     } catch (err) {
-      setError(err instanceof ApiError ? "Invalid email or password" : "Something went wrong");
+      setError(err instanceof ApiError ? "Invalid business, email, or password" : "Something went wrong");
     } finally {
       setSubmitting(false);
     }
@@ -30,6 +31,10 @@ export function LoginPage() {
   return (
     <form onSubmit={handleSubmit}>
       <h1>Sign in</h1>
+      <label>
+        Business subdomain
+        <input type="text" value={subdomain} onChange={(e) => setSubdomain(e.target.value)} required />
+      </label>
       <label>
         Email
         <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />

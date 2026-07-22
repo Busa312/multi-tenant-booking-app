@@ -45,4 +45,23 @@ export class TenantResolverService {
   async invalidate(host: string): Promise<void> {
     await this.redis.client.del(DOMAIN_CACHE_KEY(host.toLowerCase()));
   }
+
+  /**
+   * Tenant.subdomain -> tenant_id, used by CMS login: the CMS is a single
+   * shared domain (no per-tenant Host to read), so the tenant identifier is
+   * submitted as a login form field instead. Not cached — login is nowhere
+   * near the request volume of public-site page loads.
+   */
+  async resolveTenantIdBySubdomain(subdomain: string): Promise<string> {
+    const tenant = await this.prisma.client.tenant.findUnique({
+      where: { subdomain: subdomain.toLowerCase() },
+      select: { id: true },
+    });
+
+    if (!tenant) {
+      throw new NotFoundException(`No tenant found for subdomain "${subdomain}"`);
+    }
+
+    return tenant.id;
+  }
 }

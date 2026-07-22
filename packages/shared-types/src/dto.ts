@@ -30,6 +30,7 @@ export interface ResendMagicLinkRequest {
 }
 
 export interface LoginRequest {
+  subdomain: string;
   email: string;
   password: string;
 }

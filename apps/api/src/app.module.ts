@@ -28,9 +28,8 @@ export class AppModule implements NestModule {
     // anything that calls TenantContextService.update (see its class comment).
     consumer.apply(RequestContextMiddleware).forRoutes({ path: "*", method: RequestMethod.ALL });
 
-    // /cms/* (minus login) gets tenant identity from JwtAuthGuard instead.
-    consumer
-      .apply(HostTenantMiddleware)
-      .forRoutes({ path: "public/*", method: RequestMethod.ALL }, { path: "cms/auth/login", method: RequestMethod.POST });
+    // /cms/* gets tenant identity from JwtAuthGuard, except login (no JWT
+    // yet) which resolves it from the submitted subdomain — see AuthService.
+    consumer.apply(HostTenantMiddleware).forRoutes({ path: "public/*", method: RequestMethod.ALL });
   }
 }
