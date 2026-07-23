@@ -1,14 +1,16 @@
+import { headers } from "next/headers";
 import { getPublicApiClient } from "@/lib/api";
+import { getCachedTenant } from "@/lib/tenant-config";
 
 export const revalidate = 60; // ISR — system_design.md §12: SEO-relevant pages are not client-rendered
 
 export default async function HomePage() {
-  const api = getPublicApiClient();
-  const [tenant, services] = await Promise.all([api.getTenant(), api.listServices()]);
+  const host = headers().get("host") ?? "";
+  const [tenant, services] = await Promise.all([getCachedTenant(host), getPublicApiClient().listServices()]);
 
   return (
     <main>
-      <h1>{tenant.name}</h1>
+      <h1 style={{ color: "var(--color-primary)" }}>{tenant.name}</h1>
       <ul>
         {services.map((service) => (
           <li key={service.id}>

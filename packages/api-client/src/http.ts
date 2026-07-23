@@ -25,7 +25,13 @@ export class HttpClient {
 
   async request<T>(path: string, init: RequestInit = {}): Promise<T> {
     const headers = new Headers(init.headers);
-    headers.set("Content-Type", "application/json");
+    // Only set when there's a body: Fastify's default JSON parser rejects a
+    // request that declares application/json but sends an empty body
+    // (FST_ERR_CTP_EMPTY_JSON_BODY, 400) — bodyless calls like post(path)
+    // with no argument would otherwise always fail before reaching the handler.
+    if (init.body !== undefined) {
+      headers.set("Content-Type", "application/json");
+    }
 
     const token = this.options.getAuthToken?.();
     if (token) {
