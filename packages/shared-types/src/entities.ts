@@ -6,6 +6,8 @@ export type TenantUserRole = "owner" | "professional";
 
 export type AppointmentStatus = "booked" | "cancelled" | "completed" | "no_show";
 
+import type { TenantColors } from "./colors";
+
 export interface Tenant {
   id: string;
   name: string;
@@ -19,11 +21,7 @@ export interface Tenant {
 
 export interface TenantConfig {
   logoUrl?: string;
-  colors?: {
-    primary?: string;
-    secondary?: string;
-    background?: string;
-  };
+  colors?: TenantColors;
   copy?: {
     tagline?: string;
     aboutText?: string;

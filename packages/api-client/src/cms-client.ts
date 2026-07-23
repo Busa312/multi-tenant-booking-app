@@ -9,6 +9,7 @@ import type {
   Professional,
   Service,
   Tenant,
+  TenantColors,
   TenantConfig,
   TimeOff,
   UpsertBusinessHoursRequest,
@@ -33,6 +34,14 @@ export class CmsApiClient {
 
   updateTenantConfig(configJson: TenantConfig) {
     return this.http.patch<Tenant>("/cms/tenant/config", { configJson });
+  }
+
+  updateTenantColors(colors: TenantColors) {
+    return this.http.patch<Tenant>("/cms/tenant/colors", { colors });
+  }
+
+  resetTenantColors() {
+    return this.http.post<Tenant>("/cms/tenant/colors/reset");
   }
 
   listServices() {

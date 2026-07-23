@@ -11,6 +11,7 @@ export class TenantConfigColorsDto {
   @ApiPropertyOptional() primary?: string;
   @ApiPropertyOptional() secondary?: string;
   @ApiPropertyOptional() background?: string;
+  @ApiPropertyOptional() text?: string;
 }
 
 export class TenantConfigCopyDto {
@@ -158,6 +159,10 @@ export class LoginResponseDto {
 
 export class UpdateTenantConfigRequestDto {
   @ApiProperty({ type: TenantConfigDto }) configJson!: TenantConfigDto;
+}
+
+export class UpdateTenantColorsRequestDto {
+  @ApiProperty({ type: TenantConfigColorsDto }) colors!: TenantConfigColorsDto;
 }
 
 export class OnboardTenantRequestDto {

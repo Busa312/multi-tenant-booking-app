@@ -5,6 +5,7 @@ import { ProfessionalsController } from "./professionals.controller.js";
 import { BusinessHoursController } from "./business-hours.controller.js";
 import { TimeOffController } from "./time-off.controller.js";
 import { AppointmentsController } from "./appointments.controller.js";
+import { RevalidationService } from "./revalidation.service.js";
 
 @Module({
   controllers: [
@@ -15,5 +16,6 @@ import { AppointmentsController } from "./appointments.controller.js";
     TimeOffController,
     AppointmentsController,
   ],
+  providers: [RevalidationService],
 })
 export class CmsModule {}

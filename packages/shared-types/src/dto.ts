@@ -1,5 +1,11 @@
 // Request/response DTO shapes shared between apps/api and its two clients.
 
+import type { TenantColors } from "./colors";
+
+export interface UpdateTenantColorsRequest {
+  colors: TenantColors;
+}
+
 export interface CreateAppointmentRequest {
   serviceIds: string[];
   professionalId?: string; // omitted = "any available"
