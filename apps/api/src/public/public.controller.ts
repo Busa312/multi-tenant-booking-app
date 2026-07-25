@@ -67,7 +67,12 @@ export class PublicController {
   @ApiOkResponse({ type: [ProfessionalDto] })
   async listProfessionals(): Promise<Professional[]> {
     const { tenantId } = this.tenantContext.current;
-    const professionals = await this.prisma.forTenant((tx) => tx.professional.findMany({ where: { tenantId } }));
+    // Deactivated professionals (R60) drop out of the booking flow but keep
+    // their past/future appointments untouched — this listing is the only
+    // thing that changes.
+    const professionals = await this.prisma.forTenant((tx) =>
+      tx.professional.findMany({ where: { tenantId, isActive: true } }),
+    );
     return professionals.map(serializeProfessional);
   }
 

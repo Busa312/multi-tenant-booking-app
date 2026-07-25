@@ -55,11 +55,16 @@ export class HttpClient {
       throw new ApiError(res.status, body);
     }
 
-    if (res.status === 204) {
+    // Nest's default success status for DELETE/PATCH is 200, not 204 — an
+    // empty body isn't limited to 204 (confirmed: DELETE /cms/professionals/:id
+    // returns 200 with content-length 0), so check the actual body rather
+    // than trusting the status code, or res.json() throws a SyntaxError on
+    // an empty response.
+    const text = await res.text();
+    if (!text) {
       return undefined as T;
     }
-
-    return (await res.json()) as T;
+    return JSON.parse(text) as T;
   }
 
   get<T>(path: string) {

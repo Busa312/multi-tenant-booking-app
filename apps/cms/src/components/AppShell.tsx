@@ -24,7 +24,12 @@ export function AppShell({ title, subtitle, tenantSubdomain, children }: AppShel
 
   const navItems: NavItem[] = [
     { to: "/", icon: "space_dashboard", label: "Dashboard" },
-    ...(role === "owner" ? [{ to: "/settings/colors", icon: "palette", label: "Public site colors" }] : []),
+    ...(role === "owner"
+      ? [
+          { to: "/professionals", icon: "diversity_3", label: "Professionals" },
+          { to: "/settings/colors", icon: "palette", label: "Public site colors" },
+        ]
+      : []),
   ];
 
   return (

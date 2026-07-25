@@ -4,14 +4,19 @@ import type {
   CreateProfessionalRequest,
   CreateServiceRequest,
   CreateTimeOffRequest,
+  InviteProfessionalRequest,
+  InviteProfessionalResponse,
   LoginRequest,
   LoginResponse,
-  Professional,
+  ProfessionalSummary,
   Service,
+  SetPasswordRequest,
   Tenant,
   TenantColors,
   TenantConfig,
   TimeOff,
+  UpcomingAppointmentCountResponse,
+  UpdateProfessionalRequest,
   UpsertBusinessHoursRequest,
 } from "@booking/shared-types";
 import { HttpClient, type ApiClientOptions } from "./http";
@@ -26,6 +31,10 @@ export class CmsApiClient {
 
   login(payload: LoginRequest) {
     return this.http.post<LoginResponse>("/cms/auth/login", payload);
+  }
+
+  setPassword(payload: SetPasswordRequest) {
+    return this.http.post<LoginResponse>("/cms/auth/set-password", payload);
   }
 
   getTenant() {
@@ -61,11 +70,27 @@ export class CmsApiClient {
   }
 
   listProfessionals() {
-    return this.http.get<Professional[]>("/cms/professionals");
+    return this.http.get<ProfessionalSummary[]>("/cms/professionals");
   }
 
   createProfessional(payload: CreateProfessionalRequest) {
-    return this.http.post<Professional>("/cms/professionals", payload);
+    return this.http.post<ProfessionalSummary>("/cms/professionals", payload);
+  }
+
+  updateProfessional(id: string, payload: UpdateProfessionalRequest) {
+    return this.http.patch<ProfessionalSummary>(`/cms/professionals/${id}`, payload);
+  }
+
+  deleteProfessional(id: string) {
+    return this.http.delete<void>(`/cms/professionals/${id}`);
+  }
+
+  getProfessionalUpcomingCount(id: string) {
+    return this.http.get<UpcomingAppointmentCountResponse>(`/cms/professionals/${id}/upcoming-count`);
+  }
+
+  inviteProfessional(id: string, payload: InviteProfessionalRequest) {
+    return this.http.post<InviteProfessionalResponse>(`/cms/professionals/${id}/invite`, payload);
   }
 
   listBusinessHours() {
@@ -74,6 +99,10 @@ export class CmsApiClient {
 
   upsertBusinessHours(payload: UpsertBusinessHoursRequest) {
     return this.http.post<BusinessHours>("/cms/business-hours", payload);
+  }
+
+  deleteBusinessHours(id: string) {
+    return this.http.delete<void>(`/cms/business-hours/${id}`);
   }
 
   listTimeOff() {

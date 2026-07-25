@@ -40,11 +40,43 @@ export class ProfessionalDto {
   @ApiProperty() id!: string;
   @ApiProperty() tenantId!: string;
   @ApiProperty() name!: string;
+  @ApiProperty() isActive!: boolean;
   @ApiProperty() createdAt!: string;
+}
+
+export class ProfessionalSummaryDto extends ProfessionalDto {
+  @ApiProperty({ type: [String] }) serviceIds!: string[];
+  @ApiProperty({ enum: ["none", "invited", "active"] }) cmsLoginStatus!: "none" | "invited" | "active";
+  @ApiProperty({ nullable: true, type: Boolean }) cmsLoginActive!: boolean | null;
 }
 
 export class CreateProfessionalRequestDto {
   @ApiProperty() name!: string;
+  @ApiPropertyOptional({ type: [String] }) serviceIds?: string[];
+}
+
+export class UpdateProfessionalRequestDto {
+  @ApiPropertyOptional() name?: string;
+  @ApiPropertyOptional() isActive?: boolean;
+  @ApiPropertyOptional({ type: [String] }) serviceIds?: string[];
+}
+
+export class InviteProfessionalRequestDto {
+  @ApiProperty() email!: string;
+}
+
+export class InviteProfessionalResponseDto {
+  @ApiProperty() tenantId!: string;
+  @ApiProperty() tenantUserId!: string;
+  @ApiProperty() email!: string;
+  @ApiProperty() token!: string;
+  @ApiProperty() expiresAt!: string;
+}
+
+export class SetPasswordRequestDto {
+  @ApiProperty() tenantId!: string;
+  @ApiProperty() token!: string;
+  @ApiProperty() password!: string;
 }
 
 export class ServiceDto {

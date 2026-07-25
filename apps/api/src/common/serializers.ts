@@ -26,6 +26,7 @@ export const serializeProfessional = (p: PrismaProfessional): Professional => ({
   id: p.id,
   tenantId: p.tenantId,
   name: p.name,
+  isActive: p.isActive,
   createdAt: p.createdAt.toISOString(),
 });
 

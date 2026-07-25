@@ -54,6 +54,42 @@ export interface CreateServiceRequest {
 
 export interface CreateProfessionalRequest {
   name: string;
+  serviceIds?: string[];
+}
+
+export interface UpdateProfessionalRequest {
+  name?: string;
+  isActive?: boolean;
+  serviceIds?: string[];
+}
+
+export interface UpcomingAppointmentCountResponse {
+  count: number;
+}
+
+export interface InviteProfessionalRequest {
+  email: string;
+}
+
+// Email delivery is stubbed (no provider integrated yet) — the API returns
+// the raw token/expiry so the CMS can display a copyable set-password link
+// instead of it actually being emailed.
+export interface InviteProfessionalResponse {
+  tenantId: string;
+  tenantUserId: string;
+  email: string;
+  token: string;
+  expiresAt: string;
+}
+
+// tenantId travels alongside the token because tenant_user is RLS-protected
+// (fails closed with no tenant context) — the token can't be looked up
+// without first scoping to a tenant, the same reason /cms/auth/login takes a
+// subdomain. tenantId isn't a secret; the token is the actual credential.
+export interface SetPasswordRequest {
+  tenantId: string;
+  token: string;
+  password: string;
 }
 
 export interface CreateTimeOffRequest {

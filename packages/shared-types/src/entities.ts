@@ -32,7 +32,23 @@ export interface Professional {
   id: string;
   tenantId: string;
   name: string;
+  isActive: boolean;
   createdAt: string;
+}
+
+export type CmsLoginStatus = "none" | "invited" | "active";
+
+// Returned by GET /cms/professionals only — the public professional listing
+// stays the plain Professional shape above.
+export interface ProfessionalSummary extends Professional {
+  serviceIds: string[];
+  cmsLoginStatus: CmsLoginStatus;
+  // TenantUser.isActive — independent of Professional.isActive (R60); null
+  // when cmsLoginStatus is "none" (no TenantUser row to toggle).
+  cmsLoginActive: boolean | null;
+  // R80: any appointment ever (not just upcoming) — when true, delete is
+  // unavailable client-side (not just rejected server-side), only deactivate.
+  hasAppointmentHistory: boolean;
 }
 
 export interface TenantUser {
