@@ -1,8 +1,11 @@
 import { Navigate, Route, Routes } from "react-router-dom";
 import { useAuth } from "./auth/AuthContext.js";
 import { LoginPage } from "./pages/Login.js";
+import { SetPasswordPage } from "./pages/SetPassword.js";
 import { DashboardPage } from "./pages/Dashboard.js";
 import { BrandingSettingsPage } from "./pages/BrandingSettings.js";
+import { ProfessionalsPage } from "./pages/Professionals.js";
+import { HoursPage } from "./pages/Hours.js";
 
 function RequireAuth({ children }: { children: React.ReactElement }) {
   const { token } = useAuth();
@@ -20,6 +23,7 @@ export function App() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/set-password/:tenantId/:token" element={<SetPasswordPage />} />
       <Route
         path="/"
         element={
@@ -34,6 +38,26 @@ export function App() {
           <RequireAuth>
             <RequireOwner>
               <BrandingSettingsPage />
+            </RequireOwner>
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/professionals"
+        element={
+          <RequireAuth>
+            <RequireOwner>
+              <ProfessionalsPage />
+            </RequireOwner>
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/hours"
+        element={
+          <RequireAuth>
+            <RequireOwner>
+              <HoursPage />
             </RequireOwner>
           </RequireAuth>
         }

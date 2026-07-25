@@ -1,5 +1,5 @@
-import { Body, Controller, ForbiddenException, Get, Post, UseGuards } from "@nestjs/common";
-import { ApiBearerAuth, ApiBody, ApiOkResponse, ApiTags } from "@nestjs/swagger";
+import { Body, Controller, Delete, ForbiddenException, Get, Param, Post, UseGuards } from "@nestjs/common";
+import { ApiBearerAuth, ApiBody, ApiOkResponse, ApiParam, ApiTags } from "@nestjs/swagger";
 import type { BusinessHours, UpsertBusinessHoursRequest } from "@booking/shared-types";
 import { PrismaService } from "../prisma/prisma.service.js";
 import { TenantContextService } from "../tenant/tenant-context.service.js";
@@ -70,5 +70,19 @@ export class BusinessHoursController {
         startTime: toHhMm(row.startTime),
         endTime: toHhMm(row.endTime),
       }));
+  }
+
+  @Delete(":id")
+  @ApiParam({ name: "id" })
+  async remove(@Param("id") id: string): Promise<void> {
+    const { tenantId, role, professionalId: ownProfessionalId } = this.tenantContext.current;
+
+    await this.prisma.forTenant(async (tx) => {
+      const existing = await tx.businessHours.findUniqueOrThrow({ where: { id, tenantId } });
+      if (role === "professional" && existing.professionalId !== ownProfessionalId) {
+        throw new ForbiddenException("professional logins may only remove their own hours");
+      }
+      await tx.businessHours.delete({ where: { id, tenantId } });
+    });
   }
 }

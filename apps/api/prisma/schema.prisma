@@ -53,6 +53,7 @@ model Professional {
   id        String   @id @default(uuid()) @db.Uuid
   tenantId  String   @map("tenant_id") @db.Uuid
   name      String
+  isActive  Boolean  @default(true) @map("is_active")
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
 
   tenant               Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
@@ -67,15 +68,20 @@ model Professional {
 }
 
 model TenantUser {
-  id             String         @id @default(uuid()) @db.Uuid
-  tenantId       String         @map("tenant_id") @db.Uuid
-  professionalId String?        @unique @map("professional_id") @db.Uuid
-  email          String
-  passwordHash   String         @map("password_hash")
-  role           TenantUserRole
-  isActive       Boolean        @default(true) @map("is_active")
-  createdAt      DateTime       @default(now()) @map("created_at") @db.Timestamptz
-  lastLoginAt    DateTime?      @map("last_login_at") @db.Timestamptz
+  id                   String         @id @default(uuid()) @db.Uuid
+  tenantId             String         @map("tenant_id") @db.Uuid
+  professionalId       String?        @unique @map("professional_id") @db.Uuid
+  email                String
+  passwordHash         String         @map("password_hash")
+  role                 TenantUserRole
+  isActive             Boolean        @default(true) @map("is_active")
+  // Set on invite (R50), cleared once the professional sets a real password.
+  // Hashed (sha256, not bcrypt — a high-entropy random token, not a
+  // low-entropy secret, so bcrypt's deliberate slowness buys nothing here).
+  inviteTokenHash      String?        @unique @map("invite_token_hash")
+  inviteTokenExpiresAt DateTime?      @map("invite_token_expires_at") @db.Timestamptz
+  createdAt            DateTime       @default(now()) @map("created_at") @db.Timestamptz
+  lastLoginAt          DateTime?      @map("last_login_at") @db.Timestamptz
 
   tenant       Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   professional Professional? @relation(fields: [professionalId], references: [id], onDelete: SetNull)
