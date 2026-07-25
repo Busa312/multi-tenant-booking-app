@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import { Link } from "react-router-dom";
 import type { Tenant, TenantColors } from "@booking/shared-types";
 import { DEFAULT_TENANT_COLORS, isValidColor, meetsWcagAA } from "@booking/shared-types";
 import { ApiError } from "@booking/api-client";
 import { cmsApiClient } from "../lib/api.js";
+import { AppShell } from "../components/AppShell.js";
 
 type ColorField = keyof TenantColors;
 
@@ -112,77 +112,148 @@ export function BrandingSettingsPage() {
   }
 
   const contrastRatioOk = meetsWcagAA(colors.text, colors.background);
+  const previewHost = previewOrigin?.replace(/^https?:\/\//, "");
 
   return (
-    <div>
-      <p>
-        <Link to="/">← Back to dashboard</Link>
-      </p>
-      <h1>Public site colors</h1>
+    <AppShell
+      title="Public website"
+      subtitle="Style the site your clients book from"
+      tenantSubdomain={tenant?.subdomain}
+    >
       {!tenant && <p>Loading…</p>}
       {tenant && (
-        <form onSubmit={handleSubmit}>
-          {FIELDS.map(({ key, label }) => (
-            <div key={key}>
-              <label>
-                {label}
-                <input
-                  type="color"
-                  value={isValidColor(colors[key]) && HEX_ONLY.test(colors[key]) ? colors[key] : "#000000"}
-                  onChange={(e) => handleChange(key, e.target.value)}
-                />
-                <input
-                  type="text"
-                  value={colors[key]}
-                  onChange={(e) => handleChange(key, e.target.value)}
-                  placeholder={DEFAULT_TENANT_COLORS[key]}
-                />
-              </label>
-              {fieldErrors[key] && <p role="alert">{fieldErrors[key]}</p>}
+        <div className="fade-up" style={{ display: "grid", gridTemplateColumns: "320px 1fr", gap: "22px", alignItems: "start" }}>
+          <form onSubmit={handleSubmit} className="card" style={{ position: "sticky", top: "90px" }}>
+            <div style={{ fontWeight: 700, fontSize: "15px", marginBottom: "3px" }}>Public site style</div>
+            <div style={{ fontSize: "12.5px", color: "var(--ink-soft)", marginBottom: "20px" }}>
+              {previewHost ? `Changes preview live at ${previewHost}` : "Colors apply to your public booking site"}
             </div>
-          ))}
 
-          {!contrastRatioOk && (
-            <p role="status">
-              Warning: the selected text/background combination doesn&apos;t meet WCAG AA contrast. You can still
-              save, but some visitors may have trouble reading the site.
-            </p>
-          )}
+            <div className="eyebrow">Colors</div>
+            <div style={{ marginBottom: "22px" }}>
+              {FIELDS.map(({ key, label }) => (
+                <div className="field" key={key}>
+                  <label className="field-label">{label}</label>
+                  <div style={{ display: "flex", gap: "8px" }}>
+                    <input
+                      type="color"
+                      value={isValidColor(colors[key]) && HEX_ONLY.test(colors[key]) ? colors[key] : "#000000"}
+                      onChange={(e) => handleChange(key, e.target.value)}
+                      style={{
+                        width: "44px",
+                        height: "40px",
+                        flex: "none",
+                        border: "1px solid var(--border)",
+                        borderRadius: "8px",
+                        background: "none",
+                        padding: "2px",
+                        cursor: "pointer",
+                      }}
+                    />
+                    <input
+                      type="text"
+                      className="input"
+                      value={colors[key]}
+                      onChange={(e) => handleChange(key, e.target.value)}
+                      placeholder={DEFAULT_TENANT_COLORS[key]}
+                    />
+                  </div>
+                  {fieldErrors[key] && (
+                    <p className="alert alert-error" role="alert" style={{ marginTop: "6px", marginBottom: 0 }}>
+                      {fieldErrors[key]}
+                    </p>
+                  )}
+                </div>
+              ))}
+            </div>
 
-          {saveError && <p role="alert">{saveError}</p>}
-          {savedAt && <p role="status">Saved.</p>}
+            {!contrastRatioOk && (
+              <p className="alert alert-warning" role="status">
+                The selected text/background combination doesn&apos;t meet WCAG AA contrast. You can still save, but
+                some visitors may have trouble reading the site.
+              </p>
+            )}
+            {saveError && (
+              <p className="alert alert-error" role="alert">
+                {saveError}
+              </p>
+            )}
+            {savedAt && (
+              <p className="alert alert-success" role="status">
+                Saved.
+              </p>
+            )}
 
-          <div style={{ marginTop: "1rem" }}>
-            <button type="submit" disabled={saving || resetting}>
+            <button type="submit" className="btn btn-primary btn-full" disabled={saving || resetting}>
               {saving ? "Saving…" : "Save colors"}
             </button>
-            <button type="button" onClick={handleReset} disabled={saving || resetting}>
+            <button
+              type="button"
+              className="btn btn-secondary btn-full"
+              onClick={handleReset}
+              disabled={saving || resetting}
+              style={{ marginTop: "10px" }}
+            >
               {resetting ? "Resetting…" : "Reset to default"}
             </button>
-          </div>
-        </form>
-      )}
+          </form>
 
-      {tenant && (
-        <section aria-label="Live preview" style={{ marginTop: "1.5rem" }}>
-          <p>
-            Live preview — <code>{tenant.subdomain}</code> (updates as you edit, before saving)
-          </p>
           {previewOrigin ? (
-            <iframe
-              ref={iframeRef}
-              key={previewOrigin}
-              src={previewOrigin}
-              title="Public site preview"
-              onLoad={() => setPreviewReady(true)}
-              style={{ width: "100%", height: "480px", border: "1px solid #ccc" }}
-            />
+            <div
+              style={{
+                border: "1px solid var(--border)",
+                borderRadius: "16px",
+                overflow: "hidden",
+                background: "var(--surface)",
+                boxShadow: "0 18px 40px -24px rgba(43, 38, 32, .4)",
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "8px",
+                  padding: "9px 14px",
+                  background: "var(--surface-2)",
+                  borderBottom: "1px solid var(--border)",
+                }}
+              >
+                <span style={{ width: "11px", height: "11px", borderRadius: "50%", background: "#e3ccc4" }} />
+                <span style={{ width: "11px", height: "11px", borderRadius: "50%", background: "#e6dcc4" }} />
+                <span style={{ width: "11px", height: "11px", borderRadius: "50%", background: "#cfe0cf" }} />
+                <div
+                  style={{
+                    marginLeft: "10px",
+                    fontSize: "12px",
+                    color: "var(--ink-soft)",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "6px",
+                  }}
+                >
+                  <span className="ms" style={{ fontSize: "14px" }}>
+                    lock
+                  </span>
+                  {previewHost}
+                </div>
+              </div>
+              <iframe
+                ref={iframeRef}
+                key={previewOrigin}
+                src={previewOrigin}
+                title="Public site preview"
+                onLoad={() => setPreviewReady(true)}
+                style={{ width: "100%", height: "620px", border: "none", display: "block" }}
+              />
+            </div>
           ) : (
-            <p role="alert">Preview unavailable — VITE_PUBLIC_SITE_BASE_DOMAIN is not configured.</p>
+            <p className="alert alert-error" role="alert">
+              Preview unavailable — VITE_PUBLIC_SITE_BASE_DOMAIN is not configured.
+            </p>
           )}
-        </section>
+        </div>
       )}
-    </div>
+    </AppShell>
   );
 }
 
