@@ -1,0 +1,12 @@
+.row {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 7px 0;
+  font-size: 13.5px;
+}
+.row input {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+}

@@ -1,13 +1,16 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
 import type { Tenant } from "@booking/shared-types";
 import { cmsApiClient } from "../lib/api.js";
 import { useAuth } from "../auth/AuthContext.js";
+import { useI18n } from "../i18n/I18nContext.js";
 import { AppShell } from "../components/AppShell.js";
+import { ButtonLink, Card, Eyebrow, Icon } from "../components/ui/index.js";
+import styles from "./Dashboard.module.css";
 
 export function DashboardPage() {
   const [tenant, setTenant] = useState<Tenant | null>(null);
   const { role } = useAuth();
+  const { t } = useI18n();
 
   useEffect(() => {
     cmsApiClient.getTenant().then(setTenant);
@@ -15,25 +18,21 @@ export function DashboardPage() {
 
   return (
     <AppShell
-      title={tenant ? `Welcome back` : "Loading…"}
+      title={tenant ? t("dashboard.welcome") : t("common.loading")}
       subtitle={tenant ? tenant.name : undefined}
       tenantSubdomain={tenant?.subdomain}
     >
       <div className="fade-up">
-        <div className="card" style={{ maxWidth: "560px" }}>
-          <div className="eyebrow">Getting around</div>
-          <p style={{ margin: "0 0 12px", color: "var(--ink-soft)", lineHeight: 1.6 }}>
-            Services, professionals, hours, and appointment management land here as they're built out.
-          </p>
+        <Card className={styles.card}>
+          <Eyebrow>{t("dashboard.eyebrow")}</Eyebrow>
+          <p className={styles.intro}>{t("dashboard.intro")}</p>
           {role === "owner" && (
-            <Link to="/settings/colors" className="btn btn-secondary" style={{ display: "inline-flex" }}>
-              <span className="ms" style={{ fontSize: "19px", color: "var(--accent)" }}>
-                palette
-              </span>
-              Edit public site colors
-            </Link>
+            <ButtonLink to="/settings/colors" variant="secondary" className={styles.cta}>
+              <Icon name="palette" size={19} color="var(--accent)" />
+              {t("dashboard.editColors")}
+            </ButtonLink>
           )}
-        </div>
+        </Card>
       </div>
     </AppShell>
   );

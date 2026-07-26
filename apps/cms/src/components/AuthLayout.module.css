@@ -1,0 +1,91 @@
+.screen {
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: 1.05fr 0.95fr;
+}
+
+/* ---------- decorative art panel (hidden on narrow viewports) ---------- */
+
+.art {
+  position: relative;
+  display: none;
+  overflow: hidden;
+  background: linear-gradient(160deg, #3a2f28, #26201b);
+}
+/* Below the art breakpoint, drop to a single column so the form panel fills
+   the width instead of leaving the (hidden) art track empty. */
+@media (max-width: 859px) {
+  .screen {
+    grid-template-columns: 1fr;
+  }
+}
+@media (min-width: 860px) {
+  .art {
+    display: block;
+  }
+}
+.art::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image: repeating-linear-gradient(135deg, rgba(255, 255, 255, 0.045) 0 2px, transparent 2px 22px);
+}
+.artBrand {
+  position: absolute;
+  left: 56px;
+  top: 52px;
+}
+.artCopy {
+  position: absolute;
+  left: 56px;
+  right: 56px;
+  bottom: 64px;
+  color: #f4ece6;
+}
+.artHeadline {
+  font-family: var(--font-display);
+  font-size: 40px;
+  line-height: 1.08;
+  font-weight: 500;
+}
+.artSub {
+  margin-top: 18px;
+  font-size: 15px;
+  color: rgba(244, 236, 230, 0.72);
+  max-width: 430px;
+  line-height: 1.6;
+}
+
+/* ---------- form panel ---------- */
+
+.formWrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 28px;
+  background: var(--surface-2);
+}
+.lang {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+}
+.form {
+  width: 100%;
+  max-width: 392px;
+}
+.formBrand {
+  margin-bottom: 30px;
+}
+.title {
+  font-family: var(--font-display);
+  font-size: 30px;
+  font-weight: 500;
+  margin: 0 0 6px;
+}
+.subtitle {
+  margin: 0 0 26px;
+  color: var(--ink-soft);
+  font-size: 14px;
+}
