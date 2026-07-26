@@ -1,0 +1,11 @@
+.card {
+  max-width: 560px;
+}
+.intro {
+  margin: 0 0 12px;
+  color: var(--ink-soft);
+  line-height: 1.6;
+}
+.cta {
+  display: inline-flex;
+}

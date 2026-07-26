@@ -2,7 +2,10 @@ import { useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { ApiError } from "@booking/api-client";
 import { useAuth } from "../auth/AuthContext.js";
+import { useI18n } from "../i18n/I18nContext.js";
 import { cmsApiClient } from "../lib/api.js";
+import { AuthLayout } from "../components/AuthLayout.js";
+import { Alert, Button, Field, Icon, InputGroup, TextInput } from "../components/ui/index.js";
 
 const PUBLIC_SITE_BASE_DOMAIN = import.meta.env.VITE_PUBLIC_SITE_BASE_DOMAIN as string | undefined;
 
@@ -13,6 +16,7 @@ export function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const { login } = useAuth();
+  const { t } = useI18n();
   const navigate = useNavigate();
 
   async function handleSubmit(e: FormEvent) {
@@ -24,95 +28,60 @@ export function LoginPage() {
       login(accessToken);
       navigate("/");
     } catch (err) {
-      setError(err instanceof ApiError ? "Invalid business, email, or password" : "Something went wrong");
+      setError(t(err instanceof ApiError ? "login.errorInvalid" : "common.somethingWrong"));
     } finally {
       setSubmitting(false);
     }
   }
 
   return (
-    <div className="login-screen">
-      <div className="login-art">
-        <div className="login-art-brand">
-          <span className="ms">content_cut</span>
-          <span>Booking CMS</span>
-        </div>
-        <div className="login-art-copy">
-          <div className="login-art-headline">The chair is booked. The rest runs itself.</div>
-          <div className="login-art-sub">
-            Bookings, your team, your services, and your public site — one calm place to run the salon.
-          </div>
-        </div>
-      </div>
+    <AuthLayout
+      headline={t("login.artHeadline")}
+      artSub={t("login.artSub")}
+      title={t("login.title")}
+      subtitle={t("login.subtitle")}
+      onSubmit={handleSubmit}
+    >
+      <Field label={t("login.workspaceLabel")} htmlFor="subdomain">
+        <InputGroup
+          id="subdomain"
+          type="text"
+          value={subdomain}
+          onChange={(e) => setSubdomain(e.target.value)}
+          placeholder={t("login.workspacePlaceholder")}
+          required
+          suffix={PUBLIC_SITE_BASE_DOMAIN ? `.${PUBLIC_SITE_BASE_DOMAIN}` : undefined}
+        />
+      </Field>
 
-      <div className="login-form-wrap">
-        <form className="login-form fade-up" onSubmit={handleSubmit}>
-          <div className="login-form-brand">
-            <span className="ms">content_cut</span>
-            <span>Booking CMS</span>
-          </div>
-          <h1 className="login-title">Sign in to your studio</h1>
-          <p className="login-subtitle">Enter your salon workspace to manage bookings.</p>
+      <Field label={t("login.emailLabel")} htmlFor="email">
+        <TextInput
+          id="email"
+          type="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          placeholder={t("login.emailPlaceholder")}
+          required
+        />
+      </Field>
 
-          <label className="field-label" htmlFor="subdomain">
-            Salon workspace
-          </label>
-          <div className="input-group" style={{ marginBottom: "16px" }}>
-            <input
-              id="subdomain"
-              type="text"
-              value={subdomain}
-              onChange={(e) => setSubdomain(e.target.value)}
-              placeholder="your-salon"
-              required
-            />
-            {PUBLIC_SITE_BASE_DOMAIN && <span className="input-group-suffix">.{PUBLIC_SITE_BASE_DOMAIN}</span>}
-          </div>
+      <Field label={t("login.passwordLabel")} htmlFor="password">
+        <TextInput
+          id="password"
+          type="password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          placeholder={t("common.passwordPlaceholder")}
+          required
+        />
+      </Field>
 
-          <label className="field-label" htmlFor="email">
-            Email
-          </label>
-          <input
-            id="email"
-            type="email"
-            className="input"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="you@salon.com"
-            required
-            style={{ marginBottom: "16px" }}
-          />
+      {error && <Alert>{error}</Alert>}
 
-          <div className="field-row">
-            <label className="field-label" htmlFor="password" style={{ marginBottom: 0 }}>
-              Password
-            </label>
-          </div>
-          <input
-            id="password"
-            type="password"
-            className="input"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            placeholder="••••••••"
-            required
-            style={{ marginBottom: "22px" }}
-          />
-
-          {error && (
-            <p className="alert alert-error" role="alert">
-              {error}
-            </p>
-          )}
-
-          <button type="submit" className="btn btn-primary btn-full" disabled={submitting}>
-            {submitting ? "Signing in…" : "Sign in"}
-            <span className="ms" style={{ fontSize: "19px" }}>
-              arrow_forward
-            </span>
-          </button>
-        </form>
-      </div>
-    </div>
+      <Button type="submit" fullWidth disabled={submitting}>
+        {submitting ? t("login.submitting") : t("login.submit")}
+        <Icon name="arrow_forward" size={19} />
+      </Button>
+    </AuthLayout>
   );
 }

@@ -1,0 +1,20 @@
+.alert {
+  border-radius: 11px;
+  padding: 12px 14px;
+  font-size: 13px;
+  margin: 0 0 16px;
+  line-height: 1.5;
+}
+.error {
+  background: var(--danger-bg);
+  color: var(--danger);
+}
+.warning {
+  background: var(--warning-bg);
+  color: var(--warning-fg);
+  border: 1px solid var(--warning-border);
+}
+.success {
+  color: #3f6b4a;
+  background: #e8f1ea;
+}

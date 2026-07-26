@@ -1,0 +1,53 @@
+.toolbar {
+  display: flex;
+  align-items: center;
+  margin-bottom: 18px;
+}
+/* The data table has too many columns to reflow gracefully; below its natural
+   width it scrolls horizontally inside this container so the page body never
+   overflows. */
+.tableScroll {
+  overflow-x: auto;
+}
+.table {
+  min-width: 860px;
+}
+.count {
+  color: var(--ink-soft);
+  font-size: 13px;
+}
+.add {
+  margin-left: auto;
+}
+.name {
+  font-weight: 600;
+}
+.services {
+  font-size: 13px;
+  color: var(--ink-soft);
+}
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+.serviceList {
+  margin-bottom: 6px;
+}
+.noServices {
+  color: var(--ink-soft);
+  font-size: 13px;
+  margin: 0 0 12px;
+}
+.muted {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 13.5px;
+}
+.flush {
+  margin-bottom: 0;
+}
+.inviteLink {
+  margin-bottom: 16px;
+}

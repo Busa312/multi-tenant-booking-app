@@ -3,15 +3,18 @@ import type { Tenant, TenantColors } from "@booking/shared-types";
 import { DEFAULT_TENANT_COLORS, isValidColor, meetsWcagAA } from "@booking/shared-types";
 import { ApiError } from "@booking/api-client";
 import { cmsApiClient } from "../lib/api.js";
+import { useI18n } from "../i18n/I18nContext.js";
 import { AppShell } from "../components/AppShell.js";
+import { Alert, Button, Card, Eyebrow, Field, Icon, TextInput } from "../components/ui/index.js";
+import styles from "./BrandingSettings.module.css";
 
 type ColorField = keyof TenantColors;
 
-const FIELDS: { key: ColorField; label: string }[] = [
-  { key: "primary", label: "Primary" },
-  { key: "secondary", label: "Secondary / Accent" },
-  { key: "background", label: "Background" },
-  { key: "text", label: "Text" },
+const FIELDS: { key: ColorField; labelKey: string }[] = [
+  { key: "primary", labelKey: "branding.fieldPrimary" },
+  { key: "secondary", labelKey: "branding.fieldSecondary" },
+  { key: "background", labelKey: "branding.fieldBackground" },
+  { key: "text", labelKey: "branding.fieldText" },
 ];
 
 // Must match apps/public-site's PreviewColorListener MESSAGE_TYPE constant.
@@ -21,6 +24,7 @@ const PUBLIC_SITE_BASE_DOMAIN = import.meta.env.VITE_PUBLIC_SITE_BASE_DOMAIN as 
 const PUBLIC_SITE_PROTOCOL = (import.meta.env.VITE_PUBLIC_SITE_PROTOCOL as string | undefined) ?? "http";
 
 export function BrandingSettingsPage() {
+  const { t } = useI18n();
   const [tenant, setTenant] = useState<Tenant | null>(null);
   const [colors, setColors] = useState<Required<TenantColors>>(DEFAULT_TENANT_COLORS);
   const [fieldErrors, setFieldErrors] = useState<Partial<Record<ColorField, string>>>({});
@@ -32,9 +36,9 @@ export function BrandingSettingsPage() {
   const iframeRef = useRef<HTMLIFrameElement>(null);
 
   useEffect(() => {
-    cmsApiClient.getTenant().then((t) => {
-      setTenant(t);
-      setColors({ ...DEFAULT_TENANT_COLORS, ...t.configJson.colors });
+    cmsApiClient.getTenant().then((tn) => {
+      setTenant(tn);
+      setColors({ ...DEFAULT_TENANT_COLORS, ...tn.configJson.colors });
     });
   }, []);
 
@@ -59,9 +63,9 @@ export function BrandingSettingsPage() {
 
   function validate(): boolean {
     const errors: Partial<Record<ColorField, string>> = {};
-    for (const { key, label } of FIELDS) {
+    for (const { key, labelKey } of FIELDS) {
       if (!isValidColor(colors[key])) {
-        errors[key] = `${label} must be a valid hex (#rrggbb) or rgb(r, g, b) value`;
+        errors[key] = t("branding.invalidColor", { label: t(labelKey) });
       }
     }
     setFieldErrors(errors);
@@ -83,16 +87,14 @@ export function BrandingSettingsPage() {
       setTenant(updated);
       setSavedAt(Date.now());
     } catch (err) {
-      setSaveError(
-        err instanceof ApiError ? "One or more color values were rejected" : "Something went wrong saving colors",
-      );
+      setSaveError(t(err instanceof ApiError ? "branding.errRejected" : "branding.errSave"));
     } finally {
       setSaving(false);
     }
   }
 
   async function handleReset() {
-    if (!window.confirm("Reset colors to the platform default palette? This can't be undone.")) {
+    if (!window.confirm(t("branding.confirmReset"))) {
       return;
     }
 
@@ -105,7 +107,7 @@ export function BrandingSettingsPage() {
       setFieldErrors({});
       setSavedAt(Date.now());
     } catch {
-      setSaveError("Something went wrong resetting colors");
+      setSaveError(t("branding.errReset"));
     } finally {
       setResetting(false);
     }
@@ -115,125 +117,66 @@ export function BrandingSettingsPage() {
   const previewHost = previewOrigin?.replace(/^https?:\/\//, "");
 
   return (
-    <AppShell
-      title="Public website"
-      subtitle="Style the site your clients book from"
-      tenantSubdomain={tenant?.subdomain}
-    >
-      {!tenant && <p>Loading…</p>}
+    <AppShell title={t("branding.title")} subtitle={t("branding.subtitle")} tenantSubdomain={tenant?.subdomain}>
+      {!tenant && <p>{t("common.loading")}</p>}
       {tenant && (
-        <div className="fade-up" style={{ display: "grid", gridTemplateColumns: "320px 1fr", gap: "22px", alignItems: "start" }}>
-          <form onSubmit={handleSubmit} className="card" style={{ position: "sticky", top: "90px" }}>
-            <div style={{ fontWeight: 700, fontSize: "15px", marginBottom: "3px" }}>Public site style</div>
-            <div style={{ fontSize: "12.5px", color: "var(--ink-soft)", marginBottom: "20px" }}>
-              {previewHost ? `Changes preview live at ${previewHost}` : "Colors apply to your public booking site"}
+        <div className={`fade-up ${styles.layout}`}>
+          <Card as="form" onSubmit={handleSubmit} className={styles.form}>
+            <div className={styles.formTitle}>{t("branding.formTitle")}</div>
+            <div className={styles.formSub}>
+              {previewHost ? t("branding.formSubLive", { host: previewHost }) : t("branding.formSubStatic")}
             </div>
 
-            <div className="eyebrow">Colors</div>
-            <div style={{ marginBottom: "22px" }}>
-              {FIELDS.map(({ key, label }) => (
-                <div className="field" key={key}>
-                  <label className="field-label">{label}</label>
-                  <div style={{ display: "flex", gap: "8px" }}>
+            <Eyebrow>{t("branding.colors")}</Eyebrow>
+            <div className={styles.colors}>
+              {FIELDS.map(({ key, labelKey }) => (
+                <Field label={t(labelKey)} key={key}>
+                  <div className={styles.colorRow}>
                     <input
                       type="color"
+                      className={styles.swatch}
                       value={isValidColor(colors[key]) && HEX_ONLY.test(colors[key]) ? colors[key] : "#000000"}
                       onChange={(e) => handleChange(key, e.target.value)}
-                      style={{
-                        width: "44px",
-                        height: "40px",
-                        flex: "none",
-                        border: "1px solid var(--border)",
-                        borderRadius: "8px",
-                        background: "none",
-                        padding: "2px",
-                        cursor: "pointer",
-                      }}
                     />
-                    <input
+                    <TextInput
                       type="text"
-                      className="input"
                       value={colors[key]}
                       onChange={(e) => handleChange(key, e.target.value)}
                       placeholder={DEFAULT_TENANT_COLORS[key]}
                     />
                   </div>
-                  {fieldErrors[key] && (
-                    <p className="alert alert-error" role="alert" style={{ marginTop: "6px", marginBottom: 0 }}>
-                      {fieldErrors[key]}
-                    </p>
-                  )}
-                </div>
+                  {fieldErrors[key] && <Alert className={styles.fieldError}>{fieldErrors[key]}</Alert>}
+                </Field>
               ))}
             </div>
 
-            {!contrastRatioOk && (
-              <p className="alert alert-warning" role="status">
-                The selected text/background combination doesn&apos;t meet WCAG AA contrast. You can still save, but
-                some visitors may have trouble reading the site.
-              </p>
-            )}
-            {saveError && (
-              <p className="alert alert-error" role="alert">
-                {saveError}
-              </p>
-            )}
-            {savedAt && (
-              <p className="alert alert-success" role="status">
-                Saved.
-              </p>
-            )}
+            {!contrastRatioOk && <Alert variant="warning">{t("branding.wcagWarning")}</Alert>}
+            {saveError && <Alert>{saveError}</Alert>}
+            {savedAt && <Alert variant="success">{t("branding.saved")}</Alert>}
 
-            <button type="submit" className="btn btn-primary btn-full" disabled={saving || resetting}>
-              {saving ? "Saving…" : "Save colors"}
-            </button>
-            <button
+            <Button type="submit" fullWidth disabled={saving || resetting}>
+              {saving ? t("common.saving") : t("branding.saveBtn")}
+            </Button>
+            <Button
               type="button"
-              className="btn btn-secondary btn-full"
+              variant="secondary"
+              fullWidth
               onClick={handleReset}
               disabled={saving || resetting}
-              style={{ marginTop: "10px" }}
+              className={styles.resetBtn}
             >
-              {resetting ? "Resetting…" : "Reset to default"}
-            </button>
-          </form>
+              {resetting ? t("branding.resetting") : t("branding.resetBtn")}
+            </Button>
+          </Card>
 
           {previewOrigin ? (
-            <div
-              style={{
-                border: "1px solid var(--border)",
-                borderRadius: "16px",
-                overflow: "hidden",
-                background: "var(--surface)",
-                boxShadow: "0 18px 40px -24px rgba(43, 38, 32, .4)",
-              }}
-            >
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "8px",
-                  padding: "9px 14px",
-                  background: "var(--surface-2)",
-                  borderBottom: "1px solid var(--border)",
-                }}
-              >
-                <span style={{ width: "11px", height: "11px", borderRadius: "50%", background: "#e3ccc4" }} />
-                <span style={{ width: "11px", height: "11px", borderRadius: "50%", background: "#e6dcc4" }} />
-                <span style={{ width: "11px", height: "11px", borderRadius: "50%", background: "#cfe0cf" }} />
-                <div
-                  style={{
-                    marginLeft: "10px",
-                    fontSize: "12px",
-                    color: "var(--ink-soft)",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "6px",
-                  }}
-                >
-                  <span className="ms" style={{ fontSize: "14px" }}>
-                    lock
-                  </span>
+            <div className={styles.preview}>
+              <div className={styles.chrome}>
+                <span className={`${styles.dot} ${styles.dot1}`} />
+                <span className={`${styles.dot} ${styles.dot2}`} />
+                <span className={`${styles.dot} ${styles.dot3}`} />
+                <div className={styles.url}>
+                  <Icon name="lock" size={14} />
                   {previewHost}
                 </div>
               </div>
@@ -241,15 +184,13 @@ export function BrandingSettingsPage() {
                 ref={iframeRef}
                 key={previewOrigin}
                 src={previewOrigin}
-                title="Public site preview"
+                title={t("branding.previewTitle")}
                 onLoad={() => setPreviewReady(true)}
-                style={{ width: "100%", height: "620px", border: "none", display: "block" }}
+                className={styles.iframe}
               />
             </div>
           ) : (
-            <p className="alert alert-error" role="alert">
-              Preview unavailable — VITE_PUBLIC_SITE_BASE_DOMAIN is not configured.
-            </p>
+            <Alert>{t("branding.previewUnavailable")}</Alert>
           )}
         </div>
       )}

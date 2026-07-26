@@ -1,0 +1,37 @@
+.group {
+  display: flex;
+  align-items: stretch;
+  border: 1px solid var(--border);
+  border-radius: 11px;
+  background: var(--surface);
+  overflow: hidden;
+}
+.group input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  background: transparent;
+  padding: 12px 13px;
+  font-size: 14px;
+  font-weight: 600;
+}
+.group input:focus-visible {
+  outline: none;
+}
+.suffix {
+  display: flex;
+  align-items: center;
+  padding: 0 13px;
+  background: var(--surface-2);
+  border-left: 1px solid var(--border);
+  color: var(--ink-soft);
+  font-size: 13px;
+  white-space: nowrap;
+}
+/* Interactive suffix (e.g. a "Copy" button). */
+.action {
+  border: none;
+  cursor: pointer;
+  background: var(--accent);
+  color: var(--accent-ink);
+}

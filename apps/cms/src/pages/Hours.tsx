@@ -2,11 +2,14 @@ import { useEffect, useState, type FormEvent } from "react";
 import { useSearchParams } from "react-router-dom";
 import type { BusinessHours, ProfessionalSummary, TimeOff } from "@booking/shared-types";
 import { cmsApiClient } from "../lib/api.js";
+import { useI18n } from "../i18n/I18nContext.js";
 import { AppShell } from "../components/AppShell.js";
-
-const DAY_LABELS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+import { Alert, Button, Card, Eyebrow, Field, Select, TextInput, Table, TableRow, TableEmpty } from "../components/ui/index.js";
+import styles from "./Hours.module.css";
 
 export function HoursPage() {
+  const { t, messages } = useI18n();
+  const dayLabels = messages.hours.days;
   const [searchParams] = useSearchParams();
   const professionalIdParam = searchParams.get("professionalId");
 
@@ -17,105 +20,87 @@ export function HoursPage() {
 
   function load() {
     Promise.all([cmsApiClient.listBusinessHours(), cmsApiClient.listTimeOff(), cmsApiClient.listProfessionals()])
-      .then(([h, t, p]) => {
+      .then(([h, t2, p]) => {
         setHours(h);
-        setTimeOff(t);
+        setTimeOff(t2);
         setProfessionals(p);
       })
-      .catch(() => setError("Could not load hours & time off"));
+      .catch(() => setError(t("hours.errLoad")));
   }
 
+  // Fetch once on mount; a language switch shouldn't trigger a refetch.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(load, []);
 
   const scopedProfessional = professionals?.find((p) => p.id === professionalIdParam);
   const visibleHours = professionalIdParam ? hours?.filter((h) => h.professionalId === professionalIdParam) : hours;
   const visibleTimeOff = professionalIdParam
-    ? timeOff?.filter((t) => t.professionalId === professionalIdParam)
+    ? timeOff?.filter((to) => to.professionalId === professionalIdParam)
     : timeOff;
 
   function professionalLabel(id: string | null) {
-    if (!id) return "Tenant-wide";
-    return professionals?.find((p) => p.id === id)?.name ?? "—";
+    if (!id) return t("hours.tenantWide");
+    return professionals?.find((p) => p.id === id)?.name ?? t("hours.unknown");
   }
 
   return (
     <AppShell
-      title="Hours & time off"
-      subtitle={scopedProfessional ? `Scoped to ${scopedProfessional.name}` : "Business hours and blocked-off time"}
+      title={t("hours.title")}
+      subtitle={scopedProfessional ? t("hours.subtitleScoped", { name: scopedProfessional.name }) : t("hours.subtitle")}
     >
-      <div className="fade-up" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px" }}>
-        {error && (
-          <p className="alert alert-error" role="alert" style={{ gridColumn: "1 / -1" }}>
-            {error}
-          </p>
-        )}
+      <div className={`fade-up ${styles.grid}`}>
+        {error && <Alert className={styles.errorFull}>{error}</Alert>}
 
         <section>
-          <div className="eyebrow">Business hours</div>
-          <div className="table" style={{ marginBottom: "16px" }}>
+          <Eyebrow>{t("hours.businessHours")}</Eyebrow>
+          <Table className={styles.list}>
             {visibleHours?.map((h) => (
-              <div key={h.id} className="table-row" style={{ gridTemplateColumns: "1fr 1fr 40px" }}>
-                <div style={{ fontSize: "13px" }}>
-                  {DAY_LABELS[h.dayOfWeek]} · {professionalLabel(h.professionalId)}
+              <TableRow key={h.id} columns="1fr 1fr 40px">
+                <div className={styles.rowMain}>
+                  {dayLabels[h.dayOfWeek]} · {professionalLabel(h.professionalId)}
                 </div>
-                <div style={{ fontSize: "13px", color: "var(--ink-soft)" }}>
+                <div className={styles.rowSub}>
                   {h.startTime}–{h.endTime}
                 </div>
-                <button
-                  className="btn-icon"
-                  title="Delete"
-                  style={{ width: "30px", height: "30px", border: "none" }}
+                <Button
+                  iconOnly
+                  size="sm"
+                  icon="delete"
+                  title={t("hours.deleteTitle")}
                   onClick={() => cmsApiClient.deleteBusinessHours(h.id).then(load)}
-                >
-                  <span className="ms" style={{ fontSize: "18px" }}>
-                    delete
-                  </span>
-                </button>
-              </div>
+                />
+              </TableRow>
             ))}
-            {visibleHours?.length === 0 && (
-              <div style={{ padding: "16px 20px", color: "var(--ink-soft)", fontSize: "13px" }}>No hours set.</div>
-            )}
-          </div>
-          <AddHoursForm
-            defaultProfessionalId={professionalIdParam}
-            professionals={professionals ?? []}
-            onSaved={load}
-          />
+            {visibleHours?.length === 0 && <TableEmpty>{t("hours.emptyHours")}</TableEmpty>}
+          </Table>
+          <AddHoursForm defaultProfessionalId={professionalIdParam} professionals={professionals ?? []} onSaved={load} />
         </section>
 
         <section>
-          <div className="eyebrow">Time off</div>
-          <div className="table" style={{ marginBottom: "16px" }}>
-            {visibleTimeOff?.map((t) => (
-              <div key={t.id} className="table-row" style={{ gridTemplateColumns: "1fr 40px" }}>
+          <Eyebrow>{t("hours.timeOff")}</Eyebrow>
+          <Table className={styles.list}>
+            {visibleTimeOff?.map((to) => (
+              <TableRow key={to.id} columns="1fr 40px">
                 <div>
-                  <div style={{ fontSize: "13px" }}>
-                    {new Date(t.startAt).toLocaleString()} – {new Date(t.endAt).toLocaleString()}
+                  <div className={styles.rowMain}>
+                    {new Date(to.startAt).toLocaleString()} – {new Date(to.endAt).toLocaleString()}
                   </div>
-                  <div style={{ fontSize: "12px", color: "var(--ink-soft)" }}>
-                    {professionalLabel(t.professionalId)}
-                    {t.reason ? ` · ${t.reason}` : ""}
+                  <div className={styles.rowMeta}>
+                    {professionalLabel(to.professionalId)}
+                    {to.reason ? ` · ${to.reason}` : ""}
                   </div>
                 </div>
-                <button
-                  className="btn-icon"
-                  title="Delete"
-                  style={{ width: "30px", height: "30px", border: "none" }}
-                  onClick={() => cmsApiClient.deleteTimeOff(t.id).then(load)}
-                >
-                  <span className="ms" style={{ fontSize: "18px" }}>
-                    delete
-                  </span>
-                </button>
-              </div>
+                <Button
+                  iconOnly
+                  size="sm"
+                  icon="delete"
+                  title={t("hours.deleteTitle")}
+                  onClick={() => cmsApiClient.deleteTimeOff(to.id).then(load)}
+                />
+              </TableRow>
             ))}
-            {visibleTimeOff?.length === 0 && (
-              <div style={{ padding: "16px 20px", color: "var(--ink-soft)", fontSize: "13px" }}>
-                No time off blocked.
-              </div>
-            )}
-          </div>
+            {visibleTimeOff?.length === 0 && <TableEmpty>{t("hours.emptyTimeOff")}</TableEmpty>}
+          </Table>
           <AddTimeOffForm
             defaultProfessionalId={professionalIdParam}
             professionals={professionals ?? []}
@@ -136,15 +121,16 @@ function ProfessionalSelect({
   onChange: (v: string) => void;
   professionals: ProfessionalSummary[];
 }) {
+  const { t } = useI18n();
   return (
-    <select className="select" value={value} onChange={(e) => onChange(e.target.value)}>
-      <option value="">Tenant-wide</option>
+    <Select value={value} onChange={(e) => onChange(e.target.value)}>
+      <option value="">{t("hours.tenantWide")}</option>
       {professionals.map((p) => (
         <option key={p.id} value={p.id}>
           {p.name}
         </option>
       ))}
-    </select>
+    </Select>
   );
 }
 
@@ -157,6 +143,7 @@ function AddHoursForm({
   professionals: ProfessionalSummary[];
   onSaved: () => void;
 }) {
+  const { t, messages } = useI18n();
   const [professionalId, setProfessionalId] = useState(defaultProfessionalId ?? "");
   const [dayOfWeek, setDayOfWeek] = useState("1");
   const [startTime, setStartTime] = useState("09:00");
@@ -180,41 +167,31 @@ function AddHoursForm({
   }
 
   return (
-    <form onSubmit={handleSubmit} className="card">
-      <div className="field">
-        <label className="field-label">Applies to</label>
+    <Card as="form" onSubmit={handleSubmit}>
+      <Field label={t("hours.appliesTo")}>
         <ProfessionalSelect value={professionalId} onChange={setProfessionalId} professionals={professionals} />
-      </div>
-      <div className="field">
-        <label className="field-label">Day</label>
-        <select className="select" value={dayOfWeek} onChange={(e) => setDayOfWeek(e.target.value)}>
-          {DAY_LABELS.map((label, i) => (
+      </Field>
+      <Field label={t("hours.day")}>
+        <Select value={dayOfWeek} onChange={(e) => setDayOfWeek(e.target.value)}>
+          {messages.hours.days.map((label, i) => (
             <option key={label} value={i}>
               {label}
             </option>
           ))}
-        </select>
+        </Select>
+      </Field>
+      <div className={styles.timeRow}>
+        <Field label={t("hours.start")} className={styles.timeCol}>
+          <TextInput type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} required />
+        </Field>
+        <Field label={t("hours.end")} className={styles.timeCol}>
+          <TextInput type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} required />
+        </Field>
       </div>
-      <div style={{ display: "flex", gap: "10px" }}>
-        <div className="field" style={{ flex: 1 }}>
-          <label className="field-label">Start</label>
-          <input
-            type="time"
-            className="input"
-            value={startTime}
-            onChange={(e) => setStartTime(e.target.value)}
-            required
-          />
-        </div>
-        <div className="field" style={{ flex: 1 }}>
-          <label className="field-label">End</label>
-          <input type="time" className="input" value={endTime} onChange={(e) => setEndTime(e.target.value)} required />
-        </div>
-      </div>
-      <button type="submit" className="btn btn-secondary btn-full" disabled={saving}>
-        {saving ? "Adding…" : "Add hours"}
-      </button>
-    </form>
+      <Button type="submit" variant="secondary" fullWidth disabled={saving}>
+        {saving ? t("hours.adding") : t("hours.addHours")}
+      </Button>
+    </Card>
   );
 }
 
@@ -227,6 +204,7 @@ function AddTimeOffForm({
   professionals: ProfessionalSummary[];
   onSaved: () => void;
 }) {
+  const { t } = useI18n();
   const [professionalId, setProfessionalId] = useState(defaultProfessionalId ?? "");
   const [startAt, setStartAt] = useState("");
   const [endAt, setEndAt] = useState("");
@@ -251,46 +229,29 @@ function AddTimeOffForm({
   }
 
   return (
-    <form onSubmit={handleSubmit} className="card">
-      <div className="field">
-        <label className="field-label">Applies to</label>
+    <Card as="form" onSubmit={handleSubmit}>
+      <Field label={t("hours.appliesTo")}>
         <ProfessionalSelect value={professionalId} onChange={setProfessionalId} professionals={professionals} />
+      </Field>
+      <div className={styles.timeRow}>
+        <Field label={t("hours.from")} className={styles.timeCol}>
+          <TextInput type="datetime-local" value={startAt} onChange={(e) => setStartAt(e.target.value)} required />
+        </Field>
+        <Field label={t("hours.to")} className={styles.timeCol}>
+          <TextInput type="datetime-local" value={endAt} onChange={(e) => setEndAt(e.target.value)} required />
+        </Field>
       </div>
-      <div style={{ display: "flex", gap: "10px" }}>
-        <div className="field" style={{ flex: 1 }}>
-          <label className="field-label">From</label>
-          <input
-            type="datetime-local"
-            className="input"
-            value={startAt}
-            onChange={(e) => setStartAt(e.target.value)}
-            required
-          />
-        </div>
-        <div className="field" style={{ flex: 1 }}>
-          <label className="field-label">To</label>
-          <input
-            type="datetime-local"
-            className="input"
-            value={endAt}
-            onChange={(e) => setEndAt(e.target.value)}
-            required
-          />
-        </div>
-      </div>
-      <div className="field">
-        <label className="field-label">Reason (optional)</label>
-        <input
+      <Field label={t("hours.reason")}>
+        <TextInput
           type="text"
-          className="input"
           value={reason}
           onChange={(e) => setReason(e.target.value)}
-          placeholder="Vacation, holiday…"
+          placeholder={t("hours.reasonPlaceholder")}
         />
-      </div>
-      <button type="submit" className="btn btn-secondary btn-full" disabled={saving}>
-        {saving ? "Adding…" : "Block time off"}
-      </button>
-    </form>
+      </Field>
+      <Button type="submit" variant="secondary" fullWidth disabled={saving}>
+        {saving ? t("hours.adding") : t("hours.blockTimeOff")}
+      </Button>
+    </Card>
   );
 }

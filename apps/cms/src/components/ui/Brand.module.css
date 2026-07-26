@@ -1,0 +1,19 @@
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+.onDark {
+  color: #f4ece6;
+}
+.text {
+  font-family: var(--font-display);
+  font-size: 20px;
+  font-weight: 600;
+}
+.textLg {
+  font-family: var(--font-display);
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+}

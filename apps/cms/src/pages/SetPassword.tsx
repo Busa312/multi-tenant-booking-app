@@ -2,7 +2,10 @@ import { useState, type FormEvent } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { ApiError } from "@booking/api-client";
 import { useAuth } from "../auth/AuthContext.js";
+import { useI18n } from "../i18n/I18nContext.js";
 import { cmsApiClient } from "../lib/api.js";
+import { AuthLayout } from "../components/AuthLayout.js";
+import { Alert, Button, Field, TextInput } from "../components/ui/index.js";
 
 // Public route (no RequireAuth) — reached from the link an owner copies out
 // of the "Invite to CMS" flow (R50). tenantId travels in the URL alongside
@@ -14,6 +17,7 @@ export function SetPasswordPage() {
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const { login } = useAuth();
+  const { t } = useI18n();
   const navigate = useNavigate();
 
   async function handleSubmit(e: FormEvent) {
@@ -21,15 +25,15 @@ export function SetPasswordPage() {
     setError(null);
 
     if (password.length < 8) {
-      setError("Password must be at least 8 characters");
+      setError(t("setPassword.errTooShort"));
       return;
     }
     if (password !== confirm) {
-      setError("Passwords don't match");
+      setError(t("setPassword.errMismatch"));
       return;
     }
     if (!tenantId || !token) {
-      setError("This link is invalid");
+      setError(t("setPassword.errInvalidLink"));
       return;
     }
 
@@ -39,73 +43,47 @@ export function SetPasswordPage() {
       login(accessToken);
       navigate("/");
     } catch (err) {
-      setError(err instanceof ApiError ? "This link is invalid or has expired" : "Something went wrong");
+      setError(t(err instanceof ApiError ? "setPassword.errLinkExpired" : "common.somethingWrong"));
     } finally {
       setSubmitting(false);
     }
   }
 
   return (
-    <div className="login-screen">
-      <div className="login-art">
-        <div className="login-art-brand">
-          <span className="ms">content_cut</span>
-          <span>Booking CMS</span>
-        </div>
-        <div className="login-art-copy">
-          <div className="login-art-headline">Welcome to the team.</div>
-          <div className="login-art-sub">Set a password to finish setting up your CMS login.</div>
-        </div>
-      </div>
+    <AuthLayout
+      headline={t("setPassword.artHeadline")}
+      artSub={t("setPassword.artSub")}
+      title={t("setPassword.title")}
+      subtitle={t("setPassword.subtitle")}
+      onSubmit={handleSubmit}
+    >
+      <Field label={t("setPassword.passwordLabel")} htmlFor="password">
+        <TextInput
+          id="password"
+          type="password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          placeholder={t("common.passwordPlaceholder")}
+          required
+        />
+      </Field>
 
-      <div className="login-form-wrap">
-        <form className="login-form fade-up" onSubmit={handleSubmit}>
-          <div className="login-form-brand">
-            <span className="ms">content_cut</span>
-            <span>Booking CMS</span>
-          </div>
-          <h1 className="login-title">Set your password</h1>
-          <p className="login-subtitle">Choose a password to access your CMS account.</p>
+      <Field label={t("setPassword.confirmLabel")} htmlFor="confirm">
+        <TextInput
+          id="confirm"
+          type="password"
+          value={confirm}
+          onChange={(e) => setConfirm(e.target.value)}
+          placeholder={t("common.passwordPlaceholder")}
+          required
+        />
+      </Field>
 
-          <label className="field-label" htmlFor="password">
-            Password
-          </label>
-          <input
-            id="password"
-            type="password"
-            className="input"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            placeholder="••••••••"
-            required
-            style={{ marginBottom: "16px" }}
-          />
+      {error && <Alert>{error}</Alert>}
 
-          <label className="field-label" htmlFor="confirm">
-            Confirm password
-          </label>
-          <input
-            id="confirm"
-            type="password"
-            className="input"
-            value={confirm}
-            onChange={(e) => setConfirm(e.target.value)}
-            placeholder="••••••••"
-            required
-            style={{ marginBottom: "22px" }}
-          />
-
-          {error && (
-            <p className="alert alert-error" role="alert">
-              {error}
-            </p>
-          )}
-
-          <button type="submit" className="btn btn-primary btn-full" disabled={submitting}>
-            {submitting ? "Setting password…" : "Set password & sign in"}
-          </button>
-        </form>
-      </div>
-    </div>
+      <Button type="submit" fullWidth disabled={submitting}>
+        {submitting ? t("setPassword.submitting") : t("setPassword.submit")}
+      </Button>
+    </AuthLayout>
   );
 }

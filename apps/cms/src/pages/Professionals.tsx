@@ -1,23 +1,43 @@
 import { useEffect, useState, type FormEvent } from "react";
-import { Link } from "react-router-dom";
 import type { InviteProfessionalResponse, ProfessionalSummary, Service } from "@booking/shared-types";
 import { ApiError } from "@booking/api-client";
 import { cmsApiClient } from "../lib/api.js";
+import { useI18n } from "../i18n/I18nContext.js";
 import { AppShell } from "../components/AppShell.js";
 import { Modal } from "../components/Modal.js";
+import {
+  Alert,
+  Button,
+  ButtonLink,
+  Checkbox,
+  Eyebrow,
+  Field,
+  InputGroup,
+  Pill,
+  type PillTone,
+  Table,
+  TableHead,
+  TableRow,
+  TableEmpty,
+  TextInput,
+} from "../components/ui/index.js";
+import styles from "./Professionals.module.css";
 
-const LOGIN_STATUS_LABEL: Record<ProfessionalSummary["cmsLoginStatus"], string> = {
-  none: "No login",
-  invited: "Invited",
-  active: "Active",
+const COLUMNS = "1.3fr 1.6fr 130px 110px 200px";
+
+const LOGIN_STATUS_KEY: Record<ProfessionalSummary["cmsLoginStatus"], string> = {
+  none: "professionals.statusNoLogin",
+  invited: "professionals.statusInvited",
+  active: "professionals.statusActive",
 };
-const LOGIN_STATUS_COLOR: Record<ProfessionalSummary["cmsLoginStatus"], { fg: string; bg: string }> = {
-  none: { fg: "#7d746a", bg: "#f0ece5" },
-  invited: { fg: "#8a6a2f", bg: "#f7efdc" },
-  active: { fg: "#3f6b4a", bg: "#e8f1ea" },
+const LOGIN_STATUS_TONE: Record<ProfessionalSummary["cmsLoginStatus"], PillTone> = {
+  none: "neutral",
+  invited: "warning",
+  active: "success",
 };
 
 export function ProfessionalsPage() {
+  const { t } = useI18n();
   const [professionals, setProfessionals] = useState<ProfessionalSummary[] | null>(null);
   const [services, setServices] = useState<Service[] | null>(null);
   const [listError, setListError] = useState<string | null>(null);
@@ -35,13 +55,15 @@ export function ProfessionalsPage() {
         setProfessionals(p);
         setServices(s);
       })
-      .catch(() => setListError("Could not load professionals"));
+      .catch(() => setListError(t("professionals.errLoad")));
   }
 
+  // Fetch once on mount; a language switch shouldn't trigger a refetch.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(load, []);
 
   function serviceNames(p: ProfessionalSummary): string {
-    if (!services || p.serviceIds.length === 0) return "No services assigned";
+    if (!services || p.serviceIds.length === 0) return t("professionals.noServicesAssigned");
     return p.serviceIds
       .map((id) => services.find((s) => s.id === id)?.name)
       .filter(Boolean)
@@ -54,7 +76,7 @@ export function ProfessionalsPage() {
       const { count } = await cmsApiClient.getProfessionalUpcomingCount(p.id);
       setDeactivateTarget({ professional: p, count });
     } catch {
-      setListError("Could not check upcoming appointments");
+      setListError(t("professionals.errCheckUpcoming"));
     }
   }
 
@@ -66,7 +88,7 @@ export function ProfessionalsPage() {
       setDeactivateTarget(null);
       load();
     } catch {
-      setListError("Could not deactivate this professional");
+      setListError(t("professionals.errDeactivate"));
     } finally {
       setDeactivateLoading(false);
     }
@@ -78,134 +100,88 @@ export function ProfessionalsPage() {
       await cmsApiClient.updateProfessional(p.id, { isActive: true });
       load();
     } catch {
-      setListError("Could not reactivate this professional");
+      setListError(t("professionals.errReactivate"));
     }
   }
 
   async function handleDelete(p: ProfessionalSummary) {
-    if (!window.confirm(`Delete ${p.name}? This can't be undone.`)) return;
+    if (!window.confirm(t("professionals.confirmDelete", { name: p.name }))) return;
     setListError(null);
     try {
       await cmsApiClient.deleteProfessional(p.id);
       load();
     } catch (err) {
-      setListError(
-        err instanceof ApiError ? "This professional has appointment history and can't be deleted" : "Something went wrong",
-      );
+      setListError(t(err instanceof ApiError ? "professionals.errHasHistory" : "common.somethingWrong"));
     }
   }
 
   return (
-    <AppShell title="Professionals" subtitle="Your team and what they perform">
+    <AppShell title={t("professionals.title")} subtitle={t("professionals.subtitle")}>
       <div className="fade-up">
-        <div style={{ display: "flex", alignItems: "center", marginBottom: "18px" }}>
-          <div style={{ color: "var(--ink-soft)", fontSize: "13px" }}>
-            {professionals ? `${professionals.length} professionals` : "Loading…"}
+        <div className={styles.toolbar}>
+          <div className={styles.count}>
+            {professionals ? t("professionals.count", { count: professionals.length }) : t("common.loading")}
           </div>
-          <button className="btn btn-primary" style={{ marginLeft: "auto" }} onClick={() => setEditTarget("new")}>
-            <span className="ms" style={{ fontSize: "19px" }}>
-              person_add
-            </span>
-            Add professional
-          </button>
+          <Button className={styles.add} icon="person_add" onClick={() => setEditTarget("new")}>
+            {t("professionals.add")}
+          </Button>
         </div>
 
-        {listError && (
-          <p className="alert alert-error" role="alert">
-            {listError}
-          </p>
-        )}
+        {listError && <Alert>{listError}</Alert>}
 
         {professionals && (
-          <div className="table">
-            <div className="table-head" style={{ gridTemplateColumns: "1.3fr 1.6fr 130px 110px 200px" }}>
-              <div>Name</div>
-              <div>Services</div>
-              <div>CMS login</div>
-              <div>Status</div>
-              <div></div>
-            </div>
-            {professionals.map((p) => (
-              <div key={p.id} className="table-row" style={{ gridTemplateColumns: "1.3fr 1.6fr 130px 110px 200px" }}>
-                <div style={{ fontWeight: 600 }}>{p.name}</div>
-                <div style={{ fontSize: "13px", color: "var(--ink-soft)" }}>{serviceNames(p)}</div>
-                <div>
-                  <span
-                    className="pill"
-                    style={{
-                      color: LOGIN_STATUS_COLOR[p.cmsLoginStatus].fg,
-                      background: LOGIN_STATUS_COLOR[p.cmsLoginStatus].bg,
-                    }}
-                  >
-                    {LOGIN_STATUS_LABEL[p.cmsLoginStatus]}
-                  </span>
-                </div>
-                <div>
-                  <span
-                    className="pill"
-                    style={
-                      p.isActive
-                        ? { color: "#3f6b4a", background: "#e8f1ea" }
-                        : { color: "#9a4a45", background: "#f6e4e2" }
-                    }
-                  >
-                    {p.isActive ? "Active" : "Inactive"}
-                  </span>
-                </div>
-                <div style={{ display: "flex", justifyContent: "flex-end", gap: "4px", flexWrap: "wrap" }}>
-                  <button className="btn btn-secondary" onClick={() => setEditTarget(p)} style={{ padding: "6px 10px", fontSize: "12px" }}>
-                    Edit
-                  </button>
-                  <Link
-                    to={`/hours?professionalId=${p.id}`}
-                    className="btn btn-secondary"
-                    style={{ padding: "6px 10px", fontSize: "12px" }}
-                  >
-                    Hours
-                  </Link>
-                  {p.cmsLoginStatus === "none" && (
-                    <button
-                      className="btn btn-secondary"
-                      onClick={() => setInviteTarget(p)}
-                      style={{ padding: "6px 10px", fontSize: "12px" }}
-                    >
-                      Invite to CMS
-                    </button>
-                  )}
-                  {p.isActive ? (
-                    <button
-                      className="btn btn-secondary"
-                      onClick={() => handleDeactivateClick(p)}
-                      style={{ padding: "6px 10px", fontSize: "12px" }}
-                    >
-                      Deactivate
-                    </button>
-                  ) : (
-                    <button
-                      className="btn btn-secondary"
-                      onClick={() => handleReactivate(p)}
-                      style={{ padding: "6px 10px", fontSize: "12px" }}
-                    >
-                      Reactivate
-                    </button>
-                  )}
-                  {!p.hasAppointmentHistory && (
-                    <button
-                      className="btn btn-secondary"
-                      onClick={() => handleDelete(p)}
-                      style={{ padding: "6px 10px", fontSize: "12px", color: "var(--danger)" }}
-                    >
-                      Delete
-                    </button>
-                  )}
-                </div>
-              </div>
-            ))}
-            {professionals.length === 0 && (
-              <div style={{ padding: "24px 20px", color: "var(--ink-soft)", fontSize: "13.5px" }}>
-                No professionals yet.
-              </div>
-            )}
+          <div className={styles.tableScroll}>
+            <Table className={styles.table}>
+              <TableHead columns={COLUMNS}>
+                <div>{t("professionals.colName")}</div>
+                <div>{t("professionals.colServices")}</div>
+                <div>{t("professionals.colLogin")}</div>
+                <div>{t("professionals.colStatus")}</div>
+                <div></div>
+              </TableHead>
+              {professionals.map((p) => (
+                <TableRow key={p.id} columns={COLUMNS}>
+                  <div className={styles.name}>{p.name}</div>
+                  <div className={styles.services}>{serviceNames(p)}</div>
+                  <div>
+                    <Pill tone={LOGIN_STATUS_TONE[p.cmsLoginStatus]}>{t(LOGIN_STATUS_KEY[p.cmsLoginStatus])}</Pill>
+                  </div>
+                  <div>
+                    <Pill tone={p.isActive ? "success" : "danger"}>
+                      {t(p.isActive ? "professionals.active" : "professionals.inactive")}
+                    </Pill>
+                  </div>
+                  <div className={styles.actions}>
+                    <Button variant="secondary" size="sm" onClick={() => setEditTarget(p)}>
+                      {t("professionals.edit")}
+                    </Button>
+                    <ButtonLink to={`/hours?professionalId=${p.id}`} variant="secondary" size="sm">
+                      {t("professionals.hours")}
+                    </ButtonLink>
+                    {p.cmsLoginStatus === "none" && (
+                      <Button variant="secondary" size="sm" onClick={() => setInviteTarget(p)}>
+                        {t("professionals.invite")}
+                      </Button>
+                    )}
+                    {p.isActive ? (
+                      <Button variant="secondary" size="sm" onClick={() => handleDeactivateClick(p)}>
+                        {t("professionals.deactivate")}
+                      </Button>
+                    ) : (
+                      <Button variant="secondary" size="sm" onClick={() => handleReactivate(p)}>
+                        {t("professionals.reactivate")}
+                      </Button>
+                    )}
+                    {!p.hasAppointmentHistory && (
+                      <Button variant="secondary" size="sm" danger onClick={() => handleDelete(p)}>
+                        {t("professionals.delete")}
+                      </Button>
+                    )}
+                  </div>
+                </TableRow>
+              ))}
+              {professionals.length === 0 && <TableEmpty>{t("professionals.empty")}</TableEmpty>}
+            </Table>
           </div>
         )}
       </div>
@@ -226,28 +202,29 @@ export function ProfessionalsPage() {
 
       {deactivateTarget && (
         <Modal
-          title="Deactivate professional?"
+          title={t("professionals.deactivateTitle")}
           onClose={() => setDeactivateTarget(null)}
           footer={
             <>
-              <button className="btn btn-secondary" onClick={() => setDeactivateTarget(null)} disabled={deactivateLoading}>
-                Cancel
-              </button>
-              <button className="btn btn-primary" onClick={confirmDeactivate} disabled={deactivateLoading}>
-                {deactivateLoading ? "Deactivating…" : "Deactivate"}
-              </button>
+              <Button variant="secondary" onClick={() => setDeactivateTarget(null)} disabled={deactivateLoading}>
+                {t("common.cancel")}
+              </Button>
+              <Button onClick={confirmDeactivate} disabled={deactivateLoading}>
+                {deactivateLoading ? t("professionals.deactivating") : t("professionals.deactivate")}
+              </Button>
             </>
           }
         >
           {deactivateTarget.count > 0 ? (
-            <p className="alert alert-warning" role="alert" style={{ margin: 0 }}>
-              {deactivateTarget.count} upcoming appointment{deactivateTarget.count === 1 ? "" : "s"} — they'll stay
-              booked, but {deactivateTarget.professional.name} won't be offered for new bookings.
-            </p>
+            <Alert variant="warning" className={styles.flush}>
+              {t(deactivateTarget.count === 1 ? "professionals.upcomingWarning_one" : "professionals.upcomingWarning_other", {
+                count: deactivateTarget.count,
+                name: deactivateTarget.professional.name,
+              })}
+            </Alert>
           ) : (
-            <p style={{ margin: 0, color: "var(--ink-soft)", fontSize: "13.5px" }}>
-              {deactivateTarget.professional.name} won't be offered for new bookings. Existing appointments are
-              unaffected.
+            <p className={styles.muted}>
+              {t("professionals.noUpcoming", { name: deactivateTarget.professional.name })}
             </p>
           )}
         </Modal>
@@ -267,6 +244,7 @@ function EditProfessionalModal({
   onClose: () => void;
   onSaved: () => void;
 }) {
+  const { t } = useI18n();
   const isNew = target === "new";
   const [name, setName] = useState(isNew ? "" : target.name);
   const [serviceIds, setServiceIds] = useState<string[]>(isNew ? [] : target.serviceIds);
@@ -289,7 +267,7 @@ function EditProfessionalModal({
       }
       onSaved();
     } catch {
-      setError("Could not save this professional");
+      setError(t("professionals.errSave"));
     } finally {
       setSaving(false);
     }
@@ -297,58 +275,48 @@ function EditProfessionalModal({
 
   return (
     <Modal
-      title={isNew ? "Add professional" : "Edit professional"}
+      title={isNew ? t("professionals.editTitleNew") : t("professionals.editTitleEdit")}
       onClose={onClose}
       footer={
         <>
-          <button type="button" className="btn btn-secondary" onClick={onClose} disabled={saving}>
-            Cancel
-          </button>
-          <button type="submit" form="professional-form" className="btn btn-primary" disabled={saving}>
-            {saving ? "Saving…" : isNew ? "Create" : "Save changes"}
-          </button>
+          <Button type="button" variant="secondary" onClick={onClose} disabled={saving}>
+            {t("common.cancel")}
+          </Button>
+          <Button type="submit" form="professional-form" disabled={saving}>
+            {saving ? t("common.saving") : isNew ? t("common.create") : t("common.save")}
+          </Button>
         </>
       }
     >
       <form id="professional-form" onSubmit={handleSubmit}>
-        <div className="field">
-          <label className="field-label" htmlFor="prof-name">
-            Name
-          </label>
-          <input
+        <Field label={t("professionals.nameLabel")} htmlFor="prof-name">
+          <TextInput
             id="prof-name"
-            className="input"
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder="e.g. Camille Rousseau"
+            placeholder={t("professionals.namePlaceholder")}
             required
           />
-        </div>
+        </Field>
 
-        <div className="eyebrow">Services performed</div>
-        {services.length === 0 && (
-          <p style={{ color: "var(--ink-soft)", fontSize: "13px", margin: "0 0 12px" }}>No services created yet.</p>
-        )}
-        <div style={{ marginBottom: "6px" }}>
+        <Eyebrow>{t("professionals.servicesPerformed")}</Eyebrow>
+        {services.length === 0 && <p className={styles.noServices}>{t("professionals.noServicesCreated")}</p>}
+        <div className={styles.serviceList}>
           {services.map((s) => (
-            <label className="checkbox-row" key={s.id}>
-              <input type="checkbox" checked={serviceIds.includes(s.id)} onChange={() => toggleService(s.id)} />
+            <Checkbox key={s.id} checked={serviceIds.includes(s.id)} onChange={() => toggleService(s.id)}>
               {s.name}
-            </label>
+            </Checkbox>
           ))}
         </div>
 
-        {error && (
-          <p className="alert alert-error" role="alert">
-            {error}
-          </p>
-        )}
+        {error && <Alert>{error}</Alert>}
       </form>
     </Modal>
   );
 }
 
 function InviteModal({ professional, onClose }: { professional: ProfessionalSummary; onClose: () => void }) {
+  const { t, lang } = useI18n();
   const [email, setEmail] = useState("");
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -364,59 +332,48 @@ function InviteModal({ professional, onClose }: { professional: ProfessionalSumm
       const res = await cmsApiClient.inviteProfessional(professional.id, { email });
       setResult(res);
     } catch (err) {
-      setError(err instanceof ApiError ? "That email is already in use for this tenant" : "Something went wrong");
+      setError(t(err instanceof ApiError ? "professionals.errEmailInUse" : "common.somethingWrong"));
     } finally {
       setSending(false);
     }
   }
 
   return (
-    <Modal title={`Invite ${professional.name} to the CMS`} onClose={onClose}>
+    <Modal title={t("professionals.inviteTitle", { name: professional.name })} onClose={onClose}>
       {!result ? (
         <form onSubmit={handleSubmit}>
-          <div className="field">
-            <label className="field-label" htmlFor="invite-email">
-              Email
-            </label>
-            <input
+          <Field label={t("professionals.inviteEmailLabel")} htmlFor="invite-email">
+            <TextInput
               id="invite-email"
               type="email"
-              className="input"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder="professional@salon.com"
+              placeholder={t("professionals.inviteEmailPlaceholder")}
               required
             />
-          </div>
-          {error && (
-            <p className="alert alert-error" role="alert">
-              {error}
-            </p>
-          )}
-          <button type="submit" className="btn btn-primary btn-full" disabled={sending}>
-            {sending ? "Sending…" : "Create invite link"}
-          </button>
+          </Field>
+          {error && <Alert>{error}</Alert>}
+          <Button type="submit" fullWidth disabled={sending}>
+            {sending ? t("professionals.sending") : t("professionals.createLink")}
+          </Button>
         </form>
       ) : (
         <div>
-          <p className="alert alert-success" role="status">
-            Invite created. Send this link to {result.email} — it expires{" "}
-            {new Date(result.expiresAt).toLocaleDateString()}.
-          </p>
-          <div className="input-group" style={{ marginBottom: "16px" }}>
-            <input readOnly value={setPasswordUrl ?? ""} style={{ fontSize: "12.5px" }} />
-            <button
-              type="button"
-              className="input-group-suffix"
-              style={{ border: "none", cursor: "pointer", background: "var(--accent)", color: "var(--accent-ink)" }}
-              onClick={() => setPasswordUrl && navigator.clipboard.writeText(setPasswordUrl)}
-            >
-              Copy
-            </button>
-          </div>
-          <button type="button" className="btn btn-secondary btn-full" onClick={onClose}>
-            Done
-          </button>
+          <Alert variant="success">
+            {t("professionals.inviteSuccess", {
+              email: result.email,
+              date: new Date(result.expiresAt).toLocaleDateString(lang === "ka" ? "ka-GE" : "en-US"),
+            })}
+          </Alert>
+          <InputGroup
+            readOnly
+            value={setPasswordUrl ?? ""}
+            className={styles.inviteLink}
+            action={{ label: t("common.copy"), onClick: () => setPasswordUrl && navigator.clipboard.writeText(setPasswordUrl) }}
+          />
+          <Button type="button" variant="secondary" fullWidth onClick={onClose}>
+            {t("common.done")}
+          </Button>
         </div>
       )}
     </Modal>
