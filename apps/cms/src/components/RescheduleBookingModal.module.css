@@ -1,0 +1,8 @@
+.summary {
+  margin: 0 0 14px;
+  color: var(--ink-soft);
+  font-size: 13.5px;
+}
+.date {
+  max-width: 200px;
+}

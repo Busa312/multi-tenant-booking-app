@@ -1,5 +1,13 @@
 import type { Prisma } from "../../generated/prisma/index.js";
-import type { Appointment, Professional, Service, Tenant, TenantConfig, TimeOff } from "@booking/shared-types";
+import type {
+  Appointment,
+  AppointmentSummary,
+  Professional,
+  Service,
+  Tenant,
+  TenantConfig,
+  TimeOff,
+} from "@booking/shared-types";
 
 // Prisma returns Date/Decimal; shared-types (the wire contract) uses strings
 // throughout so JSON.stringify can't silently reformat them. These are the
@@ -64,4 +72,28 @@ export const serializeAppointment = (a: PrismaAppointment): Appointment => ({
   status: a.status,
   createdAt: a.createdAt.toISOString(),
   updatedAt: a.updatedAt.toISOString(),
+});
+
+// The joined shape the CMS appointment list/calendar reads. Staff-only fields
+// (notes, who created it) live here rather than on the plain Appointment because
+// that one is also what a customer's magic link returns; service and
+// professional names come along so a row doesn't need a second lookup, and the
+// magic link is reduced to a boolean because the token hash never leaves the API.
+export const APPOINTMENT_SUMMARY_INCLUDE = {
+  service: { select: { name: true, durationMinutes: true } },
+  professional: { select: { name: true } },
+} satisfies Prisma.AppointmentInclude;
+
+export type PrismaAppointmentSummary = Prisma.AppointmentGetPayload<{
+  include: typeof APPOINTMENT_SUMMARY_INCLUDE;
+}>;
+
+export const serializeAppointmentSummary = (a: PrismaAppointmentSummary): AppointmentSummary => ({
+  ...serializeAppointment(a),
+  createdByUserId: a.createdByUserId,
+  notes: a.notes,
+  serviceName: a.service.name,
+  serviceDurationMinutes: a.service.durationMinutes,
+  professionalName: a.professional?.name ?? null,
+  hasMagicLink: a.accessTokenHash !== null,
 });

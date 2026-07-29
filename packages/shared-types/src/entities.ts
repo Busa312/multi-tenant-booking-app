@@ -129,6 +129,33 @@ export interface Appointment {
   // access_token_hash is never sent to clients
 }
 
+/**
+ * Returned by the CMS appointment endpoints only — the public/magic-link shape
+ * stays the plain Appointment above.
+ *
+ * Everything added here is staff-facing, which is the reason for the split: the
+ * magic link hands a *customer* an Appointment, and internal notes ("difficult
+ * client") plus the id of the staff member who took the call are not theirs to
+ * read. The joined names ride along too, so a calendar row renders without a
+ * second round trip per appointment.
+ */
+export interface AppointmentSummary extends Appointment {
+  // null = the customer booked it on the public site; set = staff created it
+  // from the CMS (TenantUser.id), which is also why it carries no magic link.
+  createdByUserId: string | null;
+  notes: string | null;
+  serviceName: string;
+  serviceDurationMinutes: number;
+  professionalName: string | null;
+  // Whether a customer magic link exists at all for this appointment — derived
+  // from access_token_hash, which itself is never sent to clients. True only for
+  // public-site bookings, and the flag the CMS uses to warn that rescheduling
+  // will invalidate the customer's existing link (R110). Expiry isn't
+  // considered: a stale link the customer may still be holding is exactly the
+  // one worth warning about.
+  hasMagicLink: boolean;
+}
+
 export interface AvailabilitySlot {
   startAt: string;
   endAt: string;

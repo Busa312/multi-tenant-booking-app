@@ -1,5 +1,6 @@
 // Request/response DTO shapes shared between apps/api and its two clients.
 
+import type { AppointmentStatus } from "./entities";
 import type { TenantColors } from "./colors";
 
 export interface UpdateTenantColorsRequest {
@@ -29,6 +30,77 @@ export interface AvailabilityQuery {
   serviceIds: string[];
   professionalId?: string;
   date: string; // "YYYY-MM-DD", in tenant timezone
+}
+
+// ---------------------------------------------------------------------------
+// CMS-side booking management (staff acting on a customer's behalf).
+//
+// Wall-clock date + time are sent separately rather than as one instant: the
+// tenant's timezone is the authority on what "14:00" means, and the staff
+// browser may well be somewhere else. The API resolves them against
+// Tenant.timezone, the same way availability's `date` is resolved.
+// ---------------------------------------------------------------------------
+
+export interface CmsAvailabilityQuery {
+  serviceId: string;
+  /** Forced to the caller's own professional for `professional` logins (R20). */
+  professionalId?: string;
+  date: string; // "YYYY-MM-DD", in tenant timezone
+}
+
+export interface CmsAppointmentListQuery {
+  from?: string; // "YYYY-MM-DD", inclusive, in tenant timezone
+  to?: string; // "YYYY-MM-DD", inclusive, in tenant timezone
+}
+
+export interface CreateCmsAppointmentRequest {
+  serviceId: string;
+  /** Required for `owner`; ignored for `professional` logins, which are pinned
+   *  to their own professional record (R20/R30). */
+  professionalId?: string;
+  date: string; // "YYYY-MM-DD", in tenant timezone
+  time: string; // "HH:mm", in tenant timezone
+  userName: string;
+  phoneNumber: string;
+  email?: string;
+  notes?: string;
+  /** R60: acknowledge the conflicts a 409 named and book anyway. */
+  override?: boolean;
+}
+
+export interface RescheduleCmsAppointmentRequest {
+  /** date and time move together — send both or neither. */
+  date?: string;
+  time?: string;
+  professionalId?: string;
+  override?: boolean;
+}
+
+// R100: no automatic transition ever happens, so `cancelled` is deliberately
+// not settable here — that has its own endpoint, and coming *back* to `booked`
+// is how a mis-marked appointment is fixed.
+export interface UpdateAppointmentStatusRequest {
+  status: Exclude<AppointmentStatus, "cancelled">;
+}
+
+export type BookingConflictType = "appointment" | "outside_business_hours" | "time_off";
+
+// R60: staff may book over any of these, but only after confirming a warning
+// that names the conflict. Structured rather than prose so the CMS localizes it.
+export interface BookingConflict {
+  type: BookingConflictType;
+  professionalName: string | null;
+  /** The conflicting appointment's / time-off block's own window, when there is one. */
+  startAt: string | null;
+  endAt: string | null;
+  /** Conflicting appointment's customer name, or a time-off block's reason. */
+  detail: string | null;
+}
+
+/** Body of the 409 returned by create/reschedule when `override` isn't set. */
+export interface BookingConflictResponse {
+  code: "booking_conflict";
+  conflicts: BookingConflict[];
 }
 
 export interface ResendMagicLinkRequest {

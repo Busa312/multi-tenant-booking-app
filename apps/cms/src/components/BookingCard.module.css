@@ -1,0 +1,46 @@
+.card {
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  border-radius: 8px;
+  background: var(--surface);
+  padding: 7px 8px;
+}
+.cancelled {
+  border-left-color: var(--danger);
+  opacity: 0.62;
+}
+.head {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.time {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  font-size: 12.5px;
+}
+/* Pins the kebab to the trailing edge without a spacer element. */
+.menu {
+  margin-left: auto;
+}
+.name {
+  margin-top: 2px;
+  font-size: 13px;
+  font-weight: 600;
+  /* Names and service labels are free text in a narrow column — one line each,
+     truncated, so every card in a week stays the same height. */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.service,
+.professional {
+  font-size: 12px;
+  color: var(--ink-soft);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.status {
+  margin-top: 4px;
+}

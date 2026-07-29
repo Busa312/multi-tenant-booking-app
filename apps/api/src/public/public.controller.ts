@@ -26,18 +26,19 @@ import {
   ServiceDto,
   TenantDto,
 } from "../common/dto.js";
+import { AvailabilityService } from "../booking/availability.service.js";
 
 /**
  * Public, unauthenticated routes for apps/public-site. Tenant identity comes
  * from HostTenantMiddleware (Host header -> tenant_id via TenantResolverService),
  * applied in AppModule.
  *
- * Slot computation and the magic-link booking/reschedule/cancel flow are
- * deliberately left as stubs here (NotImplementedException) — see
- * system_design.md §6 "Magic Link Flow" and the Data Model doc's "Time-slots
- * are computed, not stored" note for the algorithms to implement:
- * availability = BusinessHours minus TimeOff minus existing Appointments,
- * and booking must hash+store an access token with `end_at + 24h` expiry.
+ * Slot computation is served by the shared AvailabilityService — the same one
+ * the CMS booking flow reads, so the two never disagree about what's open. The
+ * magic-link booking/reschedule/cancel flow is still stubbed
+ * (NotImplementedException): see system_design.md §6 "Magic Link Flow" — booking
+ * must hash+store an access token with `end_at + 24h` expiry, which
+ * BookingService already does on rotation.
  */
 @ApiTags("public")
 @Controller("public")
@@ -45,6 +46,7 @@ export class PublicController {
   constructor(
     private readonly prisma: PrismaService,
     private readonly tenantContext: TenantContextService,
+    private readonly availability: AvailabilityService,
   ) {}
 
   @Get("tenant")
@@ -83,10 +85,20 @@ export class PublicController {
   @ApiQuery({ name: "professionalId", required: false })
   @ApiQuery({ name: "date", description: "YYYY-MM-DD, in tenant timezone" })
   @ApiOkResponse({ type: [AvailabilitySlotDto] })
-  getAvailability(@Query() _query: AvailabilityQuery): Promise<AvailabilitySlot[]> {
-    throw new NotImplementedException(
-      "Availability computation (BusinessHours - TimeOff - Appointments) is not yet implemented",
-    );
+  getAvailability(@Query() query: AvailabilityQuery): Promise<AvailabilitySlot[]> {
+    // `serviceIds` arrives comma-separated on a single query key, so it reaches
+    // the handler as a string despite the DTO's array type.
+    const serviceIds = (Array.isArray(query.serviceIds) ? query.serviceIds : String(query.serviceIds ?? "").split(","))
+      .map((id) => id.trim())
+      .filter(Boolean);
+
+    return this.availability.computeSlots({
+      serviceIds,
+      // Omitted = "any available": slots come back for every professional who
+      // performs the requested services.
+      professionalId: query.professionalId ?? null,
+      date: query.date,
+    });
   }
 
   @Post("appointments")

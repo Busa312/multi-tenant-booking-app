@@ -1,0 +1,40 @@
+.root {
+  margin-bottom: 4px;
+}
+.slots {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  /* A busy day can produce dozens of slots — cap the block and scroll rather
+     than pushing the customer fields out of the modal. */
+  max-height: 148px;
+  overflow-y: auto;
+  margin-bottom: 12px;
+}
+.slot {
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--ink);
+  border-radius: 999px;
+  padding: 5px 12px;
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+.slot:hover {
+  border-color: var(--accent);
+}
+.slotActive {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+}
+.hint {
+  color: var(--ink-soft);
+  font-size: 13px;
+  margin: 0 0 12px;
+}
+/* The override input sits under the slot list as the deliberate second choice. */
+.manual {
+  max-width: 180px;
+}
