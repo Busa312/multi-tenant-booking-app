@@ -6,3 +6,11 @@
   padding: 12px 13px;
   font-size: 14px;
 }
+
+/* iOS Safari auto-zooms the page when focusing a control smaller than 16px, and
+   never zooms back out. Phone-sized viewports get the larger text instead. */
+@media (max-width: 520px) {
+  .input {
+    font-size: 16px;
+  }
+}

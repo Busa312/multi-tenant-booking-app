@@ -60,3 +60,19 @@
 .danger:focus-visible {
   background: var(--danger-bg);
 }
+
+/* A 32px kebab is a comfortable mouse target but a poor thumb target, and this
+   one sits at the very edge of a scrolling table row. */
+@media (pointer: coarse) {
+  .trigger {
+    width: 44px;
+    height: 44px;
+  }
+  .item {
+    padding: 13px 12px;
+    font-size: 15px;
+  }
+  .menu {
+    min-width: 200px;
+  }
+}

@@ -15,7 +15,7 @@ export function LoginPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const { login } = useAuth();
+  const { login, sessionExpired } = useAuth();
   const { t } = useI18n();
   const navigate = useNavigate();
 
@@ -76,6 +76,9 @@ export function LoginPage() {
         />
       </Field>
 
+      {/* Says why they're back here, rather than leaving a timed-out session
+          looking like the app forgot them. A live credential error wins. */}
+      {sessionExpired && !error && <Alert variant="warning">{t("login.sessionExpired")}</Alert>}
       {error && <Alert>{error}</Alert>}
 
       <Button type="submit" fullWidth disabled={submitting}>

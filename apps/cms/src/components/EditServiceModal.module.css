@@ -3,6 +3,13 @@
   grid-template-columns: 1fr 1fr;
   gap: 12px;
 }
+/* Duration and price share a row until the labels start wrapping mid-word. */
+@media (max-width: 420px) {
+  .numberRow {
+    grid-template-columns: 1fr;
+    gap: 0;
+  }
+}
 .professionalList {
   margin-bottom: 6px;
 }

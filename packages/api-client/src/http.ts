@@ -18,6 +18,14 @@ export interface ApiClientOptions {
    * — see HostTenantMiddleware in apps/api, which reads it in preference to `host`.
    */
   getExtraHeaders?: () => Record<string, string> | undefined;
+  /**
+   * Called with the request path whenever the API answers 401, before the
+   * ApiError is thrown — so a caller can end the local session centrally
+   * instead of every page mistaking an expired token for a load failure.
+   * The path is passed because not every 401 is a dead session: a rejected
+   * login is one too, and the handler needs to tell them apart.
+   */
+  onUnauthorized?: (path: string) => void;
 }
 
 export class HttpClient {
@@ -51,6 +59,9 @@ export class HttpClient {
     });
 
     if (!res.ok) {
+      if (res.status === 401) {
+        this.options.onUnauthorized?.(path);
+      }
       const body = await res.json().catch(() => undefined);
       throw new ApiError(res.status, body);
     }

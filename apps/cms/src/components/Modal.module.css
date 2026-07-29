@@ -32,7 +32,7 @@
 .sheet {
   width: 100%;
   max-width: 520px;
-  max-height: 90vh;
+  max-height: 90dvh;
   overflow: auto;
   background: var(--surface);
   border-radius: 18px;

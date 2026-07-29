@@ -23,6 +23,12 @@ interface ActionMenuProps {
   className?: string;
 }
 
+/** Anchored below the trigger, or above it when the viewport bottom is close. */
+type MenuPosition = { right: number; top?: number; bottom?: number };
+
+// Breathing room between trigger and panel, in px.
+const GAP = 6;
+
 /**
  * Kebab (⋮) menu button following the WAI-ARIA APG menu-button pattern, used to
  * collapse a table row's actions into one control.
@@ -40,28 +46,38 @@ interface ActionMenuProps {
  */
 export function ActionMenu({ items, ariaLabel, className }: ActionMenuProps) {
   const [open, setOpen] = useState(false);
-  const [position, setPosition] = useState<{ top: number; right: number } | null>(null);
+  const [position, setPosition] = useState<MenuPosition | null>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const menuId = `${useId()}-menu`;
 
   const close = useCallback((refocus: boolean) => {
     setOpen(false);
+    setPosition(null);
     if (refocus) {
       triggerRef.current?.focus();
     }
   }, []);
 
-  function openMenu() {
-    const rect = triggerRef.current?.getBoundingClientRect();
-    if (!rect) return;
-    setPosition({ top: rect.bottom + 6, right: window.innerWidth - rect.right });
-    setOpen(true);
-  }
-
-  // Move focus to the first item once the panel exists, per the menu pattern.
+  // Positioned after mount rather than on open, because placement depends on the
+  // rendered height: a row near the bottom of the viewport — routine on a phone,
+  // where the whole table is barely taller than the screen — would otherwise
+  // open its menu below the fold. Hidden until measured so it can't be seen
+  // jumping from one placement to the other.
   useLayoutEffect(() => {
     if (!open) return;
+    const trigger = triggerRef.current?.getBoundingClientRect();
+    const menu = menuRef.current?.getBoundingClientRect();
+    if (!trigger || !menu) return;
+
+    const right = window.innerWidth - trigger.right;
+    const spaceBelow = window.innerHeight - trigger.bottom;
+    setPosition(
+      spaceBelow < menu.height + GAP && trigger.top > spaceBelow
+        ? { bottom: window.innerHeight - trigger.top + GAP, right }
+        : { top: trigger.bottom + GAP, right },
+    );
+
     menuRef.current?.querySelector<HTMLElement>("[data-item]")?.focus();
   }, [open]);
 
@@ -102,7 +118,7 @@ export function ActionMenu({ items, ariaLabel, className }: ActionMenuProps) {
   function handleTriggerKeyDown(e: KeyboardEvent<HTMLButtonElement>) {
     if (e.key === "ArrowDown" || e.key === "Enter" || e.key === " ") {
       e.preventDefault();
-      openMenu();
+      setOpen(true);
     }
   }
 
@@ -135,21 +151,20 @@ export function ActionMenu({ items, ariaLabel, className }: ActionMenuProps) {
         aria-haspopup="menu"
         aria-expanded={open}
         aria-controls={open ? menuId : undefined}
-        onClick={() => (open ? close(false) : openMenu())}
+        onClick={() => (open ? close(false) : setOpen(true))}
         onKeyDown={handleTriggerKeyDown}
       >
         <Icon name="more_vert" size={20} />
       </button>
 
       {open &&
-        position &&
         createPortal(
           <div
             id={menuId}
             role="menu"
             ref={menuRef}
             className={styles.menu}
-            style={{ top: position.top, right: position.right }}
+            style={{ ...position, visibility: position ? "visible" : "hidden" }}
             onKeyDown={handleMenuKeyDown}
           >
             {items.map((item) =>
