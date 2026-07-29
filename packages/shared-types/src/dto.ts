@@ -47,9 +47,21 @@ export interface LoginResponse {
 
 export interface CreateServiceRequest {
   name: string;
+  description?: string | null;
   durationMinutes: number;
   price: string;
   professionalIds: string[];
+}
+
+export interface UpdateServiceRequest {
+  name?: string;
+  description?: string | null;
+  durationMinutes?: number;
+  price?: string;
+  // When provided, fully replaces the service's ServiceProfessional rows.
+  professionalIds?: string[];
+  // R60: deactivation (and reactivation) — never a hard delete.
+  isActive?: boolean;
 }
 
 export interface CreateProfessionalRequest {

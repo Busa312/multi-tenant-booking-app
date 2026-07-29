@@ -9,7 +9,7 @@ import type {
   LoginRequest,
   LoginResponse,
   ProfessionalSummary,
-  Service,
+  ServiceSummary,
   SetPasswordRequest,
   Tenant,
   TenantColors,
@@ -17,6 +17,7 @@ import type {
   TimeOff,
   UpcomingAppointmentCountResponse,
   UpdateProfessionalRequest,
+  UpdateServiceRequest,
   UpsertBusinessHoursRequest,
 } from "@booking/shared-types";
 import { HttpClient, type ApiClientOptions } from "./http";
@@ -54,15 +55,15 @@ export class CmsApiClient {
   }
 
   listServices() {
-    return this.http.get<Service[]>("/cms/services");
+    return this.http.get<ServiceSummary[]>("/cms/services");
   }
 
   createService(payload: CreateServiceRequest) {
-    return this.http.post<Service>("/cms/services", payload);
+    return this.http.post<ServiceSummary>("/cms/services", payload);
   }
 
-  updateService(id: string, payload: Partial<CreateServiceRequest>) {
-    return this.http.patch<Service>(`/cms/services/${id}`, payload);
+  updateService(id: string, payload: UpdateServiceRequest) {
+    return this.http.patch<ServiceSummary>(`/cms/services/${id}`, payload);
   }
 
   deleteService(id: string) {

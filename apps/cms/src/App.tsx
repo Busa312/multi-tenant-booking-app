@@ -5,6 +5,7 @@ import { SetPasswordPage } from "./pages/SetPassword.js";
 import { DashboardPage } from "./pages/Dashboard.js";
 import { BrandingSettingsPage } from "./pages/BrandingSettings.js";
 import { ProfessionalsPage } from "./pages/Professionals.js";
+import { ServicesPage } from "./pages/Services.js";
 import { HoursPage } from "./pages/Hours.js";
 
 function RequireAuth({ children }: { children: React.ReactElement }) {
@@ -48,6 +49,16 @@ export function App() {
           <RequireAuth>
             <RequireOwner>
               <ProfessionalsPage />
+            </RequireOwner>
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/services"
+        element={
+          <RequireAuth>
+            <RequireOwner>
+              <ServicesPage />
             </RequireOwner>
           </RequireAuth>
         }

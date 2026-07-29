@@ -2,9 +2,11 @@
 // co-located CSS Module so pages compose behavior, not CSS.
 export { Icon } from "./Icon.js";
 export { Button } from "./Button.js";
+export { ActionMenu, type ActionMenuItem } from "./ActionMenu.js";
 export { ButtonLink } from "./ButtonLink.js";
 export { TextInput } from "./TextInput.js";
-export { Select } from "./Select.js";
+export { Textarea } from "./Textarea.js";
+export { Select, type SelectOption } from "./Select.js";
 export { Field } from "./Field.js";
 export { Checkbox } from "./Checkbox.js";
 export { Alert } from "./Alert.js";

@@ -6,9 +6,10 @@ import { useI18n } from "../i18n/I18nContext.js";
 import { AppShell } from "../components/AppShell.js";
 import { Modal } from "../components/Modal.js";
 import {
+  ActionMenu,
+  type ActionMenuItem,
   Alert,
   Button,
-  ButtonLink,
   Checkbox,
   Eyebrow,
   Field,
@@ -23,7 +24,7 @@ import {
 } from "../components/ui/index.js";
 import styles from "./Professionals.module.css";
 
-const COLUMNS = "1.3fr 1.6fr 130px 110px 200px";
+const COLUMNS = "1.3fr 1.6fr 130px 110px 60px";
 
 const LOGIN_STATUS_KEY: Record<ProfessionalSummary["cmsLoginStatus"], string> = {
   none: "professionals.statusNoLogin",
@@ -115,6 +116,24 @@ export function ProfessionalsPage() {
     }
   }
 
+  function rowActions(p: ProfessionalSummary): ActionMenuItem[] {
+    return [
+      { label: t("professionals.edit"), icon: "edit", onSelect: () => setEditTarget(p) },
+      // Stays a real link (not a handler) so it can still be opened in a new tab.
+      { label: t("professionals.hours"), icon: "schedule", to: `/hours?professionalId=${p.id}` },
+      ...(p.cmsLoginStatus === "none"
+        ? [{ label: t("professionals.invite"), icon: "mail", onSelect: () => setInviteTarget(p) }]
+        : []),
+      p.isActive
+        ? { label: t("professionals.deactivate"), icon: "visibility_off", onSelect: () => handleDeactivateClick(p) }
+        : { label: t("professionals.reactivate"), icon: "visibility", onSelect: () => handleReactivate(p) },
+      // R80: delete is only offered for someone who was never booked.
+      ...(p.hasAppointmentHistory
+        ? []
+        : [{ label: t("professionals.delete"), icon: "delete", danger: true, onSelect: () => handleDelete(p) }]),
+    ];
+  }
+
   return (
     <AppShell title={t("professionals.title")} subtitle={t("professionals.subtitle")}>
       <div className="fade-up">
@@ -152,31 +171,7 @@ export function ProfessionalsPage() {
                     </Pill>
                   </div>
                   <div className={styles.actions}>
-                    <Button variant="secondary" size="sm" onClick={() => setEditTarget(p)}>
-                      {t("professionals.edit")}
-                    </Button>
-                    <ButtonLink to={`/hours?professionalId=${p.id}`} variant="secondary" size="sm">
-                      {t("professionals.hours")}
-                    </ButtonLink>
-                    {p.cmsLoginStatus === "none" && (
-                      <Button variant="secondary" size="sm" onClick={() => setInviteTarget(p)}>
-                        {t("professionals.invite")}
-                      </Button>
-                    )}
-                    {p.isActive ? (
-                      <Button variant="secondary" size="sm" onClick={() => handleDeactivateClick(p)}>
-                        {t("professionals.deactivate")}
-                      </Button>
-                    ) : (
-                      <Button variant="secondary" size="sm" onClick={() => handleReactivate(p)}>
-                        {t("professionals.reactivate")}
-                      </Button>
-                    )}
-                    {!p.hasAppointmentHistory && (
-                      <Button variant="secondary" size="sm" danger onClick={() => handleDelete(p)}>
-                        {t("professionals.delete")}
-                      </Button>
-                    )}
+                    <ActionMenu ariaLabel={t("common.rowActions", { name: p.name })} items={rowActions(p)} />
                   </div>
                 </TableRow>
               ))}

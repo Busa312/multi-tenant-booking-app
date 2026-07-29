@@ -43,6 +43,7 @@ async function main() {
       id: "00000000-0000-0000-0000-000000000002",
       tenantId: tenant.id,
       name: "Haircut",
+      description: "Wash, cut and finish with a consultation.",
       durationMinutes: 45,
       price: 40,
     },

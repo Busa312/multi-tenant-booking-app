@@ -23,6 +23,11 @@ export class TenantConfigDto {
   @ApiPropertyOptional() logoUrl?: string;
   @ApiPropertyOptional({ type: TenantConfigColorsDto }) colors?: TenantConfigColorsDto;
   @ApiPropertyOptional({ type: TenantConfigCopyDto }) copy?: TenantConfigCopyDto;
+  @ApiPropertyOptional({
+    type: [String],
+    description: "Public content locales, first entry = default (R80). Absent or single-entry = monolingual.",
+  })
+  enabledLocales?: string[];
 }
 
 export class TenantDto {
@@ -48,6 +53,8 @@ export class ProfessionalSummaryDto extends ProfessionalDto {
   @ApiProperty({ type: [String] }) serviceIds!: string[];
   @ApiProperty({ enum: ["none", "invited", "active"] }) cmsLoginStatus!: "none" | "invited" | "active";
   @ApiProperty({ nullable: true, type: Boolean }) cmsLoginActive!: boolean | null;
+  @ApiProperty({ description: "Any appointment ever — when true, only deactivation is allowed" })
+  hasAppointmentHistory!: boolean;
 }
 
 export class CreateProfessionalRequestDto {
@@ -83,20 +90,31 @@ export class ServiceDto {
   @ApiProperty() id!: string;
   @ApiProperty() tenantId!: string;
   @ApiProperty() name!: string;
+  @ApiProperty({ nullable: true, type: String }) description!: string | null;
   @ApiProperty() durationMinutes!: number;
   @ApiProperty({ description: "Decimal, transported as a string to avoid float precision loss" })
   price!: string;
+  @ApiProperty() isActive!: boolean;
   @ApiProperty() createdAt!: string;
+}
+
+export class ServiceSummaryDto extends ServiceDto {
+  @ApiProperty({ type: [String] }) professionalIds!: string[];
+  @ApiProperty({ description: "Any appointment ever — when true, only deactivation is allowed (R70)" })
+  hasAppointmentHistory!: boolean;
 }
 
 export class CreateServiceRequestDto {
   @ApiProperty() name!: string;
-  @ApiProperty() durationMinutes!: number;
-  @ApiProperty() price!: string;
+  @ApiPropertyOptional({ nullable: true, type: String }) description?: string | null;
+  @ApiProperty({ minimum: 1, description: "Positive whole number of minutes" }) durationMinutes!: number;
+  @ApiProperty({ example: "45.00", description: "Positive decimal, in GEL" }) price!: string;
   @ApiProperty({ type: [String] }) professionalIds!: string[];
 }
 
-export class UpdateServiceRequestDto extends PartialType(CreateServiceRequestDto) {}
+export class UpdateServiceRequestDto extends PartialType(CreateServiceRequestDto) {
+  @ApiPropertyOptional({ description: "R60: deactivate/reactivate — never a hard delete" }) isActive?: boolean;
+}
 
 export class BusinessHoursDto {
   @ApiProperty() id!: string;

@@ -26,6 +26,12 @@ export interface TenantConfig {
     tagline?: string;
     aboutText?: string;
   };
+  // R80: the tenant's public-facing content locales, first entry being the
+  // default one that the plain `name`/`description` columns hold. Absent or
+  // single-entry = monolingual, which is every tenant today; the CMS only
+  // renders per-locale tabs once this lists more than one. Actual per-locale
+  // *storage* (JSONB per field) is owned by the Translations feature.
+  enabledLocales?: string[];
 }
 
 export interface Professional {
@@ -66,9 +72,20 @@ export interface Service {
   id: string;
   tenantId: string;
   name: string;
+  description: string | null; // optional long text, shown on the public site
   durationMinutes: number;
   price: string; // numeric transported as string to avoid float precision loss
+  isActive: boolean;
   createdAt: string;
+}
+
+// Returned by GET /cms/services only — the public service listing stays the
+// plain Service shape above.
+export interface ServiceSummary extends Service {
+  professionalIds: string[];
+  // R70: any appointment ever (not just upcoming) — when true, delete is
+  // unavailable client-side (not just rejected server-side), only deactivate.
+  hasAppointmentHistory: boolean;
 }
 
 export interface ServiceProfessional {

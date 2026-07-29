@@ -1,0 +1,18 @@
+.numberRow {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.professionalList {
+  margin-bottom: 6px;
+}
+.hint {
+  color: var(--ink-soft);
+  font-size: 13px;
+  margin: 0 0 12px;
+}
+/* Pulls a validation message up against the field it belongs to, overriding
+   Alert's own standalone spacing. */
+.fieldError {
+  margin-top: -8px;
+}

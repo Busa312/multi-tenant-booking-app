@@ -1,0 +1,51 @@
+.toolbar {
+  display: flex;
+  align-items: center;
+  margin-bottom: 18px;
+}
+/* Same reasoning as the professionals table: too many columns to reflow, so it
+   scrolls horizontally inside this container rather than overflowing the page. */
+.tableScroll {
+  overflow-x: auto;
+}
+.table {
+  min-width: 800px;
+}
+.count {
+  color: var(--ink-soft);
+  font-size: 13px;
+}
+.add {
+  margin-left: auto;
+}
+.name {
+  font-weight: 600;
+}
+.description {
+  margin-top: 2px;
+  font-size: 12.5px;
+  color: var(--ink-soft);
+  /* Descriptions are free text and can be long — keep rows uniform. */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.cell {
+  font-size: 13.5px;
+}
+.badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+/* One kebab trigger, pinned to the row's trailing edge. */
+.actions {
+  display: flex;
+  justify-content: flex-end;
+}
+.muted {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 13.5px;
+}

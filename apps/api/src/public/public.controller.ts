@@ -59,7 +59,9 @@ export class PublicController {
   @ApiOkResponse({ type: [ServiceDto] })
   async listServices(): Promise<Service[]> {
     const { tenantId } = this.tenantContext.current;
-    const services = await this.prisma.forTenant((tx) => tx.service.findMany({ where: { tenantId } }));
+    const services = await this.prisma.forTenant((tx) =>
+      tx.service.findMany({ where: { tenantId, isActive: true } }),
+    );
     return services.map(serializeService);
   }
 
