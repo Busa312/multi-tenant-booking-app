@@ -168,6 +168,64 @@ export class AppointmentDto {
   @ApiProperty() updatedAt!: string;
 }
 
+// Staff-facing fields deliberately live here and not on AppointmentDto, which is
+// also what a customer's magic link returns.
+export class AppointmentSummaryDto extends AppointmentDto {
+  @ApiProperty({ nullable: true, type: String, description: "TenantUser who created it; null = customer's own booking" })
+  createdByUserId!: string | null;
+  @ApiProperty({ nullable: true, type: String, description: "Internal staff note — never shown to the customer" })
+  notes!: string | null;
+  @ApiProperty() serviceName!: string;
+  @ApiProperty() serviceDurationMinutes!: number;
+  @ApiProperty({ nullable: true, type: String }) professionalName!: string | null;
+  @ApiProperty({ description: "A customer magic link exists (public-site booking) — rescheduling rotates it (R110)" })
+  hasMagicLink!: boolean;
+}
+
+export class CreateCmsAppointmentRequestDto {
+  @ApiProperty() serviceId!: string;
+  @ApiPropertyOptional({ description: "Required for owner; forced to their own for professional logins (R20)" })
+  professionalId?: string;
+  @ApiProperty({ example: "2026-08-03", description: "YYYY-MM-DD, tenant timezone" }) date!: string;
+  @ApiProperty({ example: "14:00", description: "HH:mm, tenant timezone" }) time!: string;
+  @ApiProperty() userName!: string;
+  @ApiProperty() phoneNumber!: string;
+  @ApiPropertyOptional() email?: string;
+  @ApiPropertyOptional() notes?: string;
+  @ApiPropertyOptional({ description: "R60: book despite the conflicts the 409 named" }) override?: boolean;
+}
+
+export class RescheduleCmsAppointmentRequestDto {
+  @ApiPropertyOptional({ description: "Send with `time` or not at all" }) date?: string;
+  @ApiPropertyOptional() time?: string;
+  @ApiPropertyOptional() professionalId?: string;
+  @ApiPropertyOptional() override?: boolean;
+}
+
+export class UpdateAppointmentStatusRequestDto {
+  @ApiProperty({
+    enum: ["booked", "completed", "no_show"],
+    description: "R100: staff-set only. Cancelling has its own endpoint.",
+  })
+  status!: "booked" | "completed" | "no_show";
+}
+
+export class BookingConflictDto {
+  @ApiProperty({ enum: ["appointment", "outside_business_hours", "time_off"] })
+  type!: "appointment" | "outside_business_hours" | "time_off";
+  @ApiProperty({ nullable: true, type: String }) professionalName!: string | null;
+  @ApiProperty({ nullable: true, type: String }) startAt!: string | null;
+  @ApiProperty({ nullable: true, type: String }) endAt!: string | null;
+  @ApiProperty({ nullable: true, type: String, description: "Customer name, or a time-off block's reason" })
+  detail!: string | null;
+}
+
+/** 409 body from the CMS create/reschedule routes when `override` isn't set. */
+export class BookingConflictResponseDto {
+  @ApiProperty({ enum: ["booking_conflict"] }) code!: "booking_conflict";
+  @ApiProperty({ type: [BookingConflictDto] }) conflicts!: BookingConflictDto[];
+}
+
 export class CreateAppointmentRequestDto {
   @ApiProperty({ type: [String] }) serviceIds!: string[];
   @ApiPropertyOptional({ description: 'Omitted = "any available"' }) professionalId?: string;

@@ -12,6 +12,8 @@ const MAX_TIMEOUT_MS = 2 ** 31 - 1;
 interface AuthContextValue {
   token: string | null;
   role: TenantUserRole | null;
+  /** Present only for `professional` logins — the calendar they're confined to (R20). */
+  professionalId: string | null;
   /** True when the session ended on its own rather than by signing out — lets
    *  the login screen explain why the user is suddenly back there. */
   sessionExpired: boolean;
@@ -103,6 +105,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     () => ({
       token: session?.token ?? null,
       role: session?.claims.role ?? null,
+      professionalId: session?.claims.professionalId ?? null,
       sessionExpired,
       login,
       logout,

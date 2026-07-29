@@ -1,0 +1,15 @@
+/* Alert is a <p> sized for one line; a conflict list needs block layout. */
+.notice {
+  display: block;
+}
+.lead {
+  display: block;
+  font-weight: 600;
+}
+.item {
+  display: block;
+  margin-top: 3px;
+}
+.item::before {
+  content: "• ";
+}

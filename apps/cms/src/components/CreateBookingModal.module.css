@@ -1,0 +1,20 @@
+.date {
+  max-width: 200px;
+}
+.contactRow {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+/* Phone and email share a row until the inputs start squeezing. */
+@media (max-width: 460px) {
+  .contactRow {
+    grid-template-columns: 1fr;
+    gap: 0;
+  }
+}
+.hint {
+  color: var(--ink-soft);
+  font-size: 12.5px;
+  margin: 0 0 12px;
+}

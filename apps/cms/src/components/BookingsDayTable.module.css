@@ -1,0 +1,48 @@
+/* Same reasoning as the services table: too many columns to reflow, so it
+   scrolls horizontally inside this container rather than overflowing the page. */
+.tableScroll {
+  overflow-x: auto;
+}
+.table {
+  min-width: 840px;
+}
+.time {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  font-size: 13.5px;
+}
+.timeEnd {
+  display: block;
+  font-weight: 400;
+  color: var(--ink-soft);
+}
+.name {
+  font-weight: 600;
+}
+.cell {
+  font-size: 13.5px;
+}
+.meta {
+  margin-top: 2px;
+  font-size: 12.5px;
+  color: var(--ink-soft);
+}
+/* Notes are free text and can run long — keep rows a uniform height. */
+.notes {
+  margin-top: 3px;
+  font-size: 12.5px;
+  color: var(--ink-soft);
+  font-style: italic;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.rowCancelled {
+  opacity: 0.62;
+}
+/* One kebab trigger, pinned to the row's trailing edge. */
+.actions {
+  display: flex;
+  justify-content: flex-end;
+}

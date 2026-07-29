@@ -52,6 +52,7 @@
 .item:hover,
 .item:focus-visible {
   background: var(--surface-2);
+  text-decoration: none;
 }
 .danger {
   color: var(--danger);

@@ -1,0 +1,33 @@
+.toolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.dayNav {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.dateInput {
+  width: 165px;
+}
+.viewToggle {
+  display: flex;
+  gap: 4px;
+}
+.add {
+  margin-left: auto;
+}
+.count {
+  color: var(--ink-soft);
+  font-size: 13px;
+  margin-bottom: 10px;
+}
+@media (max-width: 620px) {
+  .add {
+    margin-left: 0;
+    width: 100%;
+  }
+}

@@ -1,6 +1,10 @@
 import type {
-  Appointment,
+  AppointmentSummary,
+  AvailabilitySlot,
   BusinessHours,
+  CmsAppointmentListQuery,
+  CmsAvailabilityQuery,
+  CreateCmsAppointmentRequest,
   CreateProfessionalRequest,
   CreateServiceRequest,
   CreateTimeOffRequest,
@@ -9,6 +13,7 @@ import type {
   LoginRequest,
   LoginResponse,
   ProfessionalSummary,
+  RescheduleCmsAppointmentRequest,
   ServiceSummary,
   SetPasswordRequest,
   Tenant,
@@ -16,6 +21,7 @@ import type {
   TenantConfig,
   TimeOff,
   UpcomingAppointmentCountResponse,
+  UpdateAppointmentStatusRequest,
   UpdateProfessionalRequest,
   UpdateServiceRequest,
   UpsertBusinessHoursRequest,
@@ -118,15 +124,41 @@ export class CmsApiClient {
     return this.http.delete<void>(`/cms/time-off/${id}`);
   }
 
-  listAppointments() {
-    return this.http.get<Appointment[]>("/cms/appointments");
+  /** Both dates are tenant-local YYYY-MM-DD days, inclusive. */
+  listAppointments(query: CmsAppointmentListQuery = {}) {
+    const params = new URLSearchParams();
+    if (query.from) params.set("from", query.from);
+    if (query.to) params.set("to", query.to);
+    const search = params.toString();
+    return this.http.get<AppointmentSummary[]>(`/cms/appointments${search ? `?${search}` : ""}`);
+  }
+
+  /** R50: the same open slots the public site would offer for this pairing. */
+  listAppointmentAvailability(query: CmsAvailabilityQuery) {
+    const params = new URLSearchParams({ serviceId: query.serviceId, date: query.date });
+    if (query.professionalId) params.set("professionalId", query.professionalId);
+    return this.http.get<AvailabilitySlot[]>(`/cms/appointments/availability?${params.toString()}`);
+  }
+
+  /**
+   * Answers 409 with a BookingConflictResponse body when the chosen time
+   * collides with anything and `override` isn't set (R60) — the caller shows the
+   * named conflicts and retries with `override: true` if staff confirms.
+   */
+  createAppointment(payload: CreateCmsAppointmentRequest) {
+    return this.http.post<AppointmentSummary>("/cms/appointments", payload);
+  }
+
+  /** Same 409-then-override contract as createAppointment. */
+  rescheduleAppointment(id: string, payload: RescheduleCmsAppointmentRequest) {
+    return this.http.patch<AppointmentSummary>(`/cms/appointments/${id}/reschedule`, payload);
+  }
+
+  updateAppointmentStatus(id: string, payload: UpdateAppointmentStatusRequest) {
+    return this.http.patch<AppointmentSummary>(`/cms/appointments/${id}/status`, payload);
   }
 
   cancelAppointment(id: string) {
-    return this.http.post<Appointment>(`/cms/appointments/${id}/cancel`);
-  }
-
-  rescheduleAppointment(id: string, startAt: string) {
-    return this.http.patch<Appointment>(`/cms/appointments/${id}/reschedule`, { startAt });
+    return this.http.post<AppointmentSummary>(`/cms/appointments/${id}/cancel`);
   }
 }

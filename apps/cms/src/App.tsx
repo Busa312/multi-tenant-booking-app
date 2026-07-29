@@ -3,6 +3,7 @@ import { useAuth } from "./auth/AuthContext.js";
 import { LoginPage } from "./pages/Login.js";
 import { SetPasswordPage } from "./pages/SetPassword.js";
 import { DashboardPage } from "./pages/Dashboard.js";
+import { BookingsPage } from "./pages/Bookings.js";
 import { BrandingSettingsPage } from "./pages/BrandingSettings.js";
 import { ProfessionalsPage } from "./pages/Professionals.js";
 import { ServicesPage } from "./pages/Services.js";
@@ -30,6 +31,16 @@ export function App() {
         element={
           <RequireAuth>
             <DashboardPage />
+          </RequireAuth>
+        }
+      />
+      {/* Owner and professional both manage bookings (R10/R20) — the API scopes
+          a professional's view to their own appointments, so no owner gate. */}
+      <Route
+        path="/bookings"
+        element={
+          <RequireAuth>
+            <BookingsPage />
           </RequireAuth>
         }
       />
