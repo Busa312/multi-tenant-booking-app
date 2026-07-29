@@ -34,8 +34,10 @@ export const serializeService = (s: PrismaService): Service => ({
   id: s.id,
   tenantId: s.tenantId,
   name: s.name,
+  description: s.description,
   durationMinutes: s.durationMinutes,
   price: s.price.toString(),
+  isActive: s.isActive,
   createdAt: s.createdAt.toISOString(),
 });
 

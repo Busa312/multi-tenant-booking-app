@@ -10,7 +10,7 @@
   overflow-x: auto;
 }
 .table {
-  min-width: 860px;
+  min-width: 720px;
 }
 .count {
   color: var(--ink-soft);
@@ -26,11 +26,10 @@
   font-size: 13px;
   color: var(--ink-soft);
 }
+/* One kebab trigger, pinned to the row's trailing edge. */
 .actions {
   display: flex;
   justify-content: flex-end;
-  gap: 4px;
-  flex-wrap: wrap;
 }
 .serviceList {
   margin-bottom: 6px;

@@ -1,8 +1,101 @@
-.select {
+.root {
+  /* Anchor for the absolutely positioned list below. */
+  position: relative;
+}
+/* Matches TextInput's box exactly so a select and a text field sit flush when
+   they share a row. */
+.trigger {
   width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
   border: 1px solid var(--border);
   border-radius: 11px;
   background: var(--surface);
   padding: 12px 13px;
+  font-family: inherit;
   font-size: 14px;
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+}
+/* Compact variant for chrome rather than forms (the topbar language switcher),
+   matching Button's own `sm` step. */
+.sm {
+  padding: 8px 10px;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 600;
+  gap: 4px;
+}
+.trigger:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.trigger[aria-expanded="true"] {
+  border-color: var(--accent);
+}
+.label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.placeholder {
+  color: var(--ink-soft);
+}
+.chevron {
+  color: var(--ink-soft);
+  flex-shrink: 0;
+  transition: transform 0.15s ease;
+}
+.trigger[aria-expanded="true"] .chevron {
+  transform: rotate(180deg);
+}
+.list {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  margin: 0;
+  padding: 4px;
+  list-style: none;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: 0 12px 28px rgba(43, 38, 32, 0.14);
+  max-height: 240px;
+  overflow-y: auto;
+}
+.option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 9px 11px;
+  border-radius: 8px;
+  font-size: 14px;
+  color: var(--ink);
+  cursor: pointer;
+}
+/* The highlight follows both pointer and keyboard, so there is exactly one
+   active row however the list is being driven. */
+.optionActive {
+  background: var(--surface-2);
+}
+.option[aria-selected="true"] {
+  color: var(--accent);
+  font-weight: 600;
+}
+.optionLabel {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chevron {
+    transition: none;
+  }
 }

@@ -28,8 +28,8 @@ These rules codify the conventions already used across this monorepo. Follow the
 - Tag code that implements a spec requirement with its `// Rxx:` comment linking back to the requirements doc.
 
 ## 4. React / Next components
-- **One exported/reusable component per file.** Private, tightly-coupled subcomponents may share the file (e.g. a page and its modals). Component files are PascalCase.
-- CMS (`apps/cms`): named exports; route components in `pages/` with a `Page` suffix, reusable UI in `components/`. Data fetching = `useState`/`useEffect` + a local `load()`, `null` as the loading sentinel, an error string in state. Use Context only for cross-cutting state (auth); consumer hooks like `useAuth` throw when used outside their provider.
+- **Exactly one component per file — no exceptions.** A page's modals and sub-forms get their own files too, even when nothing else will ever use them; a file that renders two components gets split. Each component brings its own co-located `.module.css` with it (§6), so splitting a file means splitting its stylesheet. Component files are PascalCase.
+- CMS (`apps/cms`): named exports; route components in `pages/` with a `Page` suffix, every other component in `components/` — including page-specific ones like `EditServiceModal`. Data fetching = `useState`/`useEffect` + a local `load()`, `null` as the loading sentinel, an error string in state. Use Context only for cross-cutting state (auth); consumer hooks like `useAuth` throw when used outside their provider.
 - public-site (`apps/public-site`): App Router route files stay lowercase (`page.tsx`, `layout.tsx`, `route.ts`) with default exports (framework-forced); shared components are PascalCase named exports. Server Components by default; add `"use client"` only when needed.
 - Relative imports in CMS/API use an explicit `.js` suffix (ESM). Cross-`@booking/*` imports omit extensions.
 

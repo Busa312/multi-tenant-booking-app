@@ -22,8 +22,7 @@ interface AppShellProps {
 }
 
 // Nav only lists routes that actually exist — no placeholder links to
-// not-yet-built pages (Bookings/Professionals/Services have API endpoints
-// but no CMS UI yet).
+// not-yet-built pages (Bookings has API endpoints but no CMS UI yet).
 export function AppShell({ title, subtitle, tenantSubdomain, children }: AppShellProps) {
   const { role, logout } = useAuth();
   const { t } = useI18n();
@@ -36,6 +35,7 @@ export function AppShell({ title, subtitle, tenantSubdomain, children }: AppShel
     { to: "/", icon: "space_dashboard", labelKey: "nav.dashboard" },
     ...(role === "owner"
       ? [
+          { to: "/services", icon: "design_services", labelKey: "nav.services" },
           { to: "/professionals", icon: "diversity_3", labelKey: "nav.professionals" },
           { to: "/settings/colors", icon: "palette", labelKey: "nav.colors" },
         ]

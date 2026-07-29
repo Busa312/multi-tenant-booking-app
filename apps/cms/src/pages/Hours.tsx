@@ -113,25 +113,24 @@ export function HoursPage() {
 }
 
 function ProfessionalSelect({
+  id,
   value,
   onChange,
   professionals,
 }: {
+  id: string;
   value: string;
   onChange: (v: string) => void;
   professionals: ProfessionalSummary[];
 }) {
   const { t } = useI18n();
-  return (
-    <Select value={value} onChange={(e) => onChange(e.target.value)}>
-      <option value="">{t("hours.tenantWide")}</option>
-      {professionals.map((p) => (
-        <option key={p.id} value={p.id}>
-          {p.name}
-        </option>
-      ))}
-    </Select>
-  );
+  // The empty value is a real choice here, not a placeholder — it means
+  // "tenant-wide" (BusinessHours.professionalId === null).
+  const options = [
+    { value: "", label: t("hours.tenantWide") },
+    ...professionals.map((p) => ({ value: p.id, label: p.name })),
+  ];
+  return <Select id={id} value={value} onChange={onChange} options={options} />;
 }
 
 function AddHoursForm({
@@ -168,17 +167,21 @@ function AddHoursForm({
 
   return (
     <Card as="form" onSubmit={handleSubmit}>
-      <Field label={t("hours.appliesTo")}>
-        <ProfessionalSelect value={professionalId} onChange={setProfessionalId} professionals={professionals} />
+      <Field label={t("hours.appliesTo")} htmlFor="hours-applies-to">
+        <ProfessionalSelect
+          id="hours-applies-to"
+          value={professionalId}
+          onChange={setProfessionalId}
+          professionals={professionals}
+        />
       </Field>
-      <Field label={t("hours.day")}>
-        <Select value={dayOfWeek} onChange={(e) => setDayOfWeek(e.target.value)}>
-          {messages.hours.days.map((label, i) => (
-            <option key={label} value={i}>
-              {label}
-            </option>
-          ))}
-        </Select>
+      <Field label={t("hours.day")} htmlFor="hours-day">
+        <Select
+          id="hours-day"
+          value={dayOfWeek}
+          onChange={setDayOfWeek}
+          options={messages.hours.days.map((label, i) => ({ value: String(i), label }))}
+        />
       </Field>
       <div className={styles.timeRow}>
         <Field label={t("hours.start")} className={styles.timeCol}>
@@ -230,8 +233,13 @@ function AddTimeOffForm({
 
   return (
     <Card as="form" onSubmit={handleSubmit}>
-      <Field label={t("hours.appliesTo")}>
-        <ProfessionalSelect value={professionalId} onChange={setProfessionalId} professionals={professionals} />
+      <Field label={t("hours.appliesTo")} htmlFor="timeoff-applies-to">
+        <ProfessionalSelect
+          id="timeoff-applies-to"
+          value={professionalId}
+          onChange={setProfessionalId}
+          professionals={professionals}
+        />
       </Field>
       <div className={styles.timeRow}>
         <Field label={t("hours.from")} className={styles.timeCol}>

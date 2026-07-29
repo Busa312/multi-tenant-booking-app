@@ -95,8 +95,10 @@ model Service {
   id              String   @id @default(uuid()) @db.Uuid
   tenantId        String   @map("tenant_id") @db.Uuid
   name            String
+  description     String?  @db.Text
   durationMinutes Int      @map("duration_minutes")
   price           Decimal  @db.Decimal(10, 2)
+  isActive        Boolean  @default(true) @map("is_active")
   createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz
 
   tenant               Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)

@@ -11,10 +11,13 @@ export default async function HomePage() {
   return (
     <main>
       <h1 style={{ color: "var(--color-primary)" }}>{tenant.name}</h1>
+      {/* Only active services reach this list — /public/services filters on
+          is_active (R60). Prices are GEL platform-wide. */}
       <ul>
         {services.map((service) => (
           <li key={service.id}>
-            {service.name} — {service.durationMinutes} min — ${service.price}
+            {service.name} — {service.durationMinutes} min — {service.price} ₾
+            {service.description && <p>{service.description}</p>}
           </li>
         ))}
       </ul>
