@@ -1,5 +1,9 @@
 .input {
   width: 100%;
+  /* Without this, `date`/`time`/`datetime-local` refuse to shrink below the UA's
+     intrinsic control width, so a pair of them in a flex or grid row pushes its
+     container wider than the viewport instead of narrowing. */
+  min-width: 0;
   border: 1px solid var(--border);
   border-radius: 11px;
   background: var(--surface);

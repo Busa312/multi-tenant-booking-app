@@ -1,11 +1,40 @@
-.card {
-  max-width: 560px;
+/* Quick actions band across the top, then the agenda at full width (it's the
+   list that most wants room), then the two history cards side by side. */
+.grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
 }
-.intro {
-  margin: 0 0 12px;
+.errorFull,
+.actions,
+.agenda {
+  grid-column: 1 / -1;
+}
+.trend {
+  grid-column: 1;
+}
+.top {
+  grid-column: 2;
+}
+/* Placeholder that keeps a slot's geometry while its data lands. */
+.pending {
   color: var(--ink-soft);
-  line-height: 1.6;
+  font-size: 13.5px;
 }
-.cta {
-  display: inline-flex;
+
+/* Not the 860px sidebar-drawer breakpoint, which is the tempting one: the
+   viewport isn't what these two cards live in. Subtract the 248px sidebar and
+   the content padding and a 1.4fr/1fr split at 900px leaves the right-hand
+   column about 200px of usable width — too little for a service name beside two
+   numeric columns, and too little for 30 bars to read as a shape. Two columns
+   start paying off only once the narrower one clears ~300px. */
+@media (max-width: 1140px) {
+  .grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .trend,
+  .top {
+    grid-column: 1;
+  }
 }

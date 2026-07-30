@@ -1,0 +1,38 @@
+.card {
+  /* The agenda is the tallest card; let it own its height rather than stretch. */
+  align-self: start;
+}
+.head {
+  display: flex;
+  align-items: flex-start;
+  /* The Georgian "Open the calendar" is half again as long as the English, and
+     the two of them stop fitting on one line on a narrow phone. */
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  margin-bottom: 14px;
+}
+.headText {
+  min-width: 0;
+}
+.count {
+  font-size: 13px;
+  color: var(--ink-soft);
+  margin-top: 2px;
+}
+.open {
+  margin-left: auto;
+  flex: none;
+}
+.empty {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 13.5px;
+}
+.done {
+  margin: 0 0 14px;
+  color: var(--ink-soft);
+  font-size: 13.5px;
+}
+.restLabel {
+  margin-bottom: 4px;
+}

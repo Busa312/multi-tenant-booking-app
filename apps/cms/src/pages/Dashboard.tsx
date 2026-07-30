@@ -1,39 +1,196 @@
-import { useEffect, useState } from "react";
-import type { Tenant } from "@booking/shared-types";
+import { useEffect, useMemo, useState } from "react";
+import type { AppointmentSummary, ProfessionalSummary, ServiceSummary } from "@booking/shared-types";
 import { cachedApi } from "../lib/cache.js";
 import { useAuth } from "../auth/AuthContext.js";
 import { useI18n } from "../i18n/I18nContext.js";
+import { buildTrend, dashboardRange, todaysAgenda, topServices, type DashboardRange } from "../lib/dashboardStats.js";
+import { tenantDateString } from "../lib/tenantTime.js";
 import { AppShell } from "../components/AppShell.js";
-import { ButtonLink, Card, Eyebrow, Icon } from "../components/ui/index.js";
+import { CreateBookingModal } from "../components/CreateBookingModal.js";
+import { DashboardQuickActions, type BookingBlocker } from "../components/DashboardQuickActions.js";
+import { TodayAgendaCard } from "../components/TodayAgendaCard.js";
+import { BookingTrendChart } from "../components/BookingTrendChart.js";
+import { TopServicesCard } from "../components/TopServicesCard.js";
+import { Alert, Card } from "../components/ui/index.js";
 import styles from "./Dashboard.module.css";
 
+/** Everything fetched once on mount and then held for the life of the page. */
+interface PageContext {
+  tenantName: string;
+  subdomain: string;
+  timezone: string;
+  services: ServiceSummary[];
+  professionals: ProfessionalSummary[];
+  /** The salon's today — not the staff browser's. */
+  today: string;
+  range: DashboardRange;
+}
+
+/** How often the "next up" highlight re-evaluates against the wall clock. */
+const TICK_MS = 60_000;
+
+/**
+ * The landing page after sign-in: what's on today, the things staff come here to
+ * do, and enough recent history to see how the salon is going.
+ *
+ * A `professional` login gets the same layout scoped to their own appointments —
+ * the API does that scoping (R20) — and no pricing anywhere, which the spec
+ * reserves for the owner.
+ */
 export function DashboardPage() {
-  const [tenant, setTenant] = useState<Tenant | null>(null);
-  const { role } = useAuth();
   const { t } = useI18n();
+  const { role, professionalId } = useAuth();
+
+  const [context, setContext] = useState<PageContext | null>(null);
+  const [appointments, setAppointments] = useState<AppointmentSummary[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [createOpen, setCreateOpen] = useState(false);
+  // Bumped on an interval so a dashboard left open all day stops pointing at an
+  // appointment that has already finished. No network involved.
+  const [nowTick, setNowTick] = useState(0);
 
   useEffect(() => {
-    cachedApi.getTenant().then(setTenant);
+    Promise.all([cachedApi.getTenant(), cachedApi.listServices(), cachedApi.listProfessionals()])
+      .then(([tenant, services, professionals]) => {
+        setContext({
+          tenantName: tenant.name,
+          subdomain: tenant.subdomain,
+          timezone: tenant.timezone,
+          services,
+          professionals,
+          today: tenantDateString(tenant.timezone),
+          range: dashboardRange(tenant.timezone),
+        });
+      })
+      .catch(() => setError(t("dashboard.errLoad")));
+    // Fetch once on mount; a language switch shouldn't trigger a refetch.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const range = context?.range;
+
+  function load(from: string, to: string) {
+    setAppointments(null);
+    cachedApi
+      .listAppointments({ from, to })
+      .then(setAppointments)
+      .catch(() => setError(t("dashboard.errLoad")));
+  }
+
+  useEffect(() => {
+    if (range) load(range.from, range.to);
+    // One request covers the whole page: the API's `to` bound runs to the next
+    // tenant-local midnight, so today's remaining appointments arrive in the
+    // same payload as the 30-day history.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [range?.from, range?.to]);
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setNowTick((n) => n + 1);
+      // Once the salon's date rolls over, the window itself has moved: without
+      // this, a dashboard left open overnight would keep yesterday's payload and
+      // show an empty agenda for the new day. Changing `range` refetches.
+      setContext((current) => {
+        if (!current) return current;
+        const today = tenantDateString(current.timezone);
+        if (today === current.today) return current;
+        return { ...current, today, range: dashboardRange(current.timezone) };
+      });
+    }, TICK_MS);
+    return () => clearInterval(timer);
+  }, []);
+
+  const stats = useMemo(() => {
+    if (!appointments || !context) return null;
+    return {
+      agenda: todaysAgenda(appointments, context.timezone, new Date()),
+      trend: buildTrend(appointments, context.timezone, context.range),
+      top: topServices(appointments),
+    };
+    // nowTick is a deliberate dependency: it's what moves "next up" along.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [appointments, context, nowTick]);
+
+  const activeServices = context?.services.filter((service) => service.isActive) ?? [];
+  const activeProfessionals = context?.professionals.filter((professional) => professional.isActive) ?? [];
+
+  // A professional login with no linked professional can't be pinned to a
+  // calendar, so the create form would offer an unlocked picker it shouldn't.
+  const canBookAsRole = role !== "professional" || professionalId !== null;
+  // One next step, not two: a tenant with neither is pointed at services first.
+  const blocker: BookingBlocker | null =
+    !context || !canBookAsRole
+      ? null
+      : activeServices.length === 0
+        ? "no-services"
+        : activeProfessionals.length === 0
+          ? "no-professionals"
+          : null;
+  const canBook = context !== null && canBookAsRole && blocker === null;
 
   return (
     <AppShell
-      title={tenant ? t("dashboard.welcome") : t("common.loading")}
-      subtitle={tenant ? tenant.name : undefined}
-      tenantSubdomain={tenant?.subdomain}
+      title={context ? t("dashboard.welcome") : t("common.loading")}
+      subtitle={context?.tenantName}
+      tenantSubdomain={context?.subdomain}
     >
-      <div className="fade-up">
-        <Card className={styles.card}>
-          <Eyebrow>{t("dashboard.eyebrow")}</Eyebrow>
-          <p className={styles.intro}>{t("dashboard.intro")}</p>
-          {role === "owner" && (
-            <ButtonLink to="/settings/colors" variant="secondary" className={styles.cta}>
-              <Icon name="palette" size={19} color="var(--accent)" />
-              {t("dashboard.editColors")}
-            </ButtonLink>
+      <div className={`${styles.grid} fade-up`}>
+        {error && <Alert className={styles.errorFull}>{error}</Alert>}
+
+        <div className={styles.actions}>
+          <DashboardQuickActions
+            role={role}
+            onNewBooking={() => setCreateOpen(true)}
+            canBook={canBook}
+            blocker={blocker}
+          />
+        </div>
+
+        {/* Each slot holds its place while the payload lands, so the grid doesn't
+            jump — and every widget below takes non-nullable data. */}
+        <div className={styles.agenda}>
+          {stats && context ? (
+            <TodayAgendaCard agenda={stats.agenda} timezone={context.timezone} isOwnOnly={role === "professional"} />
+          ) : (
+            <Card className={styles.pending}>{t("common.loading")}</Card>
           )}
-        </Card>
+        </div>
+
+        <div className={styles.trend}>
+          {stats ? (
+            <BookingTrendChart trend={stats.trend} />
+          ) : (
+            <Card className={styles.pending}>{t("common.loading")}</Card>
+          )}
+        </div>
+
+        <div className={styles.top}>
+          {stats ? (
+            <TopServicesCard services={stats.top} showValue={role === "owner"} />
+          ) : (
+            <Card className={styles.pending}>{t("common.loading")}</Card>
+          )}
+        </div>
       </div>
+
+      {createOpen && context && (
+        <CreateBookingModal
+          services={context.services}
+          professionals={context.professionals}
+          timezone={context.timezone}
+          lockedProfessionalId={role === "professional" ? professionalId : null}
+          defaultDate={context.today}
+          onClose={() => setCreateOpen(false)}
+          onCreated={() => {
+            setCreateOpen(false);
+            // Refetch rather than navigate: a booking made for next week won't
+            // appear in today's agenda, and that's correct — the calendar is
+            // where you go to see it.
+            load(context.range.from, context.range.to);
+          }}
+        />
+      )}
     </AppShell>
   );
 }

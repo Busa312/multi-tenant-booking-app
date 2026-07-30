@@ -1,0 +1,29 @@
+.card {
+  /* The toolbar reads as one band across the top of the grid, not a tall card. */
+  padding: 16px 20px;
+}
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.hint {
+  margin: 10px 0 0;
+  color: var(--ink-soft);
+  font-size: 12.5px;
+}
+
+/* Buttons stop fitting side by side well before the grid itself collapses. */
+@media (max-width: 620px) {
+  .row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+
+/* Finger-sized targets wherever the pointer is coarse (see Select.module.css). */
+@media (pointer: coarse) {
+  .row > * {
+    min-height: 44px;
+  }
+}
