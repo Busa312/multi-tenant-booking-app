@@ -12,7 +12,7 @@
 }
 
 /* See TextInput: sub-16px controls trigger iOS Safari's focus zoom. */
-@media (max-width: 520px) {
+@media (pointer: coarse) {
   .textarea {
     font-size: 16px;
   }

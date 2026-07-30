@@ -35,3 +35,10 @@
   background: var(--accent);
   color: var(--accent-ink);
 }
+
+/* See TextInput: sub-16px controls trigger iOS Safari's focus zoom. */
+@media (pointer: coarse) {
+  .group input {
+    font-size: 16px;
+  }
+}

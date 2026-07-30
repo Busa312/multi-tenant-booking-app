@@ -8,8 +8,9 @@
 }
 
 /* iOS Safari auto-zooms the page when focusing a control smaller than 16px, and
-   never zooms back out. Phone-sized viewports get the larger text instead. */
-@media (max-width: 520px) {
+   never zooms back out. Keyed on the pointer rather than width: a tablet, or a
+   phone held in landscape, is well past any phone breakpoint and still zooms. */
+@media (pointer: coarse) {
   .input {
     font-size: 16px;
   }

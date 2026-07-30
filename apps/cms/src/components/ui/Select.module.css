@@ -94,17 +94,6 @@
   white-space: nowrap;
 }
 
-/* See TextInput: sub-16px controls trigger iOS Safari's focus zoom. */
-@media (max-width: 520px) {
-  .trigger {
-    font-size: 16px;
-  }
-  .sm {
-    /* Chrome, not a form field — it isn't focus-zoomed, so it stays compact. */
-    font-size: 13px;
-  }
-}
-
 /* Finger-sized rows wherever the pointer is coarse, rather than keying off
    width — a touch laptop needs these as much as a phone does. */
 @media (pointer: coarse) {
@@ -113,6 +102,16 @@
   }
   .list {
     max-height: 60dvh;
+  }
+  /* Matches the 16px TextInput/Textarea use on touch. The trigger is a button,
+     so it is never focus-zoomed itself — this is purely so a Select sitting
+     beside a text field in the same form doesn't read a size smaller. */
+  .trigger {
+    font-size: 16px;
+  }
+  .sm {
+    /* Chrome, not a form field — it isn't focus-zoomed, so it stays compact. */
+    font-size: 13px;
   }
 }
 
