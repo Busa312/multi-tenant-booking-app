@@ -25,14 +25,14 @@ export class AuthService {
   async login({ subdomain, email, password }: LoginRequest): Promise<LoginResponse> {
     let tenantId: string;
     try {
-      tenantId = await this.tenantResolver.resolveTenantIdBySubdomain(subdomain);
+      tenantId = await this.tenantResolver.resolveTenantIdBySubdomain(subdomain.toLowerCase());
     } catch {
       throw new UnauthorizedException("Invalid business, email, or password");
     }
     this.tenantContext.update({ tenantId });
 
     const user = await this.prisma.forTenant((tx) =>
-      tx.tenantUser.findFirst({ where: { tenantId, email, isActive: true } }),
+      tx.tenantUser.findFirst({ where: { tenantId, email: email.toLowerCase(), isActive: true } }),
     );
 
     if (!user || !(await bcrypt.compare(password, user.passwordHash))) {
