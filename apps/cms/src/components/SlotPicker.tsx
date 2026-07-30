@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import type { AvailabilitySlot } from "@booking/shared-types";
-import { cmsApiClient } from "../lib/api.js";
+import { cachedApi } from "../lib/cache.js";
 import { useI18n } from "../i18n/I18nContext.js";
 import { cx } from "../lib/cx.js";
 import { formatTimeLabel, tenantTimeString } from "../lib/tenantTime.js";
@@ -42,7 +42,7 @@ export function SlotPicker({ serviceId, professionalId, date, timezone, value, o
     if (incomplete) {
       return undefined;
     }
-    cmsApiClient
+    cachedApi
       .listAppointmentAvailability({ serviceId, professionalId, date })
       .then((result) => {
         // A stale response from an earlier service/date must not overwrite the

@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { useSearchParams } from "react-router-dom";
 import type { BusinessHours, ProfessionalSummary, TimeOff } from "@booking/shared-types";
-import { cmsApiClient } from "../lib/api.js";
+import { cachedApi } from "../lib/cache.js";
 import { useI18n } from "../i18n/I18nContext.js";
 import { AppShell } from "../components/AppShell.js";
 import { Alert, Button, Card, Eyebrow, Field, Select, TextInput, Table, TableRow, TableEmpty } from "../components/ui/index.js";
@@ -19,7 +19,7 @@ export function HoursPage() {
   const [error, setError] = useState<string | null>(null);
 
   function load() {
-    Promise.all([cmsApiClient.listBusinessHours(), cmsApiClient.listTimeOff(), cmsApiClient.listProfessionals()])
+    Promise.all([cachedApi.listBusinessHours(), cachedApi.listTimeOff(), cachedApi.listProfessionals()])
       .then(([h, t2, p]) => {
         setHours(h);
         setTimeOff(t2);
@@ -67,7 +67,7 @@ export function HoursPage() {
                   size="sm"
                   icon="delete"
                   title={t("hours.deleteTitle")}
-                  onClick={() => cmsApiClient.deleteBusinessHours(h.id).then(load)}
+                  onClick={() => cachedApi.deleteBusinessHours(h.id).then(load)}
                 />
               </TableRow>
             ))}
@@ -95,7 +95,7 @@ export function HoursPage() {
                   size="sm"
                   icon="delete"
                   title={t("hours.deleteTitle")}
-                  onClick={() => cmsApiClient.deleteTimeOff(to.id).then(load)}
+                  onClick={() => cachedApi.deleteTimeOff(to.id).then(load)}
                 />
               </TableRow>
             ))}
@@ -153,7 +153,7 @@ function AddHoursForm({
     e.preventDefault();
     setSaving(true);
     try {
-      await cmsApiClient.upsertBusinessHours({
+      await cachedApi.upsertBusinessHours({
         professionalId: professionalId || undefined,
         dayOfWeek: Number(dayOfWeek),
         startTime,
@@ -218,7 +218,7 @@ function AddTimeOffForm({
     e.preventDefault();
     setSaving(true);
     try {
-      await cmsApiClient.createTimeOff({
+      await cachedApi.createTimeOff({
         professionalId: professionalId || undefined,
         startAt: new Date(startAt).toISOString(),
         endAt: new Date(endAt).toISOString(),

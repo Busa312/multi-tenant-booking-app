@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from "react";
 import type { ProfessionalSummary, ServiceSummary } from "@booking/shared-types";
-import { cmsApiClient } from "../lib/api.js";
+import { cachedApi } from "../lib/cache.js";
 import { useI18n } from "../i18n/I18nContext.js";
 import { Modal } from "./Modal.js";
 import { LocalizedField } from "./LocalizedField.js";
@@ -72,8 +72,8 @@ export function EditServiceModal({ target, professionals, locales, onClose, onSa
       };
 
       const saved = isNew
-        ? await cmsApiClient.createService(payload)
-        : await cmsApiClient.updateService(target.id, payload);
+        ? await cachedApi.createService(payload)
+        : await cachedApi.updateService(target.id, payload);
       onSaved(saved);
     } catch {
       setError(t("services.errSave"));

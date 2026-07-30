@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import type { AppointmentStatus, AppointmentSummary, ProfessionalSummary, ServiceSummary } from "@booking/shared-types";
-import { cmsApiClient } from "../lib/api.js";
+import { cachedApi } from "../lib/cache.js";
 import { useAuth } from "../auth/AuthContext.js";
 import { useI18n } from "../i18n/I18nContext.js";
 import {
@@ -55,7 +55,7 @@ export function BookingsPage() {
     date && weekStart ? (view === "week" ? { from: weekStart, to: addDays(weekStart, 6) } : { from: date, to: date }) : null;
 
   useEffect(() => {
-    Promise.all([cmsApiClient.getTenant(), cmsApiClient.listServices(), cmsApiClient.listProfessionals()])
+    Promise.all([cachedApi.getTenant(), cachedApi.listServices(), cachedApi.listProfessionals()])
       .then(([tenant, services, professionals]) => {
         setContext({ timezone: tenant.timezone, services, professionals });
         setDate(tenantDateString(tenant.timezone));
@@ -67,7 +67,7 @@ export function BookingsPage() {
 
   function load(from: string, to: string) {
     setAppointments(null);
-    cmsApiClient
+    cachedApi
       .listAppointments({ from, to })
       .then(setAppointments)
       .catch(() => setError(t("bookings.errLoad")));
@@ -102,7 +102,7 @@ export function BookingsPage() {
   async function setStatus(appointment: AppointmentSummary, status: Exclude<AppointmentStatus, "cancelled">) {
     setError(null);
     try {
-      await cmsApiClient.updateAppointmentStatus(appointment.id, { status });
+      await cachedApi.updateAppointmentStatus(appointment.id, { status });
       if (range) load(range.from, range.to);
     } catch {
       setError(t("bookings.errStatus"));
@@ -113,7 +113,7 @@ export function BookingsPage() {
     if (!window.confirm(t("bookings.confirmCancel", { name: appointment.userName }))) return;
     setError(null);
     try {
-      await cmsApiClient.cancelAppointment(appointment.id);
+      await cachedApi.cancelAppointment(appointment.id);
       if (range) load(range.from, range.to);
     } catch {
       setError(t("bookings.errCancel"));

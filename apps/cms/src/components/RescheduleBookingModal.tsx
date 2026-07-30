@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from "react";
 import type { AppointmentSummary, BookingConflict, ProfessionalSummary } from "@booking/shared-types";
-import { cmsApiClient } from "../lib/api.js";
+import { cachedApi } from "../lib/cache.js";
 import { useI18n } from "../i18n/I18nContext.js";
 import { conflictsFromError } from "../lib/bookingConflicts.js";
 import { tenantDateString, tenantTimeString } from "../lib/tenantTime.js";
@@ -69,7 +69,7 @@ export function RescheduleBookingModal({
 
     setSaving(true);
     try {
-      await cmsApiClient.rescheduleAppointment(appointment.id, {
+      await cachedApi.rescheduleAppointment(appointment.id, {
         date,
         time,
         professionalId,
