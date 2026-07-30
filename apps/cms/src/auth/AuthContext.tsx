@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState, t
 import { jwtDecode } from "jwt-decode";
 import type { JwtClaims, TenantUserRole } from "@booking/shared-types";
 import { SESSION_EXPIRED_EVENT } from "../lib/api.js";
+import { clearCmsCache } from "../lib/cache.js";
 
 const STORAGE_KEY = "booking_cms_token";
 
@@ -66,8 +67,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(restoreSession);
   const [sessionExpired, setSessionExpired] = useState(false);
 
+  // Every session boundary clears the CMS read cache. It is keyed by resource
+  // rather than by tenant or user, so a second sign-in in the same tab would
+  // otherwise render the previous session's rows — and since a `professional`
+  // sees a narrower slice of those same endpoints than an `owner` (R20), that
+  // is a correctness concern, not just a stale-data one.
   const endSession = useCallback(() => {
     localStorage.removeItem(STORAGE_KEY);
+    clearCmsCache();
     setSession(null);
     setSessionExpired(true);
   }, []);
@@ -75,12 +82,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const login = useCallback((newToken: string) => {
     const claims = decodeClaims(newToken);
     localStorage.setItem(STORAGE_KEY, newToken);
+    clearCmsCache();
     setSessionExpired(false);
     setSession(claims ? { token: newToken, claims } : null);
   }, []);
 
   const logout = useCallback(() => {
     localStorage.removeItem(STORAGE_KEY);
+    clearCmsCache();
     setSession(null);
     // Signing out deliberately isn't an expiry — no "session expired" notice.
     setSessionExpired(false);

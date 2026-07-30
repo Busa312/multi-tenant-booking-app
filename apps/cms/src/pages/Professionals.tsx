@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import type { InviteProfessionalResponse, ProfessionalSummary, Service } from "@booking/shared-types";
 import { ApiError } from "@booking/api-client";
-import { cmsApiClient } from "../lib/api.js";
+import { cachedApi } from "../lib/cache.js";
 import { useI18n } from "../i18n/I18nContext.js";
 import { AppShell } from "../components/AppShell.js";
 import { Modal } from "../components/Modal.js";
@@ -51,7 +51,7 @@ export function ProfessionalsPage() {
   const [deactivateLoading, setDeactivateLoading] = useState(false);
 
   function load() {
-    Promise.all([cmsApiClient.listProfessionals(), cmsApiClient.listServices()])
+    Promise.all([cachedApi.listProfessionals(), cachedApi.listServices()])
       .then(([p, s]) => {
         setProfessionals(p);
         setServices(s);
@@ -74,7 +74,7 @@ export function ProfessionalsPage() {
   async function handleDeactivateClick(p: ProfessionalSummary) {
     setListError(null);
     try {
-      const { count } = await cmsApiClient.getProfessionalUpcomingCount(p.id);
+      const { count } = await cachedApi.getProfessionalUpcomingCount(p.id);
       setDeactivateTarget({ professional: p, count });
     } catch {
       setListError(t("professionals.errCheckUpcoming"));
@@ -85,7 +85,7 @@ export function ProfessionalsPage() {
     if (!deactivateTarget) return;
     setDeactivateLoading(true);
     try {
-      await cmsApiClient.updateProfessional(deactivateTarget.professional.id, { isActive: false });
+      await cachedApi.updateProfessional(deactivateTarget.professional.id, { isActive: false });
       setDeactivateTarget(null);
       load();
     } catch {
@@ -98,7 +98,7 @@ export function ProfessionalsPage() {
   async function handleReactivate(p: ProfessionalSummary) {
     setListError(null);
     try {
-      await cmsApiClient.updateProfessional(p.id, { isActive: true });
+      await cachedApi.updateProfessional(p.id, { isActive: true });
       load();
     } catch {
       setListError(t("professionals.errReactivate"));
@@ -109,7 +109,7 @@ export function ProfessionalsPage() {
     if (!window.confirm(t("professionals.confirmDelete", { name: p.name }))) return;
     setListError(null);
     try {
-      await cmsApiClient.deleteProfessional(p.id);
+      await cachedApi.deleteProfessional(p.id);
       load();
     } catch (err) {
       setListError(t(err instanceof ApiError ? "professionals.errHasHistory" : "common.somethingWrong"));
@@ -256,9 +256,9 @@ function EditProfessionalModal({
     setSaving(true);
     try {
       if (isNew) {
-        await cmsApiClient.createProfessional({ name, serviceIds });
+        await cachedApi.createProfessional({ name, serviceIds });
       } else {
-        await cmsApiClient.updateProfessional(target.id, { name, serviceIds });
+        await cachedApi.updateProfessional(target.id, { name, serviceIds });
       }
       onSaved();
     } catch {
@@ -324,7 +324,7 @@ function InviteModal({ professional, onClose }: { professional: ProfessionalSumm
     setError(null);
     setSending(true);
     try {
-      const res = await cmsApiClient.inviteProfessional(professional.id, { email });
+      const res = await cachedApi.inviteProfessional(professional.id, { email });
       setResult(res);
     } catch (err) {
       setError(t(err instanceof ApiError ? "professionals.errEmailInUse" : "common.somethingWrong"));

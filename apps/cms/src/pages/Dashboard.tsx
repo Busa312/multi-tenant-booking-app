@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import type { Tenant } from "@booking/shared-types";
-import { cmsApiClient } from "../lib/api.js";
+import { cachedApi } from "../lib/cache.js";
 import { useAuth } from "../auth/AuthContext.js";
 import { useI18n } from "../i18n/I18nContext.js";
 import { AppShell } from "../components/AppShell.js";
@@ -13,7 +13,7 @@ export function DashboardPage() {
   const { t } = useI18n();
 
   useEffect(() => {
-    cmsApiClient.getTenant().then(setTenant);
+    cachedApi.getTenant().then(setTenant);
   }, []);
 
   return (

@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from "react";
 import type { BookingConflict, ProfessionalSummary, ServiceSummary } from "@booking/shared-types";
-import { cmsApiClient } from "../lib/api.js";
+import { cachedApi } from "../lib/cache.js";
 import { useI18n } from "../i18n/I18nContext.js";
 import { conflictsFromError } from "../lib/bookingConflicts.js";
 import { Modal } from "./Modal.js";
@@ -99,7 +99,7 @@ export function CreateBookingModal({
 
     setSaving(true);
     try {
-      await cmsApiClient.createAppointment({
+      await cachedApi.createAppointment({
         serviceId,
         professionalId,
         date,

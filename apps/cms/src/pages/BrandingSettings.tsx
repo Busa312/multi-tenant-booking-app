@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type FormEvent } from "react";
 import type { Tenant, TenantColors } from "@booking/shared-types";
 import { DEFAULT_TENANT_COLORS, isValidColor, meetsWcagAA } from "@booking/shared-types";
 import { ApiError } from "@booking/api-client";
-import { cmsApiClient } from "../lib/api.js";
+import { cachedApi } from "../lib/cache.js";
 import { useI18n } from "../i18n/I18nContext.js";
 import { AppShell } from "../components/AppShell.js";
 import { Alert, Button, Card, Eyebrow, Field, Icon, TextInput } from "../components/ui/index.js";
@@ -36,7 +36,7 @@ export function BrandingSettingsPage() {
   const iframeRef = useRef<HTMLIFrameElement>(null);
 
   useEffect(() => {
-    cmsApiClient.getTenant().then((tn) => {
+    cachedApi.getTenant().then((tn) => {
       setTenant(tn);
       setColors({ ...DEFAULT_TENANT_COLORS, ...tn.configJson.colors });
     });
@@ -83,7 +83,7 @@ export function BrandingSettingsPage() {
 
     setSaving(true);
     try {
-      const updated = await cmsApiClient.updateTenantColors(colors);
+      const updated = await cachedApi.updateTenantColors(colors);
       setTenant(updated);
       setSavedAt(Date.now());
     } catch (err) {
@@ -101,7 +101,7 @@ export function BrandingSettingsPage() {
     setSaveError(null);
     setResetting(true);
     try {
-      const updated = await cmsApiClient.resetTenantColors();
+      const updated = await cachedApi.resetTenantColors();
       setTenant(updated);
       setColors({ ...DEFAULT_TENANT_COLORS, ...updated.configJson.colors });
       setFieldErrors({});

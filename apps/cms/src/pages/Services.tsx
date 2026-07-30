@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import type { ProfessionalSummary, ServiceSummary } from "@booking/shared-types";
 import { ApiError } from "@booking/api-client";
-import { cmsApiClient } from "../lib/api.js";
+import { cachedApi } from "../lib/cache.js";
 import { useI18n } from "../i18n/I18nContext.js";
 import { AppShell } from "../components/AppShell.js";
 import { Modal } from "../components/Modal.js";
@@ -42,10 +42,10 @@ export function ServicesPage() {
 
   function load() {
     Promise.all([
-      cmsApiClient.listServices(),
-      cmsApiClient.listProfessionals(),
-      cmsApiClient.listBusinessHours(),
-      cmsApiClient.getTenant(),
+      cachedApi.listServices(),
+      cachedApi.listProfessionals(),
+      cachedApi.listBusinessHours(),
+      cachedApi.getTenant(),
     ])
       .then(([services, professionals, hours, tenant]) => {
         setData({
@@ -87,7 +87,7 @@ export function ServicesPage() {
     if (!deactivateTarget) return;
     setDeactivateLoading(true);
     try {
-      await cmsApiClient.updateService(deactivateTarget.id, { isActive: false });
+      await cachedApi.updateService(deactivateTarget.id, { isActive: false });
       setDeactivateTarget(null);
       load();
     } catch {
@@ -100,7 +100,7 @@ export function ServicesPage() {
   async function handleReactivate(s: ServiceSummary) {
     setListError(null);
     try {
-      await cmsApiClient.updateService(s.id, { isActive: true });
+      await cachedApi.updateService(s.id, { isActive: true });
       load();
     } catch {
       setListError(t("services.errReactivate"));
@@ -111,7 +111,7 @@ export function ServicesPage() {
     if (!window.confirm(t("services.confirmDelete", { name: s.name }))) return;
     setListError(null);
     try {
-      await cmsApiClient.deleteService(s.id);
+      await cachedApi.deleteService(s.id);
       load();
     } catch (err) {
       setListError(t(err instanceof ApiError ? "services.errHasHistory" : "common.somethingWrong"));
