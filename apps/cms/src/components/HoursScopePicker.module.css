@@ -1,0 +1,15 @@
+.card {
+  padding: 16px 20px;
+}
+/* The picker is the whole card, so the Field's usual bottom gutter would just
+   add dead space under it. */
+.field {
+  margin-bottom: 0;
+  max-width: 340px;
+}
+
+@media (max-width: 560px) {
+  .field {
+    max-width: none;
+  }
+}

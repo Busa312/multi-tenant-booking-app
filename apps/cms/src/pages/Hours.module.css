@@ -1,55 +1,37 @@
+/* Scope picker across the top, then the week and the time-off list side by
+   side once there is genuinely room for both. */
 .grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 20px;
+  grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
 }
-/* 860px, not 720: the sidebar is 248px wide until AppShell turns it into a
-   drawer at 860, so collapsing any earlier leaves two columns sharing a ~500px
-   content area — narrower than the date controls inside them. */
-@media (max-width: 860px) {
-  .grid {
-    grid-template-columns: 1fr;
-  }
-}
-.errorFull {
+.errorFull,
+.scope {
   grid-column: 1 / -1;
 }
-.list {
-  margin-bottom: 16px;
+.week {
+  grid-column: 1;
+}
+.timeOff {
+  grid-column: 2;
+}
+.pending {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 13.5px;
 }
 
-/* Grid items default to `min-width: auto`, so an unbroken string — a full
-   `toLocaleString()` datetime range is the worst case here — widens its track
-   and drags the whole table past the viewport. These wrap instead. */
-.rowMain,
-.rowSub,
-.rowMeta {
-  min-width: 0;
-  overflow-wrap: anywhere;
-}
-.rowCell {
-  min-width: 0;
-}
-.rowMain {
-  font-size: 13px;
-}
-.rowSub {
-  font-size: 13px;
-  color: var(--ink-soft);
-}
-.rowMeta {
-  font-size: 12px;
-  color: var(--ink-soft);
-}
-
-/* Two fields side by side only while both still fit. `auto-fit` + a minimum
-   track makes that decision against the *container*, so the pair stacks in a
-   squeezed column without needing a viewport breakpoint that can't see it. */
-.timeRow {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
-  gap: 0 12px;
-}
-.timeCol {
-  min-width: 0;
+/* Not the 860px sidebar breakpoint: subtract the 248px sidebar and the content
+   padding and a two-column split at 900px leaves each side around 280px —
+   narrower than a day row's label, two time inputs and an action. Two columns
+   only once the narrower one clears ~340px. */
+@media (max-width: 1180px) {
+  .grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .week,
+  .timeOff {
+    grid-column: 1;
+  }
 }
