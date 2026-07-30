@@ -1,0 +1,86 @@
+.row {
+  display: grid;
+  grid-template-columns: 150px minmax(0, 1fr) auto;
+  gap: 10px 12px;
+  align-items: center;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+}
+.row:last-child {
+  border-bottom: none;
+}
+.day {
+  min-width: 0;
+  font-size: 13.5px;
+  font-weight: 600;
+}
+.dayName {
+  display: inline-block;
+  padding: 7px 0;
+}
+.times {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+/* Wide enough for the native control's own text, but able to shrink with the
+   row rather than forcing it past the card. */
+.time {
+  flex: 1 1 auto;
+  max-width: 130px;
+}
+.dash {
+  color: var(--ink-soft);
+  flex: none;
+}
+.state {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+  font-size: 13px;
+  color: var(--ink-soft);
+}
+.inheritedTime {
+  font-variant-numeric: tabular-nums;
+}
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+}
+.error {
+  grid-column: 1 / -1;
+  font-size: 12px;
+  color: var(--danger);
+}
+
+/* One column below this. A text action like "Use organisation hours" beside two
+   time inputs needs ~400px; at 320 the card has about 250, so they stack rather
+   than each being squeezed to unusability. */
+@media (max-width: 560px) {
+  .row {
+    grid-template-columns: minmax(0, 1fr);
+    row-gap: 8px;
+  }
+  .day,
+  .times,
+  .state,
+  .actions {
+    grid-column: 1;
+  }
+  .actions {
+    justify-content: flex-start;
+  }
+  .time {
+    max-width: none;
+  }
+}
+
+@media (pointer: coarse) {
+  .row {
+    padding: 13px 0;
+  }
+}

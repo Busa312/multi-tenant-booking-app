@@ -78,6 +78,38 @@ export function dayOfMonth(date: string): number {
   return dateOf(date).getUTCDate();
 }
 
+/** How far `timeZone` is ahead of UTC at a given instant, in milliseconds. */
+function offsetAt(instant: Date, timeZone: string): number {
+  const p = partsIn(instant, timeZone);
+  const asIfUtc = Date.UTC(
+    Number(p.year),
+    Number(p.month) - 1,
+    Number(p.day),
+    Number(p.hour),
+    Number(p.minute),
+    instant.getUTCSeconds(),
+  );
+  return asIfUtc - instant.getTime();
+}
+
+/**
+ * A wall-clock "YYYY-MM-DDTHH:mm" *in the tenant's timezone* as a real instant.
+ *
+ * `new Date(value)` would read it in the staff browser's zone, so an owner in
+ * London blocking "09:00" for a Tbilisi salon would store 13:00 salon time. Two
+ * passes because the offset itself depends on the instant: the first guess
+ * lands close enough to read the correct offset, which the second applies (the
+ * same technique as the API's `zonedTimeToUtc`).
+ */
+export function tenantWallTimeToUtc(localDateTime: string, timeZone: string): Date {
+  const asUtc = Date.parse(`${localDateTime}:00Z`);
+  if (Number.isNaN(asUtc)) {
+    throw new RangeError(`not a YYYY-MM-DDTHH:mm value: ${localDateTime}`);
+  }
+  const firstGuess = new Date(asUtc - offsetAt(new Date(asUtc), timeZone));
+  return new Date(asUtc - offsetAt(firstGuess, timeZone));
+}
+
 /** An instant as a tenant-local clock time, in the active UI language. */
 export function formatTimeLabel(iso: string, timeZone: string, lang: string): string {
   return new Intl.DateTimeFormat(lang, { timeZone, hour: "2-digit", minute: "2-digit" }).format(new Date(iso));

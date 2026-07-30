@@ -1,0 +1,12 @@
+.card {
+  align-self: start;
+}
+.subtitle {
+  margin: 2px 0 0;
+  font-size: 13px;
+  color: var(--ink-soft);
+  line-height: 1.5;
+}
+.days {
+  margin-top: 10px;
+}
