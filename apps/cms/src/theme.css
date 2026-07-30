@@ -109,3 +109,10 @@ a:hover {
 .fade-up {
   animation: fadeUp 0.35s ease both;
 }
+/* Every page wraps its content in this, so it's the largest single source of
+   motion in the CMS — a whole dashboard of cards sliding up on each load. */
+@media (prefers-reduced-motion: reduce) {
+  .fade-up {
+    animation: none;
+  }
+}

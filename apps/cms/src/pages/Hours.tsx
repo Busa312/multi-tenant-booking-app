@@ -81,7 +81,7 @@ export function HoursPage() {
           <Table className={styles.list}>
             {visibleTimeOff?.map((to) => (
               <TableRow key={to.id} columns="1fr 40px">
-                <div>
+                <div className={styles.rowCell}>
                   <div className={styles.rowMain}>
                     {new Date(to.startAt).toLocaleString()} – {new Date(to.endAt).toLocaleString()}
                   </div>
