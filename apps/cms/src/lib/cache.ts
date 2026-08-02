@@ -1,4 +1,5 @@
 import type {
+  AppointmentSummary,
   CmsAppointmentListQuery,
   CmsAvailabilityQuery,
   CreateCmsAppointmentRequest,
@@ -33,13 +34,22 @@ import { cmsApiClient } from "./api.js";
  * which client they call. This module is a drop-in facade over `cmsApiClient`
  * with the same method names, so a page migrates by changing one import.
  *
- * Appointments are deliberately never cached — staff act on what the calendar
- * shows, and a booking made by a colleague (or from the public site) must not
- * be invisible here for even a few seconds. Those methods pass straight
- * through, and exist on this facade only so a page never needs both clients.
+ * Appointments are deliberately never cached in the read-through sense — staff
+ * act on what the calendar shows, and a booking made by a colleague (or from
+ * the public site) must not be invisible here for even a few seconds. Those
+ * methods pass straight through, and exist on this facade only so a page never
+ * needs both clients. The dashboard gets a stale-while-revalidate variant that
+ * preserves the same invariant; see `listDashboardAppointments` below.
  */
 
 type CacheKey = "tenant" | "services" | "professionals" | "business-hours" | "time-off";
+
+/**
+ * `CacheKey` plus the appointment ranges, which live in their own map because
+ * they are keyed by window rather than by resource. Writes name it like any
+ * other key; only `invalidate` knows the difference.
+ */
+type InvalidationKey = CacheKey | "appointments";
 
 /**
  * Upper bound on how long another staff member's edit can stay invisible.
@@ -87,8 +97,16 @@ function cached<T>(key: CacheKey, fetcher: () => Promise<T>): Promise<T> {
   return request;
 }
 
-function invalidate(keys: CacheKey[]): void {
+function invalidate(keys: InvalidationKey[]): void {
   for (const key of keys) {
+    if (key === "appointments") {
+      // Any appointment write can move a row into or out of any window — a
+      // reschedule crosses days by design — so there is nothing finer than
+      // dropping every range worth doing here.
+      appointmentRanges.clear();
+      appointmentInFlight.clear();
+      continue;
+    }
     entries.delete(key);
     inFlight.delete(key);
   }
@@ -101,8 +119,56 @@ function invalidate(keys: CacheKey[]): void {
  * network error after the commit is indistinguishable from one before it), and
  * a needless refetch is far cheaper than showing stale rows.
  */
-function mutating<T>(request: Promise<T>, keys: CacheKey[]): Promise<T> {
+function mutating<T>(request: Promise<T>, keys: InvalidationKey[]): Promise<T> {
   return request.finally(() => invalidate(keys));
+}
+
+// ------------------------------------------- dashboard appointments (SWR)
+
+/**
+ * The dashboard renders three widgets — agenda, 30-day trend, top services —
+ * off a single `listAppointments` payload, and remounts on every return to
+ * `/`. Read-through caching it the way the listings above are cached is not an
+ * option: the rule that a colleague's booking is never invisible applies to the
+ * agenda as much as to the calendar.
+ *
+ * So this is stale-while-revalidate rather than read-through. A caller gets the
+ * previous payload to paint immediately *and* a live request every time; the
+ * cache only ever decides what is on screen during the round trip, never
+ * whether one happens. That buys the whole win the read-through cache was
+ * built for — no full-grid loading flash on navigation — while leaving the
+ * freshness guarantee exactly where it was.
+ */
+export interface Revalidating<T> {
+  /** Available synchronously; null on a cold read, which callers show as loading. */
+  cached: T | null;
+  /** The network value. Always a real request. */
+  fresh: Promise<T>;
+}
+
+/**
+ * Ranges kept. The window changes only when the salon's date rolls over, so
+ * this exists to bound an overnight tab rather than to serve hits — a handful
+ * is already more than the page can ask for in a day.
+ */
+const APPOINTMENT_RANGES = 4;
+
+const appointmentRanges = new Map<string, AppointmentSummary[]>();
+const appointmentInFlight = new Map<string, Promise<AppointmentSummary[]>>();
+
+function rememberRange(key: string, value: AppointmentSummary[]): void {
+  // Re-insert so Map iteration order is recency, not first-seen: the eviction
+  // below takes the front, and a range still in daily use must not age out
+  // just because it was the first one fetched.
+  appointmentRanges.delete(key);
+  appointmentRanges.set(key, value);
+
+  if (appointmentRanges.size > APPOINTMENT_RANGES) {
+    const oldest = appointmentRanges.keys().next().value;
+    // noUncheckedIndexedAccess: an iterator's `value` is optional even here,
+    // where `size` has just been checked.
+    if (oldest !== undefined) appointmentRanges.delete(oldest);
+  }
 }
 
 /**
@@ -116,6 +182,7 @@ function mutating<T>(request: Promise<T>, keys: CacheKey[]): Promise<T> {
 export function clearCmsCache(): void {
   entries.clear();
   inFlight.clear();
+  invalidate(["appointments"]);
 }
 
 /**
@@ -138,6 +205,36 @@ export const cachedApi = {
   listProfessionals: () => cached("professionals", () => cmsApiClient.listProfessionals()),
   listBusinessHours: () => cached("business-hours", () => cmsApiClient.listBusinessHours()),
   listTimeOff: () => cached("time-off", () => cmsApiClient.listTimeOff()),
+
+  // ---- Revalidating read: the dashboard's one payload ----
+  /**
+   * Returns the previous payload for this window to paint now (null when
+   * there isn't one) alongside a request that always goes out. See
+   * `Revalidating` for why the dashboard gets this and the calendar doesn't.
+   */
+  listDashboardAppointments: (range: { from: string; to: string }): Revalidating<AppointmentSummary[]> => {
+    const key = `${range.from}:${range.to}`;
+    const previous = appointmentRanges.get(key) ?? null;
+
+    // A remount mid-flight rides the request already out rather than issuing a
+    // second one — the dashboard's mount effect and its day-rollover refetch
+    // can otherwise overlap.
+    const pending = appointmentInFlight.get(key);
+    if (pending) return { cached: previous, fresh: pending };
+
+    const fresh = cmsApiClient
+      .listAppointments({ from: range.from, to: range.to })
+      .then((value) => {
+        rememberRange(key, value);
+        return value;
+      })
+      .finally(() => {
+        appointmentInFlight.delete(key);
+      });
+
+    appointmentInFlight.set(key, fresh);
+    return { cached: previous, fresh };
+  },
 
   // ---- Writes: delegate, then drop what they changed ----
   updateTenantConfig: (configJson: TenantConfig) => mutating(cmsApiClient.updateTenantConfig(configJson), ["tenant"]),
@@ -166,26 +263,32 @@ export const cachedApi = {
   createTimeOff: (payload: CreateTimeOffRequest) => mutating(cmsApiClient.createTimeOff(payload), ["time-off"]),
   deleteTimeOff: (id: string) => mutating(cmsApiClient.deleteTimeOff(id), ["time-off"]),
 
-  // Booking a service/professional for the first time flips their
+  // Every appointment write drops the dashboard's cached ranges: a booking
+  // cancelled from the calendar must not be repainted as still booked when
+  // staff step back to the dashboard, even for the one round trip that
+  // stale-while-revalidate would take to correct it.
+  //
+  // Booking a service/professional for the first time additionally flips their
   // `hasAppointmentHistory`, which is what hides the delete action in favour of
-  // deactivate (R70/R80) — so these two writes invalidate the listings even
-  // though the appointments themselves are never cached. A reschedule counts
-  // because it can reassign `professionalId`. Cancelling and status changes do
-  // not: the API derives the flag from `_count.appointments`, which is
-  // unfiltered by status, so the row keeps counting once it exists.
+  // deactivate (R70/R80) — so these two writes invalidate the listings as well.
+  // A reschedule counts because it can reassign `professionalId`. Cancelling
+  // and status changes do not: the API derives the flag from
+  // `_count.appointments`, which is unfiltered by status, so the row keeps
+  // counting once it exists.
   createAppointment: (payload: CreateCmsAppointmentRequest) =>
-    mutating(cmsApiClient.createAppointment(payload), SERVICE_ASSIGNMENT),
+    mutating(cmsApiClient.createAppointment(payload), [...SERVICE_ASSIGNMENT, "appointments"]),
   rescheduleAppointment: (id: string, payload: RescheduleCmsAppointmentRequest) =>
-    mutating(cmsApiClient.rescheduleAppointment(id, payload), SERVICE_ASSIGNMENT),
+    mutating(cmsApiClient.rescheduleAppointment(id, payload), [...SERVICE_ASSIGNMENT, "appointments"]),
+  updateAppointmentStatus: (id: string, payload: UpdateAppointmentStatusRequest) =>
+    mutating(cmsApiClient.updateAppointmentStatus(id, payload), ["appointments"]),
+  cancelAppointment: (id: string) => mutating(cmsApiClient.cancelAppointment(id), ["appointments"]),
 
   // ---- Uncached passthroughs ----
-  // Point-in-time counts and the rest of the appointment surface: always the
-  // network. Staff act on what the calendar shows, and a booking made by a
-  // colleague or from the public site must not be invisible here even briefly.
+  // Point-in-time counts and the calendar's own reads: always the network, with
+  // nothing to paint in the meantime. Staff act on what the calendar shows, and
+  // a booking made by a colleague or from the public site must not be invisible
+  // here even briefly.
   getProfessionalUpcomingCount: (id: string) => cmsApiClient.getProfessionalUpcomingCount(id),
   listAppointments: (query: CmsAppointmentListQuery = {}) => cmsApiClient.listAppointments(query),
   listAppointmentAvailability: (query: CmsAvailabilityQuery) => cmsApiClient.listAppointmentAvailability(query),
-  updateAppointmentStatus: (id: string, payload: UpdateAppointmentStatusRequest) =>
-    cmsApiClient.updateAppointmentStatus(id, payload),
-  cancelAppointment: (id: string) => cmsApiClient.cancelAppointment(id),
 };

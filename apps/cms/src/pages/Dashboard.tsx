@@ -70,11 +70,14 @@ export function DashboardPage() {
   const range = context?.range;
 
   function load(from: string, to: string) {
-    setAppointments(null);
-    cachedApi
-      .listAppointments({ from, to })
-      .then(setAppointments)
-      .catch(() => setError(t("dashboard.errLoad")));
+    const { cached, fresh } = cachedApi.listDashboardAppointments({ from, to });
+    // Paint the previous payload for this window straight away — returning to
+    // the dashboard is the common case, and all three widgets key off
+    // `appointments`, so a cold `null` blanks the whole grid at once. A genuine
+    // cold read still yields null here, which is the loading state. Either way
+    // the request below has already gone out.
+    setAppointments(cached);
+    fresh.then(setAppointments).catch(() => setError(t("dashboard.errLoad")));
   }
 
   useEffect(() => {
@@ -101,16 +104,26 @@ export function DashboardPage() {
     return () => clearInterval(timer);
   }, []);
 
-  const stats = useMemo(() => {
+  // The three widgets memoize separately because only one of them reads the
+  // wall clock. Folding them into a single `stats` object made `nowTick` a
+  // dependency of all three, so every minute re-walked the full 30-day payload
+  // twice over to produce byte-identical trend and top-services results.
+  const agenda = useMemo(() => {
     if (!appointments || !context) return null;
-    return {
-      agenda: todaysAgenda(appointments, context.timezone, new Date()),
-      trend: buildTrend(appointments, context.timezone, context.range),
-      top: topServices(appointments),
-    };
+    return todaysAgenda(appointments, context.timezone, new Date());
     // nowTick is a deliberate dependency: it's what moves "next up" along.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [appointments, context, nowTick]);
+
+  // Pure functions of the payload and the window. A day rollover replaces
+  // `context` (and with it `range`), so these still recompute when the window
+  // actually moves — just not on the 29 ticks in between.
+  const trend = useMemo(() => {
+    if (!appointments || !context) return null;
+    return buildTrend(appointments, context.timezone, context.range);
+  }, [appointments, context]);
+
+  const top = useMemo(() => (appointments ? topServices(appointments) : null), [appointments]);
 
   const activeServices = context?.services.filter((service) => service.isActive) ?? [];
   const activeProfessionals = context?.professionals.filter((professional) => professional.isActive) ?? [];
@@ -150,24 +163,20 @@ export function DashboardPage() {
         {/* Each slot holds its place while the payload lands, so the grid doesn't
             jump — and every widget below takes non-nullable data. */}
         <div className={styles.agenda}>
-          {stats && context ? (
-            <TodayAgendaCard agenda={stats.agenda} timezone={context.timezone} isOwnOnly={role === "professional"} />
+          {agenda && context ? (
+            <TodayAgendaCard agenda={agenda} timezone={context.timezone} isOwnOnly={role === "professional"} />
           ) : (
             <Card className={styles.pending}>{t("common.loading")}</Card>
           )}
         </div>
 
         <div className={styles.trend}>
-          {stats ? (
-            <BookingTrendChart trend={stats.trend} />
-          ) : (
-            <Card className={styles.pending}>{t("common.loading")}</Card>
-          )}
+          {trend ? <BookingTrendChart trend={trend} /> : <Card className={styles.pending}>{t("common.loading")}</Card>}
         </div>
 
         <div className={styles.top}>
-          {stats ? (
-            <TopServicesCard services={stats.top} showValue={role === "owner"} />
+          {top ? (
+            <TopServicesCard services={top} showValue={role === "owner"} />
           ) : (
             <Card className={styles.pending}>{t("common.loading")}</Card>
           )}
