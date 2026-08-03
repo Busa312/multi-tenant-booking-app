@@ -10,3 +10,13 @@
   height: 16px;
   cursor: pointer;
 }
+
+/* Matches how Button and TextInput read when disabled: dimmed, not hidden, and
+   the whole row loses the pointer since the label is part of the target. */
+.disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.disabled input {
+  cursor: not-allowed;
+}

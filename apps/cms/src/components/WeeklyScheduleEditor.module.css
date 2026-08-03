@@ -1,5 +1,16 @@
 .card {
   align-self: start;
+  /*
+   * The week's layout depends on how wide this card is, and that does not track
+   * the viewport. The Hours page puts the week in a 1.25fr column beside time
+   * off, then stacks both at 1180px — so the card is *wider* at a 1100px
+   * viewport (full width) than at a 1300px one (~565px). A max-width media
+   * query is inverted across that band, which is why the rows were being
+   * crushed at desktop widths while the 560px breakpoint never fired.
+   *
+   * ScheduleDayRow queries this container instead.
+   */
+  container-type: inline-size;
 }
 .subtitle {
   margin: 2px 0 0;

@@ -1,7 +1,16 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import type { BusinessHours, ProfessionalSummary, TimeOff } from "@booking/shared-types";
 import { cachedApi } from "../lib/cache.js";
+import {
+  diffWeek,
+  draftFromHours,
+  hasChanges,
+  invalidDays,
+  WEEK_DAYS,
+  type DayHours,
+  type WeekDraft,
+} from "../lib/weekSchedule.js";
 import { useAuth } from "../auth/AuthContext.js";
 import { useI18n } from "../i18n/I18nContext.js";
 import { AppShell } from "../components/AppShell.js";
@@ -44,11 +53,19 @@ export function HoursPage() {
 
   const [data, setData] = useState<PageData | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [savingDay, setSavingDay] = useState<number | null>(null);
-  // A copy touches every open day, so it locks the whole week rather than a row.
-  const [copying, setCopying] = useState(false);
+  const [saving, setSaving] = useState(false);
+  // Latches after a successful write and clears on the next edit, so the save
+  // bar can distinguish "just saved" from "nothing to save".
+  const [saved, setSaved] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [addOpen, setAddOpen] = useState(false);
+
+  /**
+   * The week being edited. Held here rather than in the row components so the
+   * whole schedule submits as one change — nothing below writes to the server.
+   * Null until the first load lands.
+   */
+  const [draft, setDraft] = useState<WeekDraft | null>(null);
 
   // A professional login only ever manages its own schedule (R20), so the URL
   // can't put it on someone else's.
@@ -56,7 +73,14 @@ export function HoursPage() {
   const scopeParam = searchParams.get("professionalId");
   const professionalId = locked ? ownProfessionalId : scopeParam;
 
-  function load() {
+  /**
+   * `reseedDraft` is the whole reason this takes an argument. Time-off writes
+   * reload the page's data too, and re-seeding on every load would silently
+   * throw away schedule edits that hadn't been submitted yet — so only the
+   * paths that genuinely invalidate the draft (first load, a saved week) ask
+   * for it.
+   */
+  function load(reseedDraft = true) {
     return Promise.all([
       cachedApi.getTenant(),
       cachedApi.listBusinessHours(),
@@ -65,6 +89,7 @@ export function HoursPage() {
     ])
       .then(([tenant, hours, timeOff, professionals]) => {
         setData({ timezone: tenant.timezone, hours, timeOff, professionals });
+        if (reseedDraft) setDraft(draftFromHours(hours, professionalId));
       })
       .catch(() => setError(t("hours.errLoad")));
   }
@@ -72,6 +97,16 @@ export function HoursPage() {
   // Fetch once on mount; a language switch shouldn't trigger a refetch.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => void load(), []);
+
+  // Switching scope replaces the draft with that scope's stored week. Guarded
+  // at the picker below, so anything unsaved has already been confirmed away.
+  useEffect(() => {
+    if (data) setDraft(draftFromHours(data.hours, professionalId));
+    setSaved(false);
+    // Deliberately not keyed on `data`: that would re-seed on every reload,
+    // including the ones time-off writes trigger. See `load`.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [professionalId]);
 
   const scopedProfessional = data?.professionals.find((p) => p.id === professionalId) ?? null;
   const scope = professionalId ? "professional" : "organisation";
@@ -81,62 +116,64 @@ export function HoursPage() {
     return data?.professionals.find((p) => p.id === id)?.name ?? t("hours.unknown");
   }
 
-  async function saveDay(dayOfWeek: number, startTime: string, endTime: string) {
-    setError(null);
-    setSavingDay(dayOfWeek);
-    try {
-      await cachedApi.upsertBusinessHours({
-        professionalId: professionalId ?? undefined,
-        dayOfWeek,
-        startTime,
-        endTime,
-      });
-      await load();
-    } catch {
-      setError(t("hours.errSaveDay"));
-    } finally {
-      setSavingDay(null);
-    }
-  }
+  const changes = useMemo(
+    () => (data && draft ? diffWeek(draft, data.hours, professionalId) : null),
+    [data, draft, professionalId],
+  );
+  const dirty = changes !== null && hasChanges(changes);
+  const invalidCount = draft ? invalidDays(draft).length : 0;
 
-  async function clearDay(row: BusinessHours) {
-    setError(null);
-    setSavingDay(row.dayOfWeek);
-    try {
-      await cachedApi.deleteBusinessHours(row.id);
-      await load();
-    } catch {
-      setError(t("hours.errSaveDay"));
-    } finally {
-      setSavingDay(null);
-    }
+  function changeDay(dayOfWeek: number, next: DayHours) {
+    setSaved(false);
+    setDraft((current) => (current ? { ...current, [dayOfWeek]: next } : current));
   }
 
   /** Spread one day's hours across every other day already open in this scope. */
-  async function copyToAll(startTime: string, endTime: string) {
-    if (!data || copying) return;
-    const openDays = data.hours
-      .filter((row) => row.professionalId === professionalId)
-      .map((row) => row.dayOfWeek);
-    setError(null);
-    setCopying(true);
-    try {
-      // Sequential, not Promise.all: each write deletes the day's existing row
-      // before inserting, and firing seven of those at once against the same
-      // scope invites the interleaving the per-day replace is meant to prevent.
-      for (const dayOfWeek of openDays) {
-        await cachedApi.upsertBusinessHours({
-          professionalId: professionalId ?? undefined,
-          dayOfWeek,
-          startTime,
-          endTime,
-        });
+  function copyToAll(startTime: string, endTime: string) {
+    setSaved(false);
+    setDraft((current) => {
+      if (!current) return current;
+      const next: WeekDraft = { ...current };
+      for (const dayOfWeek of WEEK_DAYS) {
+        // Only days already open: a copy spreads hours, it doesn't open the
+        // salon on days that were closed.
+        if (next[dayOfWeek]) next[dayOfWeek] = { startTime, endTime };
       }
+      return next;
+    });
+  }
+
+  function discard() {
+    if (data) setDraft(draftFromHours(data.hours, professionalId));
+    setError(null);
+    setSaved(false);
+  }
+
+  async function saveWeek() {
+    if (!changes || !dirty || invalidCount > 0 || saving) return;
+    setError(null);
+    setSaved(false);
+    setSaving(true);
+    try {
+      // Parallel, and safe to be: the API's upsert scopes its replace to
+      // (tenant, professional, dayOfWeek), so two days never touch the same
+      // rows and can't interleave. This is where the speed comes from — the
+      // whole week costs one round trip's latency instead of one per day, and
+      // one reload at the end instead of one after every keystroke's blur.
+      await Promise.all([
+        ...changes.upserts.map((day) =>
+          cachedApi.upsertBusinessHours({ professionalId: professionalId ?? undefined, ...day }),
+        ),
+        ...changes.deletes.map((row) => cachedApi.deleteBusinessHours(row.id)),
+      ]);
       await load();
+      setSaved(true);
     } catch {
-      setError(t("hours.errSaveDay"));
+      // The draft is left exactly as it was, so a failed save is retryable
+      // rather than something the user has to retype.
+      setError(t("hours.errSaveWeek"));
     } finally {
-      setCopying(false);
+      setSaving(false);
     }
   }
 
@@ -146,7 +183,8 @@ export function HoursPage() {
     setDeletingId(block.id);
     try {
       await cachedApi.deleteTimeOff(block.id);
-      await load();
+      // Keeps the schedule draft: this write has nothing to do with it.
+      await load(false);
     } catch {
       setError(t("hours.errSaveTimeOff"));
     } finally {
@@ -175,6 +213,10 @@ export function HoursPage() {
               professionals={data.professionals}
               value={professionalId}
               onChange={(next) => {
+                // The draft is per-scope, so switching away drops it. Ask first
+                // — silently discarding a week someone just laid out would be
+                // the worst failure mode this change introduces.
+                if (dirty && !window.confirm(t("hours.confirmDiscard"))) return;
                 setError(null);
                 setSearchParams(next ? { professionalId: next } : {}, { replace: true });
               }}
@@ -183,17 +225,20 @@ export function HoursPage() {
         )}
 
         <div className={styles.week}>
-          {data ? (
+          {data && draft ? (
             <WeeklyScheduleEditor
               scope={scope}
               professionalName={scopedProfessional?.name ?? null}
+              draft={draft}
               hours={data.hours}
-              professionalId={professionalId}
-              savingDay={savingDay}
-              busy={copying}
-              onSave={saveDay}
-              onClear={clearDay}
+              saving={saving}
+              dirty={dirty}
+              invalidCount={invalidCount}
+              saved={saved}
+              onChangeDay={changeDay}
               onCopyToAll={copyToAll}
+              onSubmit={saveWeek}
+              onDiscard={discard}
             />
           ) : (
             <CardSkeleton rows={7} rowHeight={DAY_ROW} />
@@ -225,7 +270,7 @@ export function HoursPage() {
           onClose={() => setAddOpen(false)}
           onCreated={() => {
             setAddOpen(false);
-            void load();
+            void load(false);
           }}
         />
       )}

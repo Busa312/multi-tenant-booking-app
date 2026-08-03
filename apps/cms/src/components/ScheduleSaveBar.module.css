@@ -1,0 +1,43 @@
+.bar {
+  display: flex;
+  align-items: center;
+  /* The status sits left, the actions right; on a narrow phone they stack and
+     the actions keep their own line rather than wrapping mid-pair. */
+  flex-wrap: wrap;
+  gap: 10px 16px;
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+
+.status {
+  margin: 0;
+  min-width: 0;
+  font-size: 13px;
+  color: var(--ink-soft);
+}
+
+/* A blocked save is the one status that is the user's problem to fix, so it is
+   the one that takes the danger colour. */
+.blocked {
+  color: var(--danger);
+  font-weight: 600;
+}
+
+.actions {
+  display: flex;
+  gap: 8px;
+  margin-left: auto;
+}
+
+@media (max-width: 520px) {
+  .actions {
+    /* Full width once stacked, so the primary action isn't a small target
+       floating at the end of a line. */
+    width: 100%;
+    margin-left: 0;
+  }
+  .actions > * {
+    flex: 1;
+  }
+}

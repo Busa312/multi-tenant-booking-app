@@ -1,8 +1,37 @@
-.row {
+/*
+ * The week's shared column tracks, applied by WeeklyScheduleEditor to the
+ * container the rows sit in.
+ *
+ * It lives here, beside the row that fills it, because the two have to agree —
+ * including at the breakpoint below. Each row used to declare these tracks
+ * itself, which made seven independent grids: at organisation scope every row
+ * holds the same things so they happened to line up, but at professional scope
+ * a day showing two time inputs and a day showing "Follows organisation"
+ * disagreed about where the action column started, and the week stepped in and
+ * out down the page.
+ */
+.grid {
   display: grid;
-  grid-template-columns: 150px minmax(0, 1fr) auto;
-  gap: 10px 12px;
+  /* 128px fits the longest day name in both catalogs ("Wednesday",
+     "ოთხშაბათი") and gives the middle column back the ~22px it needs to keep
+     two time inputs legible. */
+  grid-template-columns: 128px minmax(0, 1fr) auto;
+  column-gap: 12px;
+}
+
+.row {
+  /* subgrid, so all seven rows resolve against .grid's tracks rather than
+     their own content. The row stays a real box (it has a border and a
+     min-height), which `display: contents` would have cost. */
+  display: grid;
+  grid-template-columns: subgrid;
+  grid-column: 1 / -1;
+  row-gap: 8px;
   align-items: center;
+  /* A day with time inputs is ~43px of content and a day showing a pill is
+     ~24px. Left alone the week visibly ripples wherever the two alternate,
+     which is every other row on a professional's schedule. */
+  min-height: 64px;
   padding: 10px 0;
   border-bottom: 1px solid var(--border);
 }
@@ -24,10 +53,21 @@
   gap: 8px;
   min-width: 0;
 }
-/* Wide enough for the native control's own text, but able to shrink with the
-   row rather than forcing it past the card. */
+/*
+ * Wide enough for the native control's own text, but able to shrink with the
+ * row rather than forcing it past the card.
+ *
+ * The floor is not cosmetic. TextInput sets `min-width: 0` so a `type="time"`
+ * control can shrink at all, and once one drops below roughly 100px Chrome
+ * stops rendering the value entirely — the field keeps its picker icon and
+ * silently shows no time. 112px keeps "11:00" plus the icon visible at the
+ * 16px font coarse pointers get. Below that the row stacks instead (see the
+ * container query at the foot of this file), which is the honest trade: a
+ * time you cannot read is worse than a taller row.
+ */
 .time {
   flex: 1 1 auto;
+  min-width: 112px;
   max-width: 130px;
 }
 .dash {
@@ -43,13 +83,34 @@
   font-size: 13px;
   color: var(--ink-soft);
 }
+/* Wrap between the pill and the time, never inside either. Flex items shrink
+   below their content by default, which was breaking "Follows organisation"
+   across two lines inside its own pill and turning a label into a paragraph. */
+.state > * {
+  flex: none;
+}
 .inheritedTime {
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 .actions {
   display: flex;
   justify-content: flex-end;
   gap: 6px;
+}
+
+/*
+ * Professional scope only. Its two actions are text buttons of unequal length
+ * ("Set custom hours" vs "Use organisation hours", and further apart again in
+ * Georgian), so right-aligning them leaves the edge of the card ragged by a
+ * word or two per row. Filling the track — which subgrid has already sized to
+ * the longer of the two — keeps that edge straight.
+ *
+ * Organisation scope keeps its natural width: its action is a single icon
+ * button, and stretching that would just make a large empty square.
+ */
+.actionsFill > * {
+  flex: 1;
 }
 .error {
   grid-column: 1 / -1;
@@ -57,13 +118,18 @@
   color: var(--danger);
 }
 
-/* One column below this. A text action like "Use organisation hours" beside two
-   time inputs needs ~400px; at 320 the card has about 250, so they stack rather
-   than each being squeezed to unusability. */
-@media (max-width: 560px) {
-  .row {
+/*
+ * One column below this — measured against the card, not the viewport, because
+ * the two don't correlate here (see WeeklyScheduleEditor's .card).
+ *
+ * The threshold is the sum of what three columns actually need: a 128px day, a
+ * 12px gap, two 112px time inputs with their dash and gaps (~250px), another
+ * gap, and roughly 185px for the longest action label. Below that something has
+ * to give, and stacking gives up vertical space rather than legibility.
+ */
+@container (max-width: 620px) {
+  .grid {
     grid-template-columns: minmax(0, 1fr);
-    row-gap: 8px;
   }
   .day,
   .times,
@@ -76,6 +142,11 @@
   }
   .time {
     max-width: none;
+  }
+  /* Stacked rows are already tall; the floor that evens out two side-by-side
+     layouts would only add dead space here. */
+  .row {
+    min-height: 0;
   }
 }
 
