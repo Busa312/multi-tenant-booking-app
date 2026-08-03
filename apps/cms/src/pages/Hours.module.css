@@ -16,12 +16,6 @@
 .timeOff {
   grid-column: 2;
 }
-.pending {
-  margin: 0;
-  color: var(--ink-soft);
-  font-size: 13.5px;
-}
-
 /* Not the 860px sidebar breakpoint: subtract the 248px sidebar and the content
    padding and a two-column split at 900px leaves each side around 280px —
    narrower than a day row's label, two time inputs and an action. Two columns

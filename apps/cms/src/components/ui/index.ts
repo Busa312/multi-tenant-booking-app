@@ -12,6 +12,7 @@ export { Checkbox } from "./Checkbox.js";
 export { Alert } from "./Alert.js";
 export { Pill, type PillTone } from "./Pill.js";
 export { Card } from "./Card.js";
+export { Skeleton } from "./Skeleton.js";
 export { InputGroup } from "./InputGroup.js";
 export { Eyebrow } from "./Eyebrow.js";
 export { Brand } from "./Brand.js";

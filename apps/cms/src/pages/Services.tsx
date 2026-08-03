@@ -6,6 +6,7 @@ import { useI18n } from "../i18n/I18nContext.js";
 import { AppShell } from "../components/AppShell.js";
 import { Modal } from "../components/Modal.js";
 import { EditServiceModal } from "../components/EditServiceModal.js";
+import { CardSkeleton } from "../components/CardSkeleton.js";
 import {
   ActionMenu,
   type ActionMenuItem,
@@ -20,6 +21,9 @@ import {
 import styles from "./Services.module.css";
 
 const COLUMNS = "1.3fr 90px 100px 1.4fr 100px 60px";
+
+/** A TableRow with an ActionMenu in it. Sized for the loading placeholder. */
+const TABLE_ROW = "46px";
 
 interface PageData {
   services: ServiceSummary[];
@@ -187,6 +191,7 @@ export function ServicesPage() {
             </Table>
           </div>
         )}
+        {!data && <CardSkeleton rows={5} rowHeight={TABLE_ROW} />}
       </div>
 
       {editTarget && data && (

@@ -1,0 +1,56 @@
+/*
+ * Zero specificity, deliberately.
+ *
+ * Callers style skeletons by handing them a class from the stylesheet of the
+ * thing being stood in for — `.iframe` from BrandingSettings, `.bar` from the
+ * trend chart — so that the reserved geometry comes from the real rule rather
+ * than a copy of its numbers. Those live in *other* CSS Modules, so with a
+ * plain `.block` selector the winner would be whichever file the bundler
+ * happened to emit last: equal specificity, order decides. That silently
+ * turned the 620px branding preview into a 1em sliver, which is the entire
+ * reservation this component exists to make.
+ *
+ * `:where()` drops this rule to specificity 0, so any caller class beats it
+ * outright, in any order. The overrides below stay at normal weight so they
+ * still beat the base.
+ */
+:where(.block) {
+  display: block;
+  width: 100%;
+  height: 1em;
+  border-radius: 6px;
+  /* flex-shrink guard: inside a flex row a skeleton must hold the width it was
+     given, not collapse to fit its (empty) content. */
+  flex: none;
+  background-color: var(--skeleton-base);
+  /* The sweep is a moving background rather than a pseudo-element, so a
+     skeleton stays a single leaf node and can sit anywhere — including inside
+     the flex rails and table cells it stands in for. */
+  background-image: linear-gradient(90deg, transparent, var(--skeleton-sheen), transparent);
+  background-repeat: no-repeat;
+  background-size: 45% 100%;
+  animation: skeletonSweep 1.5s ease-in-out infinite;
+}
+
+.rounded {
+  border-radius: 999px;
+}
+
+@keyframes skeletonSweep {
+  from {
+    background-position: -60% 0;
+  }
+  to {
+    background-position: 160% 0;
+  }
+}
+
+/*
+ * The block keeps its geometry — that is the whole point of it — and only the
+ * sweep stops. A still placeholder still reserves the space.
+ */
+@media (prefers-reduced-motion: reduce) {
+  .block {
+    animation: none;
+  }
+}

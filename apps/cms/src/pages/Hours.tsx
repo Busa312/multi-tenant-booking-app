@@ -9,8 +9,18 @@ import { HoursScopePicker } from "../components/HoursScopePicker.js";
 import { WeeklyScheduleEditor } from "../components/WeeklyScheduleEditor.js";
 import { TimeOffCard } from "../components/TimeOffCard.js";
 import { AddTimeOffModal } from "../components/AddTimeOffModal.js";
+import { CardSkeleton } from "../components/CardSkeleton.js";
 import { Alert } from "../components/ui/index.js";
 import styles from "./Hours.module.css";
+
+/**
+ * Placeholder row heights. A ScheduleDayRow is a label, two time inputs and an
+ * action on one line (10px padding, 13px at the wrapping breakpoint); a time-off
+ * block is a two-line entry. The week always has exactly seven rows, which
+ * makes that slot's reservation exact rather than typical.
+ */
+const DAY_ROW = "46px";
+const TIME_OFF_ROW = "52px";
 
 interface PageData {
   timezone: string;
@@ -186,7 +196,7 @@ export function HoursPage() {
               onCopyToAll={copyToAll}
             />
           ) : (
-            <p className={styles.pending}>{t("common.loading")}</p>
+            <CardSkeleton rows={7} rowHeight={DAY_ROW} />
           )}
         </div>
 
@@ -201,7 +211,7 @@ export function HoursPage() {
               onDelete={deleteTimeOff}
             />
           ) : (
-            <p className={styles.pending}>{t("common.loading")}</p>
+            <CardSkeleton rows={3} rowHeight={TIME_OFF_ROW} />
           )}
         </div>
       </div>

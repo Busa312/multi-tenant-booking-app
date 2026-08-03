@@ -11,6 +11,13 @@
     "somethingWrong": "Something went wrong",
     "passwordPlaceholder": "••••••••"
   },
+  "error": {
+    "staleTitle": "The app has been updated",
+    "staleBody": "This tab is still running an earlier version, so part of it could not be loaded. Reloading picks up the new one. Nothing you have saved is affected.",
+    "crashTitle": "This page could not be displayed",
+    "crashBody": "Something went wrong while rendering. Reloading sometimes clears it; if it keeps happening, this is a bug worth reporting.",
+    "reload": "Reload the page"
+  },
   "nav": {
     "dashboard": "Dashboard",
     "bookings": "Bookings",

@@ -10,9 +10,23 @@ import { CreateBookingModal } from "../components/CreateBookingModal.js";
 import { DashboardQuickActions, type BookingBlocker } from "../components/DashboardQuickActions.js";
 import { TodayAgendaCard } from "../components/TodayAgendaCard.js";
 import { BookingTrendChart } from "../components/BookingTrendChart.js";
+import { BookingTrendChartSkeleton } from "../components/BookingTrendChartSkeleton.js";
 import { TopServicesCard } from "../components/TopServicesCard.js";
-import { Alert, Card } from "../components/ui/index.js";
+import { CardSkeleton } from "../components/CardSkeleton.js";
+import { Alert } from "../components/ui/index.js";
 import styles from "./Dashboard.module.css";
+
+/**
+ * Placeholder sizing, in the units each card is actually built from.
+ *
+ * An agenda entry is a BookingCard; a top-services entry is a table row at
+ * 9px padding on 13.5px text. The counts are what each card typically settles
+ * at — five services is the hard cap (TOP_SERVICES_LIMIT), four appointments is
+ * a normal day for a salon of this size — so the reserved height lands close to
+ * the real one from the first paint.
+ */
+const AGENDA_ROW = "58px";
+const TABLE_ROW = "34px";
 
 /** Everything fetched once on mount and then held for the life of the page. */
 interface PageContext {
@@ -166,19 +180,17 @@ export function DashboardPage() {
           {agenda && context ? (
             <TodayAgendaCard agenda={agenda} timezone={context.timezone} isOwnOnly={role === "professional"} />
           ) : (
-            <Card className={styles.pending}>{t("common.loading")}</Card>
+            <CardSkeleton rows={4} rowHeight={AGENDA_ROW} />
           )}
         </div>
 
-        <div className={styles.trend}>
-          {trend ? <BookingTrendChart trend={trend} /> : <Card className={styles.pending}>{t("common.loading")}</Card>}
-        </div>
+        <div className={styles.trend}>{trend ? <BookingTrendChart trend={trend} /> : <BookingTrendChartSkeleton />}</div>
 
         <div className={styles.top}>
           {top ? (
             <TopServicesCard services={top} showValue={role === "owner"} />
           ) : (
-            <Card className={styles.pending}>{t("common.loading")}</Card>
+            <CardSkeleton rows={5} rowHeight={TABLE_ROW} />
           )}
         </div>
       </div>

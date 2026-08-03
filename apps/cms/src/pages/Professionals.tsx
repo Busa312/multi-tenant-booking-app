@@ -5,6 +5,7 @@ import { cachedApi } from "../lib/cache.js";
 import { useI18n } from "../i18n/I18nContext.js";
 import { AppShell } from "../components/AppShell.js";
 import { Modal } from "../components/Modal.js";
+import { CardSkeleton } from "../components/CardSkeleton.js";
 import {
   ActionMenu,
   type ActionMenuItem,
@@ -25,6 +26,9 @@ import {
 import styles from "./Professionals.module.css";
 
 const COLUMNS = "1.3fr 1.6fr 130px 110px 60px";
+
+/** A TableRow with an ActionMenu in it. Sized for the loading placeholder. */
+const TABLE_ROW = "46px";
 
 const LOGIN_STATUS_KEY: Record<ProfessionalSummary["cmsLoginStatus"], string> = {
   none: "professionals.statusNoLogin",
@@ -179,6 +183,7 @@ export function ProfessionalsPage() {
             </Table>
           </div>
         )}
+        {!professionals && <CardSkeleton rows={5} rowHeight={TABLE_ROW} />}
       </div>
 
       {editTarget && (

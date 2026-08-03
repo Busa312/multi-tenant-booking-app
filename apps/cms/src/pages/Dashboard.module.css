@@ -17,12 +17,6 @@
 .top {
   grid-column: 2;
 }
-/* Placeholder that keeps a slot's geometry while its data lands. */
-.pending {
-  color: var(--ink-soft);
-  font-size: 13.5px;
-}
-
 /* Not the 860px sidebar-drawer breakpoint, which is the tempting one: the
    viewport isn't what these two cards live in. Subtract the 248px sidebar and
    the content padding and a 1.4fr/1fr split at 900px leaves the right-hand

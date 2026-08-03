@@ -15,10 +15,19 @@ import { CreateBookingModal } from "../components/CreateBookingModal.js";
 import { RescheduleBookingModal } from "../components/RescheduleBookingModal.js";
 import { BookingsDayTable } from "../components/BookingsDayTable.js";
 import { BookingsWeekGrid } from "../components/BookingsWeekGrid.js";
+import { CardSkeleton } from "../components/CardSkeleton.js";
 import { type ActionMenuItem, Alert, Button, TextInput } from "../components/ui/index.js";
 import styles from "./Bookings.module.css";
 
 /** Everything that doesn't change as the visible day moves. */
+/**
+ * Loading-placeholder row heights. A day-table row carries a time, a customer,
+ * a service and a status pill on one line; a week-grid column is a day's stack
+ * of BookingCards, so it reserves a good deal more per row.
+ */
+const DAY_ROW = "48px";
+const WEEK_ROW = "74px";
+
 interface PageContext {
   timezone: string;
   services: ServiceSummary[];
@@ -262,6 +271,20 @@ export function BookingsPage() {
             }}
           />
         )}
+
+        {/* Mirrors the `appointments && context` guard on both tables above —
+            the two load independently, so keying the placeholder off the
+            payload alone leaves a blank gap whenever appointments land first.
+
+            The week grid is seven day-columns tall and the day table is a list,
+            so the two views reserve different amounts — sized per view rather
+            than sharing one number that would be wrong for both. */}
+        {(!appointments || !context) &&
+          (view === "week" ? (
+            <CardSkeleton rows={7} rowHeight={WEEK_ROW} />
+          ) : (
+            <CardSkeleton rows={6} rowHeight={DAY_ROW} />
+          ))}
       </div>
 
       {createOpen && context && date && (

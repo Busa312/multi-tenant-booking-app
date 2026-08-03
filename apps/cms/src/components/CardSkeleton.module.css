@@ -1,0 +1,22 @@
+.card {
+  /* Matches the real cards on these grids, which all opt out of stretching so
+     their height is their content's. */
+  align-self: start;
+}
+
+/* Mirrors the 2px gap the real cards put between an Eyebrow and its subtitle. */
+.subtitle {
+  margin-top: 6px;
+}
+
+/*
+ * 14px above the block matches the `margin-top` every real card uses between
+ * its header and its body (see TopServicesCard .table, BookingTrendChart
+ * .figure); 10px between rows approximates a table row's vertical padding.
+ */
+.rows {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 14px;
+}

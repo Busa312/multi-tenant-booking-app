@@ -1,0 +1,25 @@
+/* The header spacing the real card gets from Eyebrow + .subtitle. */
+.subtitle {
+  margin-top: 6px;
+}
+
+/* Matches .figcaption's 10px gap above the rail in BookingTrendChart. */
+.figcaption {
+  margin-bottom: 10px;
+}
+
+/*
+ * The bar shape from BookingTrendChart: same 14px cap and the same square
+ * baseline, so the rail reads as a chart rather than a row of pills. Height is
+ * per-bar and arrives inline.
+ */
+.bar {
+  max-width: 14px;
+  border-radius: 3px 3px 0 0;
+}
+
+@media (max-width: 520px) {
+  .bar {
+    max-width: none;
+  }
+}

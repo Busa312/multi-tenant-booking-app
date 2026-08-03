@@ -5,7 +5,8 @@ import { ApiError } from "@booking/api-client";
 import { cachedApi } from "../lib/cache.js";
 import { useI18n } from "../i18n/I18nContext.js";
 import { AppShell } from "../components/AppShell.js";
-import { Alert, Button, Card, Eyebrow, Field, Icon, TextInput } from "../components/ui/index.js";
+import { CardSkeleton } from "../components/CardSkeleton.js";
+import { Alert, Button, Card, Eyebrow, Field, Icon, Skeleton, TextInput } from "../components/ui/index.js";
 import styles from "./BrandingSettings.module.css";
 
 type ColorField = keyof TenantColors;
@@ -118,7 +119,17 @@ export function BrandingSettingsPage() {
 
   return (
     <AppShell title={t("branding.title")} subtitle={t("branding.subtitle")} tenantSubdomain={tenant?.subdomain}>
-      {!tenant && <p>{t("common.loading")}</p>}
+      {!tenant && (
+        // Mirrors the real two-column layout, and reuses `.preview`/`.iframe`
+        // so the 620px frame (460px below 820px) is reserved from the same rule
+        // that sizes it — not a copy of the number.
+        <div className={styles.layout}>
+          <CardSkeleton className={styles.form} rows={6} rowHeight="52px" />
+          <div className={styles.preview}>
+            <Skeleton className={styles.iframe} />
+          </div>
+        </div>
+      )}
       {tenant && (
         <div className={`fade-up ${styles.layout}`}>
           <Card as="form" onSubmit={handleSubmit} className={styles.form}>

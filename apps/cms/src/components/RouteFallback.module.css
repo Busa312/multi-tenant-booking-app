@@ -1,0 +1,36 @@
+.root {
+  display: grid;
+  place-items: center;
+  min-height: 60vh;
+  padding: 2rem;
+}
+
+/*
+ * Held back by a beat before fading in, so a chunk that resolves quickly — the
+ * usual case once App.tsx has warmed it — never flashes a loading state on the
+ * way past. `both` keeps it at opacity 0 through the delay rather than showing
+ * and then animating.
+ */
+.label {
+  color: var(--ink-soft);
+  font-family: var(--font-ui);
+  font-size: 0.9375rem;
+  letter-spacing: 0.01em;
+  animation: routeFallbackIn 0.2s ease 0.15s both;
+}
+
+@keyframes routeFallbackIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* No animation also means no delay: the label is simply there from the start. */
+@media (prefers-reduced-motion: reduce) {
+  .label {
+    animation: none;
+  }
+}

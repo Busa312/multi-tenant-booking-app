@@ -1,0 +1,33 @@
+/*
+ * Stands alone on the page rather than inside AppShell — the shell is part of
+ * what failed. Centred on the viewport, not the content column, because there
+ * is no content column at this point.
+ */
+.root {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: var(--bg);
+}
+
+.card {
+  max-width: 440px;
+  text-align: center;
+}
+
+.title {
+  font-family: var(--font-display);
+  font-size: 22px;
+  font-weight: 600;
+  line-height: 1.25;
+  margin: 0 0 10px;
+  color: var(--ink);
+}
+
+.body {
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--ink-soft);
+  margin: 0 0 20px;
+}
