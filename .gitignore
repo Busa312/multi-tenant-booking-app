@@ -4,6 +4,9 @@ dist
 .turbo
 *.tsbuildinfo
 coverage
+# GitLab CI relocates pnpm's store here so it can be cached (only paths inside
+# the build directory are cacheable). Harmless locally, but never committed.
+.pnpm-store
 
 .env
 .env.local

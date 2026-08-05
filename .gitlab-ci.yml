@@ -1,0 +1,108 @@
+# GitLab CI port of .github/workflows/ci.yml and .github/workflows/deploy-api.yml.
+#
+# Required CI/CD variables (Settings -> CI/CD -> Variables), both masked and
+# scoped to the `production` environment:
+#   PROD_DATABASE_URL       Neon owner/migration role connection string
+#   RENDER_DEPLOY_HOOK_API  Render deploy hook URL
+#
+# Also enable Settings -> CI/CD -> General pipelines -> "Auto-cancel redundant
+# pipelines". `interruptible` below marks which jobs may be cancelled, but that
+# project setting is what actually does the cancelling.
+
+stages:
+  - check
+  - deploy
+
+default:
+  # Pinned from .nvmrc (Node 20). The full image rather than -slim on purpose:
+  # the merge-request job shells out to `git`, and `curl` posts the deploy hook.
+  image: node:20-bookworm
+  interruptible: true
+
+variables:
+  # Turbo's affected-package filter diffs against the target branch, so the
+  # runner's default shallow clone (depth 20) can't see far enough back.
+  GIT_DEPTH: "0"
+  # GitLab can only cache paths inside the build directory, so pnpm's store is
+  # relocated there. Set as an env var rather than `pnpm config set` so nothing
+  # writes an .npmrc into a checkout that deliberately has none.
+  NPM_CONFIG_STORE_DIR: .pnpm-store
+  TURBO_TELEMETRY_DISABLED: "1"
+
+# Toolchain + dependencies, shared by every job below.
+.node:
+  before_script:
+    # Corepack reads `packageManager` from package.json, so the pnpm version is
+    # pinned by the repo (10.27.0) rather than by this file.
+    - corepack enable
+    - corepack prepare --activate
+    - pnpm install --frozen-lockfile
+  cache:
+    # Keyed on the lockfile: dependency changes get a fresh store, everything
+    # else reuses it.
+    - key:
+        files:
+          - pnpm-lock.yaml
+      paths:
+        - .pnpm-store
+    # Turbo's local task cache. Content-addressed, so a hit means the inputs
+    # were byte-identical — safe to carry across pipelines.
+    - key: turbo-$CI_COMMIT_REF_SLUG
+      paths:
+        - .turbo
+      policy: pull-push
+
+# Merge requests: only lint/typecheck/test/build the packages the diff actually
+# affects, so a CMS-only change doesn't rebuild api/public-site.
+checks:mr:
+  stage: check
+  extends: .node
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+  script:
+    # The runner fetches the merge request's own ref and nothing else, so the
+    # target branch has to be brought in by hand before turbo can diff it.
+    - git fetch --no-tags origin
+      "+refs/heads/$CI_MERGE_REQUEST_TARGET_BRANCH_NAME:refs/remotes/origin/$CI_MERGE_REQUEST_TARGET_BRANCH_NAME"
+    - pnpm exec turbo run lint typecheck test build
+      --filter="...[origin/$CI_MERGE_REQUEST_TARGET_BRANCH_NAME]"
+
+# Default branch: always the full set, so it is never green on a stale cache.
+checks:main:
+  stage: check
+  extends: .node
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+  script:
+    - pnpm exec turbo run lint typecheck test build
+
+deploy:api:
+  stage: deploy
+  extends: .node
+  # A migration must never be killed part-way through, so this job opts out of
+  # auto-cancellation and `resource_group` serialises concurrent deploys into a
+  # queue — together they are GitLab's equivalent of the workflow's
+  # `cancel-in-progress: false`.
+  interruptible: false
+  resource_group: deploy-api
+  environment:
+    name: production
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      changes:
+        - apps/api/**/*
+        - packages/shared-types/**/*
+        - packages/api-client/**/*
+        - packages/config/**/*
+        - pnpm-lock.yaml
+        - .gitlab-ci.yml
+  variables:
+    # Prisma reads DATABASE_URL; the value is the Neon owner/migration role,
+    # never the booking_app runtime role — table owners bypass RLS, see
+    # docker/postgres/init.sql.
+    DATABASE_URL: $PROD_DATABASE_URL
+  script:
+    - pnpm --filter @booking/api prisma:generate
+    # Gates the deploy: a failed migration means Render is never triggered.
+    - pnpm --filter @booking/api prisma:deploy
+    - curl -f -X POST "$RENDER_DEPLOY_HOOK_API"
