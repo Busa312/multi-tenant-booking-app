@@ -55,4 +55,8 @@ These rules codify the conventions already used across this monorepo. Follow the
 - Unused vars are allowed only with a leading `_`.
 
 ## 8. Testing
-- `[R]` No test convention exists yet (every app stubs `test`). Start with Jest on `apps/api` for the RLS/tenant-isolation and serializer logic (highest risk), using colocated `*.spec.ts`. Establish this before adding frontend tests.
+- `apps/api` runs Jest + ts-jest (`apps/api/jest.config.js`), with **colocated `*.spec.ts`** next to the unit under test. Run via `pnpm test` (Turbo) or `pnpm --filter @booking/api test:watch`.
+- These are **unit tests: no database, no Redis, no Nest bootstrap.** Construct the subject directly and hand it stubs — `PrismaService` becomes `{ forTenant: (fn) => fn(txStub) }`, `TenantContextService` becomes `{ current: { tenantId } }` (or a real instance when the AsyncLocalStorage behaviour *is* the thing under test). `pnpm test` must stay runnable with nothing else running.
+- Covered so far: `common/timezone`, `common/serializers`, `cms/color-validation`, `tenant/tenant-context.service`, `prisma/prisma.service` (the `forTenant`/RLS choke point), `auth/guards/roles.guard`, `booking/availability.service`, `booking/booking.service`.
+- Tag a test with the same `// Rxx:` comment as the code it pins (§3), and prefer asserting the *rule* (`price` is never rewritten on reschedule) over the mechanics.
+- Still open: integration tests that exercise the Postgres RLS policies against a real database — a unit test can only prove `forTenant` sets `app.tenant_id`, not that the policies act on it. Frontend tests come after that.
