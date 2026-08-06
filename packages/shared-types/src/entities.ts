@@ -112,10 +112,28 @@ export interface TimeOff {
   reason: string | null;
 }
 
+/**
+ * One service on an appointment. `durationMinutes` and `price` are the values
+ * snapshotted when the service was added, not the service's current ones — a
+ * later price or duration edit must not rewrite what a customer was quoted
+ * (R40). `name` is deliberately live: a rename is normally a correction.
+ */
+export interface AppointmentServiceLine {
+  serviceId: string;
+  name: string;
+  durationMinutes: number;
+  price: string; // numeric transported as string, like Service.price
+}
+
 export interface Appointment {
   id: string;
   tenantId: string;
-  serviceId: string;
+  /**
+   * One or more, in the order they were chosen. They run as one contiguous
+   * block: endAt is startAt plus the sum of their durations, and `price` below
+   * is the sum of their prices.
+   */
+  services: AppointmentServiceLine[];
   professionalId: string | null; // null = "any available" was chosen
   userName: string;
   phoneNumber: string;
@@ -144,8 +162,6 @@ export interface AppointmentSummary extends Appointment {
   // from the CMS (TenantUser.id), which is also why it carries no magic link.
   createdByUserId: string | null;
   notes: string | null;
-  serviceName: string;
-  serviceDurationMinutes: number;
   professionalName: string | null;
   // Whether a customer magic link exists at all for this appointment — derived
   // from access_token_hash, which itself is never sent to clients. True only for

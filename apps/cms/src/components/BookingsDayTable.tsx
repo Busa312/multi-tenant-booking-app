@@ -1,5 +1,6 @@
 import type { AppointmentSummary } from "@booking/shared-types";
 import { useI18n } from "../i18n/I18nContext.js";
+import { serviceLabel } from "../lib/appointmentServices.js";
 import { formatTimeLabel } from "../lib/tenantTime.js";
 import { BookingStatusPill } from "./BookingStatusPill.js";
 import { ActionMenu, type ActionMenuItem, Table, TableEmpty, TableHead, TableRow } from "./ui/index.js";
@@ -48,7 +49,7 @@ export function BookingsDayTable({ appointments, timezone, actionsFor }: Booking
               {appointment.notes && <div className={styles.notes}>{appointment.notes}</div>}
             </div>
             <div>
-              <div className={styles.cell}>{appointment.serviceName}</div>
+              <div className={styles.cell}>{serviceLabel(appointment)}</div>
               <div className={styles.meta}>{t("bookings.priceValue", { price: appointment.price })}</div>
             </div>
             <div className={styles.cell}>{appointment.professionalName ?? t("bookings.anyProfessional")}</div>

@@ -15,6 +15,7 @@ import type {
 import { PrismaService } from "../prisma/prisma.service.js";
 import { TenantContextService } from "../tenant/tenant-context.service.js";
 import { serializeProfessional, serializeService, serializeTenant } from "../common/serializers.js";
+import { parseIdList } from "../common/query.js";
 import {
   AppointmentDto,
   AvailabilitySlotDto,
@@ -86,11 +87,7 @@ export class PublicController {
   @ApiQuery({ name: "date", description: "YYYY-MM-DD, in tenant timezone" })
   @ApiOkResponse({ type: [AvailabilitySlotDto] })
   getAvailability(@Query() query: AvailabilityQuery): Promise<AvailabilitySlot[]> {
-    // `serviceIds` arrives comma-separated on a single query key, so it reaches
-    // the handler as a string despite the DTO's array type.
-    const serviceIds = (Array.isArray(query.serviceIds) ? query.serviceIds : String(query.serviceIds ?? "").split(","))
-      .map((id) => id.trim())
-      .filter(Boolean);
+    const serviceIds = parseIdList(query.serviceIds);
 
     return this.availability.computeSlots({
       serviceIds,

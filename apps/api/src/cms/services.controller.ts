@@ -24,7 +24,11 @@ import { RevalidationService } from "./revalidation.service.js";
 
 const SERVICE_SUMMARY_INCLUDE = {
   serviceProfessionals: true,
-  _count: { select: { appointments: true } },
+  // Counted through the join, not through a column on `appointment`: a service
+  // that only ever appears as the *second* service of an appointment still has
+  // history, and reporting it as unused would let the delete below through to a
+  // foreign-key error.
+  _count: { select: { appointmentServices: true } },
 } satisfies Prisma.ServiceInclude;
 
 type ServiceWithRelations = Prisma.ServiceGetPayload<{ include: typeof SERVICE_SUMMARY_INCLUDE }>;
@@ -33,7 +37,7 @@ function toSummary(s: ServiceWithRelations): ServiceSummary {
   return {
     ...serializeService(s),
     professionalIds: s.serviceProfessionals.map((sp) => sp.professionalId),
-    hasAppointmentHistory: s._count.appointments > 0,
+    hasAppointmentHistory: s._count.appointmentServices > 0,
   };
 }
 
@@ -158,7 +162,10 @@ export class ServicesController {
   async remove(@Param("id") id: string): Promise<void> {
     const { tenantId } = this.tenantContext.current;
     await this.prisma.forTenant(async (tx) => {
-      const appointmentCount = await tx.appointment.count({ where: { tenantId, serviceId: id } });
+      // Any line on any appointment counts, not just the first one — otherwise
+      // the RESTRICT foreign key on appointment_service turns this 409 into a
+      // 500 for exactly the services multi-service bookings introduced.
+      const appointmentCount = await tx.appointmentService.count({ where: { tenantId, serviceId: id } });
       if (appointmentCount > 0) {
         throw new ConflictException("This service has appointment history and can only be deactivated, not deleted");
       }

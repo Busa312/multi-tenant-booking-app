@@ -10,6 +10,7 @@ import {
   zonedDateString,
   zonedTimeToUtc,
 } from "../common/timezone.js";
+import { resolveServiceLines, totalDurationMinutes, validateServiceIds } from "./service-lines.js";
 
 /**
  * The one implementation of "when is this bookable", used by both the public
@@ -46,6 +47,12 @@ export interface AvailabilityInput {
   professionalId?: string | null;
   /** "YYYY-MM-DD", in the tenant's timezone. */
   date: string;
+  /**
+   * The appointment being moved. It occupies its own slot, so without this the
+   * reschedule picker hides every time the appointment already covers — the
+   * same self-exclusion `findConflictsIn` does (R80).
+   */
+  excludeAppointmentId?: string;
 }
 
 export interface ConflictCheckInput {
@@ -87,9 +94,7 @@ export class AvailabilityService {
   async computeSlots(input: AvailabilityInput): Promise<AvailabilitySlot[]> {
     const { tenantId } = this.tenantContext.current;
     const date = this.validateDate(input.date);
-    if (input.serviceIds.length === 0) {
-      throw new BadRequestException("at least one serviceId is required");
-    }
+    validateServiceIds(input.serviceIds);
 
     return this.prisma.forTenant(async (tx) => {
       const { timezone } = await tx.tenant.findUniqueOrThrow({
@@ -97,16 +102,20 @@ export class AvailabilityService {
         select: { timezone: true },
       });
 
-      const services = await tx.service.findMany({
-        where: { tenantId, id: { in: input.serviceIds }, isActive: true },
-        select: { id: true, durationMinutes: true },
-      });
       // R120: a deactivated (or unknown) service yields no availability at all
-      // rather than slots the booking call would then reject.
-      if (services.length !== new Set(input.serviceIds).size) {
-        throw new BadRequestException("one or more services are unknown or deactivated");
-      }
-      const durationMinutes = services.reduce((total, s) => total + s.durationMinutes, 0);
+      // rather than slots the booking call would then reject — except on the
+      // one already booked, whose lines come from the appointment being edited.
+      // Resolved through the same helper BookingService writes with, so the
+      // window offered here is exactly the window that will be booked.
+      const existing = input.excludeAppointmentId
+        ? await tx.appointmentService.findMany({
+            where: { tenantId, appointmentId: input.excludeAppointmentId },
+            select: { serviceId: true, durationMinutes: true, price: true },
+          })
+        : [];
+      const durationMinutes = totalDurationMinutes(
+        await resolveServiceLines(tx, tenantId, input.serviceIds, existing),
+      );
 
       const candidates = await this.resolveCandidates(tx, tenantId, input.serviceIds, input.professionalId ?? null);
       if (candidates.length === 0) {
@@ -137,6 +146,9 @@ export class AvailabilityService {
             status: { not: "cancelled" },
             startAt: { lt: dayEnd },
             endAt: { gt: dayStart },
+            // R80: an appointment being moved doesn't block itself, or the
+            // reschedule picker would hide every slot it currently covers.
+            ...(input.excludeAppointmentId ? { id: { not: input.excludeAppointmentId } } : {}),
           },
           select: { professionalId: true, startAt: true, endAt: true },
         }),

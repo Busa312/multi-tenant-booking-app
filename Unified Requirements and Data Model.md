@@ -150,19 +150,38 @@ Composite PK on (`service_id`, `professional_id`).
 | ------------------------- | ---------------------- | --------------------------------------------------------------------------------------- |
 | `id`                      | uuid, PK               |                                                                                         |
 | `tenant_id`               | uuid, FK               |                                                                                         |
-| `service_id`              | uuid, FK               |                                                                                         |
 | `professional_id`         | uuid, FK, nullable     | null = "any available" was chosen                                                       |
 | `user_name`               | text                   |                                                                                         |
 | `phone_number`            | text                   |                                                                                         |
 | `email`                   | text                   |                                                                                         |
 | `start_at`                | timestamptz            |                                                                                         |
-| `end_at`                  | timestamptz            | derived from `start_at` + service duration at booking time, stored for query simplicity |
-| `price`                   | numeric                | snapshot of `Service.price` at booking time                                             |
+| `end_at`                  | timestamptz            | derived from `start_at` + the summed durations of its `AppointmentService` rows at booking time, stored for query simplicity |
+| `price`                   | numeric                | sum of its `AppointmentService` prices, each snapshotted when that service was added    |
 | `status`                  | text                   | `booked` \| `cancelled` \| `completed` \| `no_show`                                     |
 | `access_token_hash`       | text, unique, nullable | null after expiry/cancellation cleanup if desired                                       |
 | `access_token_expires_at` | timestamptz            |                                                                                         |
 | `created_at`              | timestamptz            |                                                                                         |
 | `updated_at`              | timestamptz            |                                                                                         |
+
+### AppointmentService (join table)
+The services one appointment covers — one or more, per "User can choose one or more
+services" in the requirements above. They run as a single contiguous block with one
+professional, which is what lets `Appointment` keep a single `professional_id`,
+`start_at` and `end_at`.
+
+| column | type | notes |
+|---|---|---|
+| `id` | uuid, PK | surrogate rather than a composite PK, so allowing the same service twice later is a validation change rather than a migration |
+| `tenant_id` | uuid, FK | denormalized for RLS simplicity |
+| `appointment_id` | uuid, FK | cascade on delete |
+| `service_id` | uuid, FK | **restrict** on delete — the database-level backstop behind the "service has history" 409 |
+| `position` | smallint | order the services were chosen in; unique per appointment |
+| `duration_minutes` | int | snapshot of `Service.duration_minutes` when this service was added |
+| `price` | numeric | snapshot of `Service.price` when this service was added |
+
+Note that `Appointment` therefore has no database-level guarantee of at least one
+service — a join table can't express "≥1 row" without a deferred constraint
+trigger. That invariant is the booking service's to keep.
 
 ## ER Diagram
 
@@ -174,6 +193,7 @@ erDiagram
     TENANT ||--o{ BUSINESS_HOURS : has
     TENANT ||--o{ TIME_OFF : has
     TENANT ||--o{ APPOINTMENT : has
+    TENANT ||--o{ APPOINTMENT_SERVICE : has
 
     PROFESSIONAL ||--o| TENANT_USER : "logs in as (optional)"
     PROFESSIONAL ||--o{ SERVICE_PROFESSIONAL : performs
@@ -182,7 +202,8 @@ erDiagram
     PROFESSIONAL ||--o{ APPOINTMENT : "booked with (optional)"
 
     SERVICE ||--o{ SERVICE_PROFESSIONAL : "offered by"
-    SERVICE ||--o{ APPOINTMENT : "booked for"
+    SERVICE ||--o{ APPOINTMENT_SERVICE : "booked as"
+    APPOINTMENT ||--o{ APPOINTMENT_SERVICE : covers
 
     TENANT {
         uuid id PK
@@ -250,7 +271,6 @@ erDiagram
     APPOINTMENT {
         uuid id PK
         uuid tenant_id FK
-        uuid service_id FK
         uuid professional_id FK
         text user_name
         text phone_number
@@ -263,6 +283,16 @@ erDiagram
         timestamptz access_token_expires_at
         timestamptz created_at
         timestamptz updated_at
+    }
+
+    APPOINTMENT_SERVICE {
+        uuid id PK
+        uuid tenant_id FK
+        uuid appointment_id FK
+        uuid service_id FK
+        smallint position
+        int duration_minutes
+        numeric price
     }
 ```
 
@@ -298,4 +328,21 @@ The shared-tables-plus-RLS decision itself doesn't need revisiting at any of the
 
 ## Still Open
 
-No open modeling questions remain at this pass. Revisit this section as new requirements surface.
+**Resolved:** this document required "User can choose one or more services" while its
+own data model gave `Appointment` a single `service_id`. The `AppointmentService` join
+table above settles it in favour of the requirement. Availability already worked this
+way — it has always taken a list of service ids and summed their durations — so only
+persistence and the CMS contract changed.
+
+Still open:
+
+- **Per-line professional.** All the services on an appointment are performed by one
+  professional, back to back. A salon where the colourist doesn't cut hair can't book
+  "colour + cut" as a single appointment; today that is two appointments. Supporting it
+  would mean per-segment availability, a conflict response that can say *which* service
+  collided, and an answer to what "this professional's own appointments" (R20) means for
+  an appointment with two of them. `AppointmentService` is shaped so a nullable
+  `professional_id` and `start_at` could be added to it without a rewrite.
+- **Same service twice on one appointment.** Rejected with a 400 for now rather than
+  modelled as a quantity; the surrogate PK means allowing it later is a validation
+  change, not a migration.

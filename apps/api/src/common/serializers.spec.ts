@@ -23,10 +23,22 @@ const prismaTenant = (overrides: Partial<Parameters<typeof serializeTenant>[0]> 
   ...overrides,
 });
 
+const line = (overrides: Partial<Parameters<typeof serializeAppointment>[0]["services"][number]> = {}) => ({
+  id: "llllllll-llll-llll-llll-llllllllllll",
+  tenantId: TENANT_ID,
+  appointmentId: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+  serviceId: "ssssssss-ssss-ssss-ssss-ssssssssssss",
+  position: 0,
+  durationMinutes: 30,
+  price: new Prisma.Decimal("45.50"),
+  service: { name: "Haircut" },
+  ...overrides,
+});
+
 const prismaAppointment = (overrides: Partial<Parameters<typeof serializeAppointment>[0]> = {}) => ({
   id: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
   tenantId: TENANT_ID,
-  serviceId: "ssssssss-ssss-ssss-ssss-ssssssssssss",
+  services: [line()],
   professionalId: "pppppppp-pppp-pppp-pppp-pppppppppppp",
   userName: "ნინო",
   phoneNumber: "+995555123456",
@@ -48,7 +60,6 @@ const prismaAppointmentSummary = (
   overrides: Partial<PrismaAppointmentSummary> = {},
 ): PrismaAppointmentSummary => ({
   ...prismaAppointment(),
-  service: { name: "Haircut", durationMinutes: 30 },
   professional: { name: "Levan" },
   ...overrides,
 });
@@ -149,6 +160,58 @@ describe("serializeAppointment", () => {
     expect(result.price).toBe("45.5");
   });
 
+  describe("service lines", () => {
+    it("renders each line with its live name and its snapshotted numbers", () => {
+      const result = serializeAppointment(prismaAppointment());
+
+      expect(result.services).toEqual([
+        {
+          serviceId: "ssssssss-ssss-ssss-ssss-ssssssssssss",
+          name: "Haircut",
+          durationMinutes: 30,
+          price: "45.5",
+        },
+      ]);
+    });
+
+    it("sends each line's price as a string, never a float", () => {
+      const result = serializeAppointment(
+        prismaAppointment({ services: [line({ price: new Prisma.Decimal("12345678.91") })] }),
+      );
+
+      expect(result.services[0]?.price).toBe("12345678.91");
+    });
+
+    it("keeps the lines in the order the include asked for", () => {
+      const result = serializeAppointment(
+        prismaAppointment({
+          services: [
+            line({ serviceId: "s1", position: 0, service: { name: "Haircut" } }),
+            line({ serviceId: "s2", position: 1, service: { name: "Beard trim" } }),
+          ],
+        }),
+      );
+
+      expect(result.services.map((entry) => entry.name)).toEqual(["Haircut", "Beard trim"]);
+    });
+
+    // The database no longer guarantees at least one line — dropping
+    // appointment.service_id gave that up — so the serializer must not assume it.
+    it("serializes an appointment with no lines as an empty array", () => {
+      const result = serializeAppointment(prismaAppointment({ services: [] }));
+
+      expect(result.services).toEqual([]);
+    });
+
+    it("exposes no internal line ids", () => {
+      const result = serializeAppointment(prismaAppointment());
+
+      expect(result.services[0]).not.toHaveProperty("id");
+      expect(result.services[0]).not.toHaveProperty("appointmentId");
+      expect(result.services[0]).not.toHaveProperty("position");
+    });
+  });
+
   it("never exposes the magic-link token or its expiry", () => {
     const result = serializeAppointment(
       prismaAppointment({
@@ -163,11 +226,9 @@ describe("serializeAppointment", () => {
 });
 
 describe("serializeAppointmentSummary", () => {
-  it("flattens the joined service and professional names", () => {
+  it("flattens the joined professional name", () => {
     const result = serializeAppointmentSummary(prismaAppointmentSummary());
 
-    expect(result.serviceName).toBe("Haircut");
-    expect(result.serviceDurationMinutes).toBe(30);
     expect(result.professionalName).toBe("Levan");
   });
 

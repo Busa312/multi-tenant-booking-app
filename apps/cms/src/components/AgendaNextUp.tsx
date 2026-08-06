@@ -1,5 +1,6 @@
 import type { AppointmentSummary } from "@booking/shared-types";
 import { useI18n } from "../i18n/I18nContext.js";
+import { serviceLabel } from "../lib/appointmentServices.js";
 import { formatTimeLabel } from "../lib/tenantTime.js";
 import { BookingStatusPill } from "./BookingStatusPill.js";
 import { Icon } from "./ui/index.js";
@@ -35,7 +36,7 @@ export function AgendaNextUp({ appointment, timezone }: AgendaNextUpProps) {
       <div className={styles.meta}>
         <span className={styles.metaItem}>
           <Icon name="design_services" size={16} />
-          {appointment.serviceName}
+          {serviceLabel(appointment)}
         </span>
         <span className={styles.metaItem}>
           <Icon name="person" size={16} />

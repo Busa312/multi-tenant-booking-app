@@ -7,6 +7,12 @@ import { TenantContextService } from "../tenant/tenant-context.service.js";
 import { APPOINTMENT_SUMMARY_INCLUDE, type PrismaAppointmentSummary } from "../common/serializers.js";
 import { parseTimeOfDay, zonedTimeToUtc } from "../common/timezone.js";
 import { AvailabilityService } from "./availability.service.js";
+import {
+  resolveServiceLines,
+  totalDurationMinutes,
+  totalPrice,
+  type ResolvedServiceLine,
+} from "./service-lines.js";
 
 /**
  * Writes to `Appointment`, shared by the CMS booking flow and (once its
@@ -31,7 +37,8 @@ function requireText(value: string, field: string): string {
 }
 
 export interface CreateBookingInput {
-  serviceId: string;
+  /** One or more, in the order they run. A service may appear only once. */
+  serviceIds: string[];
   /** null = "any available" (no professional pinned to the row). */
   professionalId: string | null;
   /** "YYYY-MM-DD" + "HH:mm", both read in the tenant's timezone. */
@@ -47,12 +54,14 @@ export interface CreateBookingInput {
   override?: boolean;
 }
 
-export interface RescheduleBookingInput {
+export interface UpdateBookingInput {
   appointmentId: string;
   /** Both or neither — a time move needs its date. */
   date?: string;
   time?: string;
   professionalId?: string;
+  /** Replaces the whole service list; services already on it keep their price. */
+  serviceIds?: string[];
   override?: boolean;
   /**
    * Set for `professional` logins: the only professional whose appointments
@@ -86,9 +95,10 @@ export class BookingService {
         select: { timezone: true },
       });
 
-      const service = await this.loadBookableService(tx, tenantId, input.serviceId, input.professionalId);
+      const lines = await resolveServiceLines(tx, tenantId, input.serviceIds);
+      await this.assertPairing(tx, tenantId, lines, input.professionalId);
       const startAt = this.resolveStartAt(input.date, input.time, timezone);
-      const endAt = new Date(startAt.getTime() + service.durationMinutes * 60_000);
+      const endAt = new Date(startAt.getTime() + totalDurationMinutes(lines) * 60_000);
 
       await this.assertBookable(tx, {
         professionalId: input.professionalId,
@@ -100,7 +110,6 @@ export class BookingService {
       return tx.appointment.create({
         data: {
           tenantId,
-          serviceId: service.id,
           professionalId: input.professionalId,
           userName,
           phoneNumber,
@@ -108,30 +117,40 @@ export class BookingService {
           // public flow relies on to have somewhere to send the magic link.
           email: input.email?.trim() ?? "",
           startAt,
-          // R40: derived from the service duration, not accepted from the client.
+          // R40: derived from the summed service durations, not accepted from
+          // the client.
           endAt,
           // R40: snapshot — a later price change must not rewrite history.
-          price: service.price,
+          price: totalPrice(lines),
           notes: input.notes?.trim() || null,
           createdByUserId: input.createdByUserId,
           // R70: staff-created bookings carry no customer link, so there is
           // nothing to expire either.
           accessTokenHash: null,
           accessTokenExpiresAt: null,
+          services: { create: lines.map((line) => this.lineData(tenantId, line)) },
         },
         include: APPOINTMENT_SUMMARY_INCLUDE,
       });
     });
   }
 
-  /** R80: move an appointment in time and/or to another professional. */
-  async reschedule(input: RescheduleBookingInput): Promise<PrismaAppointmentSummary> {
+  /**
+   * R80: move an appointment in time and/or to another professional, and change
+   * which services it covers.
+   *
+   * Changing the service list changes the appointment's length and its total,
+   * so all three edits go through one path — each of them shifts `end_at`, and
+   * every one of them therefore has to re-check the window and rotate the
+   * customer's magic link.
+   */
+  async update(input: UpdateBookingInput): Promise<PrismaAppointmentSummary> {
     const { tenantId } = this.tenantContext.current;
     if ((input.date === undefined) !== (input.time === undefined)) {
       throw new BadRequestException("date and time must be sent together");
     }
-    if (input.date === undefined && input.professionalId === undefined) {
-      throw new BadRequestException("a reschedule must change the time, the professional, or both");
+    if (input.date === undefined && input.professionalId === undefined && input.serviceIds === undefined) {
+      throw new BadRequestException("an update must change the time, the professional, the services, or some of them");
     }
 
     return this.prisma.forTenant(async (tx) => {
@@ -144,18 +163,26 @@ export class BookingService {
       if (existing.status === "cancelled") {
         // R90 keeps cancelled rows as history; reviving one is a status change
         // the staff member makes deliberately first, not a side effect of a move.
-        throw new BadRequestException("a cancelled appointment can't be rescheduled");
+        throw new BadRequestException("a cancelled appointment can't be updated");
       }
 
       const professionalId = input.professionalId ?? existing.professionalId;
-      // R140 applies to the new pairing just as it does at creation. R120 does
-      // not: it governs *new* bookings, and an appointment that already exists
-      // must stay movable even if its service or its professional was
-      // deactivated since — otherwise deactivating a departing stylist would
-      // strand every appointment already on their calendar. Moving one *to*
+      // R120 governs *new* bookings only: an appointment that already exists must
+      // stay movable even if its service or its professional was deactivated
+      // since — otherwise deactivating a departing stylist would strand every
+      // appointment already on their calendar. Passing the current lines as
+      // `existing` is what grants that, and it is also what keeps their original
+      // prices (R40) when another service is added alongside them. A service
+      // being *added* now is a new booking and must be active.
+      const lines = await resolveServiceLines(
+        tx,
+        tenantId,
+        input.serviceIds ?? existing.services.map((line) => line.serviceId),
+        existing.services,
+      );
+      // R140 applies to the new pairing just as it does at creation. Moving to
       // another professional still requires that professional to be active.
-      const service = await this.loadBookableService(tx, tenantId, existing.serviceId, professionalId, {
-        allowInactiveService: true,
+      await this.assertPairing(tx, tenantId, lines, professionalId, {
         allowInactiveProfessional: professionalId === existing.professionalId,
       });
 
@@ -163,7 +190,7 @@ export class BookingService {
         input.date !== undefined && input.time !== undefined
           ? this.resolveStartAt(input.date, input.time, timezone)
           : existing.startAt;
-      const endAt = new Date(startAt.getTime() + service.durationMinutes * 60_000);
+      const endAt = new Date(startAt.getTime() + totalDurationMinutes(lines) * 60_000);
 
       await this.assertBookable(tx, {
         professionalId,
@@ -173,19 +200,43 @@ export class BookingService {
         excludeAppointmentId: existing.id,
       });
 
+      if (input.serviceIds !== undefined) {
+        // Replaced wholesale rather than diffed: `@@unique(appointmentId, position)`
+        // is a plain index, so reordering in place collides with itself
+        // mid-statement. The snapshots that must survive were already carried
+        // over by resolveServiceLines above.
+        await tx.appointmentService.deleteMany({ where: { tenantId, appointmentId: existing.id } });
+        await tx.appointmentService.createMany({
+          data: lines.map((line) => ({ appointmentId: existing.id, ...this.lineData(tenantId, line) })),
+        });
+      }
+
       return tx.appointment.update({
         where: { id: existing.id, tenantId },
-        // `price` is deliberately absent: it was snapshotted at creation (R40)
-        // and moving an appointment doesn't re-quote it.
         data: {
           professionalId,
           startAt,
           endAt,
+          // Re-summed from the lines, which is a no-op unless the service list
+          // changed: an unchanged service keeps the price it was booked at, so
+          // moving an appointment still never re-quotes it (R40).
+          price: totalPrice(lines),
           ...this.rotatedToken(existing.accessTokenHash, endAt),
         },
         include: APPOINTMENT_SUMMARY_INCLUDE,
       });
     });
+  }
+
+  /** The columns a line is written with; `position` comes from request order. */
+  private lineData(tenantId: string, line: ResolvedServiceLine) {
+    return {
+      tenantId,
+      serviceId: line.serviceId,
+      position: line.position,
+      durationMinutes: line.durationMinutes,
+      price: line.price,
+    };
   }
 
   /**
@@ -227,6 +278,9 @@ export class BookingService {
   ) {
     const appointment = await tx.appointment.findFirst({
       where: { id: appointmentId, tenantId, ...(professionalScope ? { professionalId: professionalScope } : {}) },
+      // The lines come along because an update needs their snapshots to decide
+      // what the appointment still costs and how long it still runs.
+      include: { services: { orderBy: { position: "asc" } } },
     });
     if (!appointment) {
       throw new NotFoundException("Appointment not found");
@@ -249,46 +303,45 @@ export class BookingService {
   }
 
   /**
-   * R120: neither a deactivated service nor a deactivated professional can take
-   * a new booking. R140: the two must actually be paired via
-   * ServiceProfessional, otherwise the combination isn't offered at all.
+   * R120: a deactivated professional can't take a new booking. R140: they must
+   * be paired via ServiceProfessional with *every* service on the appointment,
+   * matching `AvailabilityService.resolveCandidates` — a slot is only offered
+   * for someone who can do the whole block, so a booking must hold to the same
+   * rule or the CMS could submit a pairing the picker never showed.
    *
-   * The two `allowInactive*` options exist for the reschedule path, where the
-   * booking already exists: a deactivation since then is a reason not to take
-   * *new* bookings, not a reason to freeze the ones on the books.
+   * `allowInactiveProfessional` exists for the update path, where the booking
+   * already exists: a deactivation since then is a reason not to take *new*
+   * bookings, not a reason to freeze the ones on the books.
    */
-  private async loadBookableService(
+  private async assertPairing(
     tx: Prisma.TransactionClient,
     tenantId: string,
-    serviceId: string,
+    lines: readonly ResolvedServiceLine[],
     professionalId: string | null,
-    options: { allowInactiveService?: boolean; allowInactiveProfessional?: boolean } = {},
-  ) {
-    const service = await tx.service.findFirst({ where: { id: serviceId, tenantId } });
-    if (!service) {
-      throw new NotFoundException("Service not found");
+    options: { allowInactiveProfessional?: boolean } = {},
+  ): Promise<void> {
+    if (professionalId === null) {
+      return;
     }
-    if (!service.isActive && !options.allowInactiveService) {
-      throw new BadRequestException(`"${service.name}" is deactivated and can't take new bookings`);
+    const professional = await tx.professional.findFirst({ where: { id: professionalId, tenantId } });
+    if (!professional) {
+      throw new NotFoundException("Professional not found");
     }
-
-    if (professionalId !== null) {
-      const professional = await tx.professional.findFirst({ where: { id: professionalId, tenantId } });
-      if (!professional) {
-        throw new NotFoundException("Professional not found");
-      }
-      if (!professional.isActive && !options.allowInactiveProfessional) {
-        throw new BadRequestException(`${professional.name} is deactivated and can't take new bookings`);
-      }
-      const assignment = await tx.serviceProfessional.findFirst({
-        where: { tenantId, serviceId, professionalId },
-      });
-      if (!assignment) {
-        throw new BadRequestException(`${professional.name} doesn't perform "${service.name}"`);
-      }
+    if (!professional.isActive && !options.allowInactiveProfessional) {
+      throw new BadRequestException(`${professional.name} is deactivated and can't take new bookings`);
     }
 
-    return service;
+    const assignments = await tx.serviceProfessional.findMany({
+      where: { tenantId, professionalId, serviceId: { in: lines.map((line) => line.serviceId) } },
+      select: { serviceId: true },
+    });
+    const performed = new Set(assignments.map((assignment) => assignment.serviceId));
+    // Named rather than counted: "Levan doesn't perform Colour" is something a
+    // staff member can act on, "one of these isn't allowed" isn't.
+    const missing = lines.find((line) => !performed.has(line.serviceId));
+    if (missing) {
+      throw new BadRequestException(`${professional.name} doesn't perform "${missing.name}"`);
+    }
   }
 
   /**

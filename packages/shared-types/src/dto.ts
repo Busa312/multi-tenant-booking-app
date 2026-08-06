@@ -42,10 +42,18 @@ export interface AvailabilityQuery {
 // ---------------------------------------------------------------------------
 
 export interface CmsAvailabilityQuery {
-  serviceId: string;
+  /** One or more; their durations are booked as one contiguous block. */
+  serviceIds: string[];
   /** Forced to the caller's own professional for `professional` logins (R20). */
   professionalId?: string;
   date: string; // "YYYY-MM-DD", in tenant timezone
+  /**
+   * Set when picking a new time for an existing appointment. It excludes that
+   * appointment from the occupancy check so it doesn't block itself (R80), and
+   * makes services already on it keep their snapshotted duration — so the slots
+   * offered here are the ones the reschedule call will actually accept.
+   */
+  appointmentId?: string;
 }
 
 export interface CmsAppointmentListQuery {
@@ -54,7 +62,8 @@ export interface CmsAppointmentListQuery {
 }
 
 export interface CreateCmsAppointmentRequest {
-  serviceId: string;
+  /** One or more, in the order they should run. A service may appear only once. */
+  serviceIds: string[];
   /** Required for `owner`; ignored for `professional` logins, which are pinned
    *  to their own professional record (R20/R30). */
   professionalId?: string;
@@ -68,11 +77,24 @@ export interface CreateCmsAppointmentRequest {
   override?: boolean;
 }
 
-export interface RescheduleCmsAppointmentRequest {
+/**
+ * Every in-place edit of an existing appointment: its time, its professional,
+ * its services, or any combination. Send at least one of them.
+ *
+ * Not named "reschedule" any more because changing the service list also changes
+ * the appointment's duration and price, which a reschedule never did.
+ */
+export interface UpdateCmsAppointmentRequest {
   /** date and time move together — send both or neither. */
   date?: string;
   time?: string;
   professionalId?: string;
+  /**
+   * Replaces the whole list. Services already on the appointment keep the price
+   * and duration they were booked at; only newly added ones are quoted at
+   * today's values (R40).
+   */
+  serviceIds?: string[];
   override?: boolean;
 }
 

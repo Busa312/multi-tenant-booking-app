@@ -8,14 +8,19 @@ import { Eyebrow, Field, TextInput } from "./ui/index.js";
 import styles from "./SlotPicker.module.css";
 
 interface SlotPickerProps {
-  /** Empty until picked — slots can't be computed without both of these. */
-  serviceId: string;
+  /** Empty until picked — slots can't be computed without these and a date. */
+  serviceIds: string[];
   professionalId: string;
   /** Tenant-local "YYYY-MM-DD". */
   date: string;
   timezone: string;
   /** Tenant-local "HH:mm", or "" while nothing is picked. */
   value: string;
+  /**
+   * Set when re-timing an existing appointment, so the API doesn't count it as
+   * occupying its own slot (R80) and measures it by its booked duration.
+   */
+  appointmentId?: string;
   onChange: (time: string) => void;
 }
 
@@ -28,12 +33,24 @@ interface SlotPickerProps {
  * "can you fit me in at six?" — the warning on submit is what makes taking a
  * closed slot deliberate, not a hidden control.
  */
-export function SlotPicker({ serviceId, professionalId, date, timezone, value, onChange }: SlotPickerProps) {
+export function SlotPicker({
+  serviceIds,
+  professionalId,
+  date,
+  timezone,
+  value,
+  appointmentId,
+  onChange,
+}: SlotPickerProps) {
   const { t, lang } = useI18n();
   const [slots, setSlots] = useState<AvailabilitySlot[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const incomplete = !serviceId || !professionalId || !date;
+  // Depended on as a string, not as the array: the parent builds a fresh array
+  // every render, so an array in the dep list would be a new reference each
+  // time and this effect would refetch forever.
+  const key = serviceIds.filter(Boolean).join(",");
+  const incomplete = !key || !professionalId || !date;
 
   useEffect(() => {
     let current = true;
@@ -43,7 +60,7 @@ export function SlotPicker({ serviceId, professionalId, date, timezone, value, o
       return undefined;
     }
     cachedApi
-      .listAppointmentAvailability({ serviceId, professionalId, date })
+      .listAppointmentAvailability({ serviceIds: key.split(","), professionalId, date, appointmentId })
       .then((result) => {
         // A stale response from an earlier service/date must not overwrite the
         // list for the selection the user is now looking at.
@@ -56,7 +73,7 @@ export function SlotPicker({ serviceId, professionalId, date, timezone, value, o
       current = false;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [serviceId, professionalId, date, incomplete]);
+  }, [key, professionalId, date, appointmentId, incomplete]);
 
   return (
     <div className={styles.root}>

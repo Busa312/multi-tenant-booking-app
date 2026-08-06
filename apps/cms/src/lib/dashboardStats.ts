@@ -217,6 +217,7 @@ export function buildTrend(
 export interface TopServiceStat {
   serviceId: string;
   serviceName: string;
+  /** How many times the service was booked — not how many appointments. */
   count: number;
   /** Expected value in minor units. Owner-only at the render site. */
   valueMinor: number;
@@ -225,12 +226,17 @@ export interface TopServiceStat {
 }
 
 /**
- * Busiest services over the window, by held-appointment count.
+ * Busiest services over the window, by how often each was booked.
  *
- * The value is *expected*: the price snapshotted when each appointment was
- * booked (R40 of TBUK-010), for appointments that are booked or completed. The
- * product is reservation-only and customers pay in person, so this is never a
- * record of money received.
+ * Counted per service *line*, so an appointment covering a haircut and a colour
+ * counts once towards each. The value is likewise each line's own price, not the
+ * appointment total — attributing the whole total to every service on it would
+ * multiply a three-service booking's revenue by three.
+ *
+ * The value is *expected*: the price snapshotted when each service was added
+ * (R40 of TBUK-010), for appointments that are booked or completed. The product
+ * is reservation-only and customers pay in person, so this is never a record of
+ * money received.
  */
 export function topServices(
   appointments: readonly AppointmentSummary[],
@@ -241,21 +247,23 @@ export function topServices(
   for (const appointment of appointments) {
     if (!isHeld(appointment.status)) continue;
 
-    const stat = byService.get(appointment.serviceId) ?? {
-      serviceId: appointment.serviceId,
-      serviceName: appointment.serviceName,
-      count: 0,
-      valueMinor: 0,
-      unpriced: 0,
-    };
-    stat.count += 1;
-    const minor = parsePriceMinor(appointment.price);
-    if (minor === null) {
-      stat.unpriced += 1;
-    } else {
-      stat.valueMinor += minor;
+    for (const line of appointment.services) {
+      const stat = byService.get(line.serviceId) ?? {
+        serviceId: line.serviceId,
+        serviceName: line.name,
+        count: 0,
+        valueMinor: 0,
+        unpriced: 0,
+      };
+      stat.count += 1;
+      const minor = parsePriceMinor(line.price);
+      if (minor === null) {
+        stat.unpriced += 1;
+      } else {
+        stat.valueMinor += minor;
+      }
+      byService.set(line.serviceId, stat);
     }
-    byService.set(appointment.serviceId, stat);
   }
 
   // Count desc, then value desc, then name — so equal-count rows have a stable

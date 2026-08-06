@@ -10,26 +10,26 @@ const TZ = "Asia/Tbilisi"; // UTC+4, no DST: local 10:00 is 06:00Z.
 
 type ServiceRow = { id: string; name: string; durationMinutes: number; price: Prisma.Decimal; isActive: boolean };
 type ProfessionalRow = { id: string; name: string; isActive: boolean };
+/** A line already stored on the appointment, with its booked-at snapshots. */
+type LineRow = { serviceId: string; position: number; durationMinutes: number; price: Prisma.Decimal };
 type AppointmentRow = {
   id: string;
   tenantId: string;
-  serviceId: string;
   professionalId: string | null;
   startAt: Date;
   endAt: Date;
   status: string;
   accessTokenHash: string | null;
+  services: LineRow[];
 };
 
 /**
  * The `data` payload a Prisma write received. Every field is declared present
  * so assertions can read them without narrowing; the tests that care about a
- * field being *absent* (`price` on a reschedule) assert that at runtime with
- * `not.toHaveProperty`.
+ * field being *absent* assert that at runtime with `not.toHaveProperty`.
  */
 interface AppointmentWriteData {
   tenantId: string;
-  serviceId: string;
   professionalId: string | null;
   userName: string;
   phoneNumber: string;
@@ -41,6 +41,7 @@ interface AppointmentWriteData {
   createdByUserId: string | null;
   accessTokenHash: string | null;
   accessTokenExpiresAt: Date | null;
+  services: { create: LineRow[] };
 }
 
 type WriteArgs = { data: AppointmentWriteData; include?: unknown };
@@ -48,7 +49,8 @@ type WriteArgs = { data: AppointmentWriteData; include?: unknown };
 interface Overrides {
   services?: ServiceRow[];
   professionals?: ProfessionalRow[];
-  assignment?: unknown;
+  /** Which (professionalId, serviceId) pairings exist; defaults to p1 doing s1. */
+  assignments?: { professionalId: string; serviceId: string }[];
   appointment?: Partial<AppointmentRow>;
   conflicts?: unknown[];
 }
@@ -61,26 +63,37 @@ const defaultService: ServiceRow = {
   isActive: true,
 };
 
+const beardTrim: ServiceRow = {
+  id: "s2",
+  name: "Beard trim",
+  durationMinutes: 15,
+  price: new Prisma.Decimal("15.00"),
+  isActive: true,
+};
+
 const setup = (overrides: Overrides = {}) => {
   const services = overrides.services ?? [defaultService];
   const professionals = overrides.professionals ?? [{ id: "p1", name: "Levan", isActive: true }];
+  const assignments =
+    overrides.assignments ??
+    professionals.flatMap((p) => services.map((s) => ({ professionalId: p.id, serviceId: s.id })));
   const existing: AppointmentRow = {
     id: "a1",
     tenantId: TENANT_ID,
-    serviceId: "s1",
     professionalId: "p1",
     startAt: new Date("2026-08-05T06:00:00.000Z"),
     endAt: new Date("2026-08-05T06:30:00.000Z"),
     status: "booked",
     accessTokenHash: null,
+    services: [{ serviceId: "s1", position: 0, durationMinutes: 30, price: new Prisma.Decimal("45.00") }],
     ...overrides.appointment,
   };
 
   const tx = {
     tenant: { findUniqueOrThrow: jest.fn().mockResolvedValue({ timezone: TZ }) },
     service: {
-      findFirst: jest.fn(({ where }: { where: { id: string } }) =>
-        Promise.resolve(services.find((row) => row.id === where.id) ?? null),
+      findMany: jest.fn(({ where }: { where: { id: { in: string[] } } }) =>
+        Promise.resolve(services.filter((row) => where.id.in.includes(row.id))),
       ),
     },
     professional: {
@@ -89,12 +102,20 @@ const setup = (overrides: Overrides = {}) => {
       ),
     },
     serviceProfessional: {
-      findFirst: jest.fn().mockResolvedValue(overrides.assignment === undefined ? { serviceId: "s1" } : overrides.assignment),
+      findMany: jest.fn(({ where }: { where: { professionalId: string; serviceId: { in: string[] } } }) =>
+        Promise.resolve(
+          assignments.filter((a) => a.professionalId === where.professionalId && where.serviceId.in.includes(a.serviceId)),
+        ),
+      ),
     },
     appointment: {
       findFirst: jest.fn().mockResolvedValue(existing),
       create: jest.fn(({ data }: WriteArgs) => Promise.resolve({ id: "new", ...data })),
       update: jest.fn(({ data }: WriteArgs) => Promise.resolve({ id: "a1", ...data })),
+    },
+    appointmentService: {
+      deleteMany: jest.fn().mockResolvedValue({ count: 1 }),
+      createMany: jest.fn().mockResolvedValue({ count: 1 }),
     },
   };
 
@@ -117,7 +138,7 @@ const setup = (overrides: Overrides = {}) => {
 };
 
 const createInput = (overrides: Record<string, unknown> = {}) => ({
-  serviceId: "s1",
+  serviceIds: ["s1"],
   professionalId: "p1" as string | null,
   date: "2026-08-05",
   time: "10:00",
@@ -138,6 +159,13 @@ const createdData = (tx: TxStub): AppointmentWriteData => {
 const updatedData = (tx: TxStub): AppointmentWriteData => {
   const call = tx.appointment.update.mock.calls[0];
   if (!call) throw new Error("expected appointment.update to have been called");
+  return call[0].data;
+};
+
+/** The lines an update rewrote, as handed to createMany. */
+const rewrittenLines = (tx: TxStub): LineRow[] => {
+  const call = tx.appointmentService.createMany.mock.calls[0];
+  if (!call) throw new Error("expected appointmentService.createMany to have been called");
   return call[0].data;
 };
 
@@ -194,7 +222,70 @@ describe("BookingService.create", () => {
     await service.create(createInput());
 
     expect(createdData(tx).createdByUserId).toBe("uuuuuuuu-uuuu-uuuu-uuuu-uuuuuuuuuuuu");
-    expect(tx.appointment.create.mock.calls[0]?.[0]?.include).toHaveProperty("service");
+    expect(tx.appointment.create.mock.calls[0]?.[0]?.include).toHaveProperty("services");
+  });
+
+  describe("service lines", () => {
+    it("writes one line per requested service, in the order they were asked for", async () => {
+      const { service, tx } = setup({ services: [defaultService, beardTrim] });
+
+      await service.create(createInput({ serviceIds: ["s2", "s1"] }));
+
+      expect(createdData(tx).services.create).toEqual([
+        { tenantId: TENANT_ID, serviceId: "s2", position: 0, durationMinutes: 15, price: beardTrim.price },
+        { tenantId: TENANT_ID, serviceId: "s1", position: 1, durationMinutes: 30, price: defaultService.price },
+      ]);
+    });
+
+    it("runs the services as one block ending after their summed duration", async () => {
+      const { service, tx } = setup({ services: [defaultService, beardTrim] });
+
+      await service.create(createInput({ serviceIds: ["s1", "s2"] }));
+
+      // 10:00 local (06:00Z) + 30 + 15 minutes.
+      expect(createdData(tx).endAt.toISOString()).toBe("2026-08-05T06:45:00.000Z");
+    });
+
+    it("totals the price as Decimal, not through floating point", async () => {
+      const { service, tx } = setup({
+        services: [
+          { ...defaultService, price: new Prisma.Decimal("10.10") },
+          { ...beardTrim, price: new Prisma.Decimal("20.20") },
+        ],
+      });
+
+      await service.create(createInput({ serviceIds: ["s1", "s2"] }));
+
+      // 10.10 + 20.20 is 30.299999999999997 in binary floating point.
+      expect(createdData(tx).price.toString()).toBe("30.3");
+    });
+
+    it("snapshots each line's own duration and price", async () => {
+      const { service, tx } = setup({ services: [defaultService, beardTrim] });
+
+      await service.create(createInput({ serviceIds: ["s1", "s2"] }));
+
+      expect(createdData(tx).services.create.map((line) => [line.durationMinutes, line.price.toString()])).toEqual([
+        [30, "45"],
+        [15, "15"],
+      ]);
+    });
+
+    it("rejects a booking with no services", async () => {
+      const { service } = setup();
+
+      await expect(service.create(createInput({ serviceIds: [] }))).rejects.toThrow(
+        "at least one serviceId is required",
+      );
+    });
+
+    it("rejects the same service twice", async () => {
+      const { service } = setup();
+
+      await expect(service.create(createInput({ serviceIds: ["s1", "s1"] }))).rejects.toThrow(
+        "a service can only be booked once per appointment",
+      );
+    });
   });
 
   describe("customer details", () => {
@@ -312,13 +403,26 @@ describe("BookingService.create", () => {
 
     // R140
     it("refuses a professional who doesn't perform the service", async () => {
-      const { service } = setup({ assignment: null });
+      const { service } = setup({ assignments: [] });
 
       await expect(service.create(createInput())).rejects.toThrow('Levan doesn\'t perform "Haircut"');
     });
 
+    // R140 across the whole block: a slot is only ever offered for someone who
+    // can do all of it, so a booking must hold to the same rule.
+    it("names the one service a professional doesn't perform", async () => {
+      const { service } = setup({
+        services: [defaultService, beardTrim],
+        assignments: [{ professionalId: "p1", serviceId: "s1" }],
+      });
+
+      await expect(service.create(createInput({ serviceIds: ["s1", "s2"] }))).rejects.toThrow(
+        'Levan doesn\'t perform "Beard trim"',
+      );
+    });
+
     it("skips the professional checks for an 'any available' booking", async () => {
-      const { service, tx } = setup({ assignment: null });
+      const { service, tx } = setup({ assignments: [] });
 
       await service.create(createInput({ professionalId: null }));
 
@@ -368,8 +472,8 @@ describe("BookingService.create", () => {
   });
 });
 
-describe("BookingService.reschedule", () => {
-  const rescheduleInput = (overrides: Record<string, unknown> = {}) => ({
+describe("BookingService.update", () => {
+  const updateInput = (overrides: Record<string, unknown> = {}) => ({
     appointmentId: "a1",
     professionalScope: null as string | null,
     ...overrides,
@@ -382,24 +486,32 @@ describe("BookingService.reschedule", () => {
     ])("rejects %s", async (_label, patch) => {
       const { service } = setup();
 
-      await expect(service.reschedule(rescheduleInput(patch))).rejects.toThrow(
+      await expect(service.update(updateInput(patch))).rejects.toThrow(
         "date and time must be sent together",
       );
     });
 
-    it("rejects a no-op reschedule", async () => {
+    it("rejects an update that changes nothing", async () => {
       const { service } = setup();
 
-      await expect(service.reschedule(rescheduleInput())).rejects.toThrow(
-        "a reschedule must change the time, the professional, or both",
+      await expect(service.update(updateInput())).rejects.toThrow(
+        "an update must change the time, the professional, the services, or some of them",
       );
     });
 
-    it("rejects reviving a cancelled appointment by moving it", async () => {
+    it("accepts a services-only change", async () => {
+      const { service, tx } = setup({ services: [defaultService, beardTrim] });
+
+      await service.update(updateInput({ serviceIds: ["s1", "s2"] }));
+
+      expect(tx.appointment.update).toHaveBeenCalled();
+    });
+
+    it("rejects reviving a cancelled appointment by editing it", async () => {
       const { service } = setup({ appointment: { status: "cancelled" } });
 
-      await expect(service.reschedule(rescheduleInput({ date: "2026-08-06", time: "11:00" }))).rejects.toThrow(
-        "a cancelled appointment can't be rescheduled",
+      await expect(service.update(updateInput({ date: "2026-08-06", time: "11:00" }))).rejects.toThrow(
+        "a cancelled appointment can't be updated",
       );
     });
   });
@@ -409,17 +521,17 @@ describe("BookingService.reschedule", () => {
     it("restricts the lookup to the caller's own appointments", async () => {
       const { service, tx } = setup();
 
-      await service.reschedule(rescheduleInput({ date: "2026-08-06", time: "11:00", professionalScope: "p1" }));
+      await service.update(updateInput({ date: "2026-08-06", time: "11:00", professionalScope: "p1" }));
 
-      expect(tx.appointment.findFirst).toHaveBeenCalledWith({
-        where: { id: "a1", tenantId: TENANT_ID, professionalId: "p1" },
-      });
+      expect(tx.appointment.findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { id: "a1", tenantId: TENANT_ID, professionalId: "p1" } }),
+      );
     });
 
     it("does not filter by professional for an owner", async () => {
       const { service, tx } = setup();
 
-      await service.reschedule(rescheduleInput({ date: "2026-08-06", time: "11:00" }));
+      await service.update(updateInput({ date: "2026-08-06", time: "11:00" }));
 
       expect(tx.appointment.findFirst.mock.calls[0]?.[0]?.where).not.toHaveProperty("professionalId");
     });
@@ -429,28 +541,60 @@ describe("BookingService.reschedule", () => {
       tx.appointment.findFirst.mockResolvedValue(null);
 
       await expect(
-        service.reschedule(rescheduleInput({ date: "2026-08-06", time: "11:00", professionalScope: "p2" })),
+        service.update(updateInput({ date: "2026-08-06", time: "11:00", professionalScope: "p2" })),
       ).rejects.toThrow(NotFoundException);
     });
   });
 
   describe("the move", () => {
-    it("recomputes end_at from the service duration at the new start", async () => {
-      const { service, tx } = setup({ services: [{ ...defaultService, durationMinutes: 60 }] });
+    it("recomputes end_at at the new start from the booked duration", async () => {
+      const { service, tx } = setup({
+        appointment: {
+          services: [{ serviceId: "s1", position: 0, durationMinutes: 60, price: new Prisma.Decimal("45.00") }],
+        },
+      });
 
-      await service.reschedule(rescheduleInput({ date: "2026-08-06", time: "11:00" }));
+      await service.update(updateInput({ date: "2026-08-06", time: "11:00" }));
 
       expect(updatedData(tx).startAt.toISOString()).toBe("2026-08-06T07:00:00.000Z");
       expect(updatedData(tx).endAt.toISOString()).toBe("2026-08-06T08:00:00.000Z");
     });
 
+    // The counterpart of the price rule below: a duration edit must not
+    // retroactively re-length an appointment already on the books, or the slot
+    // the picker offered and the block that gets written stop agreeing.
+    it("does not re-length an appointment whose service duration changed since booking", async () => {
+      const { service, tx } = setup({
+        services: [{ ...defaultService, durationMinutes: 90 }],
+        appointment: {
+          services: [{ serviceId: "s1", position: 0, durationMinutes: 30, price: new Prisma.Decimal("45.00") }],
+        },
+      });
+
+      await service.update(updateInput({ date: "2026-08-06", time: "11:00" }));
+
+      // 30 minutes, as booked — not the service's current 90.
+      expect(updatedData(tx).endAt.toISOString()).toBe("2026-08-06T07:30:00.000Z");
+    });
+
     // R40: the price was snapshotted at creation; moving doesn't re-quote it.
-    it("never rewrites the price", async () => {
+    it("does not re-quote a moved appointment whose service price changed since booking", async () => {
+      const { service, tx } = setup({
+        services: [{ ...defaultService, price: new Prisma.Decimal("99.00") }],
+      });
+
+      await service.update(updateInput({ date: "2026-08-06", time: "11:00" }));
+
+      expect(updatedData(tx).price.toString()).toBe("45");
+    });
+
+    it("rewrites no service lines when only the time moves", async () => {
       const { service, tx } = setup();
 
-      await service.reschedule(rescheduleInput({ date: "2026-08-06", time: "11:00" }));
+      await service.update(updateInput({ date: "2026-08-06", time: "11:00" }));
 
-      expect(updatedData(tx)).not.toHaveProperty("price");
+      expect(tx.appointmentService.deleteMany).not.toHaveBeenCalled();
+      expect(tx.appointmentService.createMany).not.toHaveBeenCalled();
     });
 
     it("keeps the existing time when only the professional changes", async () => {
@@ -461,7 +605,7 @@ describe("BookingService.reschedule", () => {
         ],
       });
 
-      await service.reschedule(rescheduleInput({ professionalId: "p2" }));
+      await service.update(updateInput({ professionalId: "p2" }));
 
       expect(updatedData(tx)).toMatchObject({ professionalId: "p2" });
       expect(updatedData(tx).startAt.toISOString()).toBe("2026-08-05T06:00:00.000Z");
@@ -471,7 +615,7 @@ describe("BookingService.reschedule", () => {
     it("does not let the appointment conflict with itself", async () => {
       const { service, availability } = setup();
 
-      await service.reschedule(rescheduleInput({ date: "2026-08-06", time: "11:00" }));
+      await service.update(updateInput({ date: "2026-08-06", time: "11:00" }));
 
       expect(availability.findConflictsIn).toHaveBeenCalledWith(
         expect.anything(),
@@ -482,7 +626,7 @@ describe("BookingService.reschedule", () => {
     it("409s on a conflict and moves nothing", async () => {
       const { service, tx } = setup({ conflicts: [{ type: "time_off" }] });
 
-      await expect(service.reschedule(rescheduleInput({ date: "2026-08-06", time: "11:00" }))).rejects.toThrow(
+      await expect(service.update(updateInput({ date: "2026-08-06", time: "11:00" }))).rejects.toThrow(
         ConflictException,
       );
       expect(tx.appointment.update).not.toHaveBeenCalled();
@@ -491,7 +635,7 @@ describe("BookingService.reschedule", () => {
     it("moves over a conflict once the caller confirms", async () => {
       const { service, tx, availability } = setup({ conflicts: [{ type: "time_off" }] });
 
-      await service.reschedule(rescheduleInput({ date: "2026-08-06", time: "11:00", override: true }));
+      await service.update(updateInput({ date: "2026-08-06", time: "11:00", override: true }));
 
       expect(availability.findConflictsIn).not.toHaveBeenCalled();
       expect(tx.appointment.update).toHaveBeenCalled();
@@ -504,7 +648,7 @@ describe("BookingService.reschedule", () => {
     it("still moves an appointment whose service was deactivated", async () => {
       const { service, tx } = setup({ services: [{ ...defaultService, isActive: false }] });
 
-      await service.reschedule(rescheduleInput({ date: "2026-08-06", time: "11:00" }));
+      await service.update(updateInput({ date: "2026-08-06", time: "11:00" }));
 
       expect(tx.appointment.update).toHaveBeenCalled();
     });
@@ -512,7 +656,7 @@ describe("BookingService.reschedule", () => {
     it("still moves an appointment whose professional was deactivated", async () => {
       const { service, tx } = setup({ professionals: [{ id: "p1", name: "Levan", isActive: false }] });
 
-      await service.reschedule(rescheduleInput({ date: "2026-08-06", time: "11:00" }));
+      await service.update(updateInput({ date: "2026-08-06", time: "11:00" }));
 
       expect(tx.appointment.update).toHaveBeenCalled();
     });
@@ -525,7 +669,7 @@ describe("BookingService.reschedule", () => {
         ],
       });
 
-      await expect(service.reschedule(rescheduleInput({ professionalId: "p2" }))).rejects.toThrow(
+      await expect(service.update(updateInput({ professionalId: "p2" }))).rejects.toThrow(
         "Nino is deactivated and can't take new bookings",
       );
     });
@@ -537,11 +681,103 @@ describe("BookingService.reschedule", () => {
           { id: "p1", name: "Levan", isActive: true },
           { id: "p2", name: "Nino", isActive: true },
         ],
-        assignment: null,
+        assignments: [{ professionalId: "p1", serviceId: "s1" }],
       });
 
-      await expect(service.reschedule(rescheduleInput({ professionalId: "p2" }))).rejects.toThrow(
+      await expect(service.update(updateInput({ professionalId: "p2" }))).rejects.toThrow(
         'Nino doesn\'t perform "Haircut"',
+      );
+    });
+
+    // R120 governs new bookings, and adding a service to an appointment is one.
+    it("refuses to add a deactivated service to an existing appointment", async () => {
+      const { service } = setup({ services: [defaultService, { ...beardTrim, isActive: false }] });
+
+      await expect(service.update(updateInput({ serviceIds: ["s1", "s2"] }))).rejects.toThrow(
+        '"Beard trim" is deactivated and can\'t take new bookings',
+      );
+    });
+  });
+
+  describe("editing the service list", () => {
+    it("replaces the lines wholesale rather than reordering them in place", async () => {
+      const { service, tx } = setup({ services: [defaultService, beardTrim] });
+
+      await service.update(updateInput({ serviceIds: ["s2", "s1"] }));
+
+      // `@@unique(appointmentId, position)` is a plain index, so an in-place
+      // swap would collide with itself mid-statement.
+      expect(tx.appointmentService.deleteMany).toHaveBeenCalledWith({
+        where: { tenantId: TENANT_ID, appointmentId: "a1" },
+      });
+      expect(rewrittenLines(tx).map((line) => [line.serviceId, line.position])).toEqual([
+        ["s2", 0],
+        ["s1", 1],
+      ]);
+    });
+
+    // R40 again, from the other direction: adding a service must not re-quote
+    // the ones the customer was already told the price of.
+    it("keeps an existing line's booked price while quoting the new one at today's", async () => {
+      const { service, tx } = setup({
+        services: [{ ...defaultService, price: new Prisma.Decimal("99.00") }, beardTrim],
+      });
+
+      await service.update(updateInput({ serviceIds: ["s1", "s2"] }));
+
+      expect(rewrittenLines(tx).map((line) => line.price.toString())).toEqual(["45", "15"]);
+      expect(updatedData(tx).price.toString()).toBe("60");
+    });
+
+    it("keeps an existing line's booked duration when another service is added", async () => {
+      const { service, tx } = setup({
+        services: [{ ...defaultService, durationMinutes: 90 }, beardTrim],
+      });
+
+      await service.update(updateInput({ serviceIds: ["s1", "s2"] }));
+
+      // 30 as booked + 15 for the newly added trim, not 90 + 15.
+      expect(rewrittenLines(tx).map((line) => line.durationMinutes)).toEqual([30, 15]);
+      expect(updatedData(tx).endAt.toISOString()).toBe("2026-08-05T06:45:00.000Z");
+    });
+
+    it("re-totals the price when a service is removed", async () => {
+      const { service, tx } = setup({
+        services: [defaultService, beardTrim],
+        appointment: {
+          services: [
+            { serviceId: "s1", position: 0, durationMinutes: 30, price: new Prisma.Decimal("45.00") },
+            { serviceId: "s2", position: 1, durationMinutes: 15, price: new Prisma.Decimal("15.00") },
+          ],
+        },
+      });
+
+      await service.update(updateInput({ serviceIds: ["s2"] }));
+
+      expect(updatedData(tx).price.toString()).toBe("15");
+      expect(updatedData(tx).endAt.toISOString()).toBe("2026-08-05T06:15:00.000Z");
+    });
+
+    it("re-checks the window against the new, longer block", async () => {
+      const { service, availability } = setup({ services: [defaultService, beardTrim] });
+
+      await service.update(updateInput({ serviceIds: ["s1", "s2"] }));
+
+      expect(availability.findConflictsIn).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          startAt: new Date("2026-08-05T06:00:00.000Z"),
+          endAt: new Date("2026-08-05T06:45:00.000Z"),
+          excludeAppointmentId: "a1",
+        }),
+      );
+    });
+
+    it("rejects emptying the service list", async () => {
+      const { service } = setup();
+
+      await expect(service.update(updateInput({ serviceIds: [] }))).rejects.toThrow(
+        "at least one serviceId is required",
       );
     });
   });
@@ -552,7 +788,7 @@ describe("BookingService.reschedule", () => {
       const oldHash = "a".repeat(64);
       const { service, tx } = setup({ appointment: { accessTokenHash: oldHash } });
 
-      await service.reschedule(rescheduleInput({ date: "2026-08-06", time: "11:00" }));
+      await service.update(updateInput({ date: "2026-08-06", time: "11:00" }));
 
       const data = updatedData(tx);
       expect(data.accessTokenHash).toMatch(/^[0-9a-f]{64}$/);
@@ -565,8 +801,8 @@ describe("BookingService.reschedule", () => {
       const first = setup({ appointment: { accessTokenHash: "a".repeat(64) } });
       const second = setup({ appointment: { accessTokenHash: "a".repeat(64) } });
 
-      await first.service.reschedule(rescheduleInput({ date: "2026-08-06", time: "11:00" }));
-      await second.service.reschedule(rescheduleInput({ date: "2026-08-06", time: "11:00" }));
+      await first.service.update(updateInput({ date: "2026-08-06", time: "11:00" }));
+      await second.service.update(updateInput({ date: "2026-08-06", time: "11:00" }));
 
       expect(updatedData(first.tx).accessTokenHash).not.toBe(updatedData(second.tx).accessTokenHash);
     });
@@ -575,7 +811,7 @@ describe("BookingService.reschedule", () => {
     it("leaves a staff-created booking without a token", async () => {
       const { service, tx } = setup();
 
-      await service.reschedule(rescheduleInput({ date: "2026-08-06", time: "11:00" }));
+      await service.update(updateInput({ date: "2026-08-06", time: "11:00" }));
 
       expect(updatedData(tx)).not.toHaveProperty("accessTokenHash");
       expect(updatedData(tx)).not.toHaveProperty("accessTokenExpiresAt");

@@ -13,7 +13,7 @@ import type {
   LoginRequest,
   LoginResponse,
   ProfessionalSummary,
-  RescheduleCmsAppointmentRequest,
+  UpdateCmsAppointmentRequest,
   ServiceSummary,
   SetPasswordRequest,
   Tenant,
@@ -135,8 +135,10 @@ export class CmsApiClient {
 
   /** R50: the same open slots the public site would offer for this pairing. */
   listAppointmentAvailability(query: CmsAvailabilityQuery) {
-    const params = new URLSearchParams({ serviceId: query.serviceId, date: query.date });
+    // Comma-joined onto one key, matching PublicApiClient.getAvailability.
+    const params = new URLSearchParams({ serviceIds: query.serviceIds.join(","), date: query.date });
     if (query.professionalId) params.set("professionalId", query.professionalId);
+    if (query.appointmentId) params.set("appointmentId", query.appointmentId);
     return this.http.get<AvailabilitySlot[]>(`/cms/appointments/availability?${params.toString()}`);
   }
 
@@ -149,8 +151,12 @@ export class CmsApiClient {
     return this.http.post<AppointmentSummary>("/cms/appointments", payload);
   }
 
-  /** Same 409-then-override contract as createAppointment. */
-  rescheduleAppointment(id: string, payload: RescheduleCmsAppointmentRequest) {
+  /**
+   * Edits an existing appointment's time, professional and/or services. Same
+   * 409-then-override contract as createAppointment. The route keeps its
+   * `/reschedule` path for compatibility.
+   */
+  updateAppointment(id: string, payload: UpdateCmsAppointmentRequest) {
     return this.http.patch<AppointmentSummary>(`/cms/appointments/${id}/reschedule`, payload);
   }
 

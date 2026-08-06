@@ -7,7 +7,7 @@ import type {
   CreateServiceRequest,
   CreateTimeOffRequest,
   InviteProfessionalRequest,
-  RescheduleCmsAppointmentRequest,
+  UpdateCmsAppointmentRequest,
   TenantColors,
   TenantConfig,
   UpdateAppointmentStatusRequest,
@@ -277,8 +277,8 @@ export const cachedApi = {
   // counting once it exists.
   createAppointment: (payload: CreateCmsAppointmentRequest) =>
     mutating(cmsApiClient.createAppointment(payload), [...SERVICE_ASSIGNMENT, "appointments"]),
-  rescheduleAppointment: (id: string, payload: RescheduleCmsAppointmentRequest) =>
-    mutating(cmsApiClient.rescheduleAppointment(id, payload), [...SERVICE_ASSIGNMENT, "appointments"]),
+  updateAppointment: (id: string, payload: UpdateCmsAppointmentRequest) =>
+    mutating(cmsApiClient.updateAppointment(id, payload), [...SERVICE_ASSIGNMENT, "appointments"]),
   updateAppointmentStatus: (id: string, payload: UpdateAppointmentStatusRequest) =>
     mutating(cmsApiClient.updateAppointmentStatus(id, payload), ["appointments"]),
   cancelAppointment: (id: string) => mutating(cmsApiClient.cancelAppointment(id), ["appointments"]),

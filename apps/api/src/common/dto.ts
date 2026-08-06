@@ -150,10 +150,23 @@ export class CreateTimeOffRequestDto {
   @ApiPropertyOptional() reason?: string;
 }
 
+export class AppointmentServiceLineDto {
+  @ApiProperty() serviceId!: string;
+  @ApiProperty({ description: "The service's current name — not snapshotted" }) name!: string;
+  @ApiProperty({ description: "Snapshotted when the service was added to the appointment" })
+  durationMinutes!: number;
+  @ApiProperty({ description: "Snapshotted when the service was added to the appointment (R40)" })
+  price!: string;
+}
+
 export class AppointmentDto {
   @ApiProperty() id!: string;
   @ApiProperty() tenantId!: string;
-  @ApiProperty() serviceId!: string;
+  @ApiProperty({
+    type: [AppointmentServiceLineDto],
+    description: "One or more, in order; endAt and price are their sums",
+  })
+  services!: AppointmentServiceLineDto[];
   @ApiProperty({ nullable: true, type: String, description: '"any available" was chosen' })
   professionalId!: string | null;
   @ApiProperty() userName!: string;
@@ -175,15 +188,14 @@ export class AppointmentSummaryDto extends AppointmentDto {
   createdByUserId!: string | null;
   @ApiProperty({ nullable: true, type: String, description: "Internal staff note — never shown to the customer" })
   notes!: string | null;
-  @ApiProperty() serviceName!: string;
-  @ApiProperty() serviceDurationMinutes!: number;
   @ApiProperty({ nullable: true, type: String }) professionalName!: string | null;
   @ApiProperty({ description: "A customer magic link exists (public-site booking) — rescheduling rotates it (R110)" })
   hasMagicLink!: boolean;
 }
 
 export class CreateCmsAppointmentRequestDto {
-  @ApiProperty() serviceId!: string;
+  @ApiProperty({ type: [String], description: "One or more, in order; a service may appear only once" })
+  serviceIds!: string[];
   @ApiPropertyOptional({ description: "Required for owner; forced to their own for professional logins (R20)" })
   professionalId?: string;
   @ApiProperty({ example: "2026-08-03", description: "YYYY-MM-DD, tenant timezone" }) date!: string;
@@ -195,10 +207,15 @@ export class CreateCmsAppointmentRequestDto {
   @ApiPropertyOptional({ description: "R60: book despite the conflicts the 409 named" }) override?: boolean;
 }
 
-export class RescheduleCmsAppointmentRequestDto {
+export class UpdateCmsAppointmentRequestDto {
   @ApiPropertyOptional({ description: "Send with `time` or not at all" }) date?: string;
   @ApiPropertyOptional() time?: string;
   @ApiPropertyOptional() professionalId?: string;
+  @ApiPropertyOptional({
+    type: [String],
+    description: "Replaces the list; services already on it keep their booked price (R40)",
+  })
+  serviceIds?: string[];
   @ApiPropertyOptional() override?: boolean;
 }
 

@@ -1,5 +1,6 @@
 import type { AppointmentSummary } from "@booking/shared-types";
 import { useI18n } from "../i18n/I18nContext.js";
+import { serviceLabel } from "../lib/appointmentServices.js";
 import { cx } from "../lib/cx.js";
 import { formatTimeLabel } from "../lib/tenantTime.js";
 import { BookingStatusPill } from "./BookingStatusPill.js";
@@ -34,7 +35,7 @@ export function AgendaList({ appointments, timezone }: AgendaListProps) {
           <div className={styles.time}>{formatTimeLabel(appointment.startAt, timezone, lang)}</div>
           <div className={styles.who}>
             <div className={styles.name}>{appointment.userName}</div>
-            <div className={styles.service}>{appointment.serviceName}</div>
+            <div className={styles.service}>{serviceLabel(appointment)}</div>
           </div>
           <div className={styles.professional}>{appointment.professionalName ?? t("bookings.anyProfessional")}</div>
           <div className={styles.status}>

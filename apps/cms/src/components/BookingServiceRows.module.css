@@ -1,0 +1,19 @@
+.root {
+  margin-bottom: 14px;
+}
+
+.footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 10px;
+  flex-wrap: wrap;
+}
+
+.summary {
+  color: var(--ink-soft);
+  font-size: 13px;
+  /* Reads as the consequence of the rows above it, not as another control. */
+  font-variant-numeric: tabular-nums;
+}

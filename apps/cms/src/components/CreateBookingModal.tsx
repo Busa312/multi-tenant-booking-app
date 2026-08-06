@@ -5,6 +5,7 @@ import { useI18n } from "../i18n/I18nContext.js";
 import { conflictsFromError } from "../lib/bookingConflicts.js";
 import { Modal } from "./Modal.js";
 import { SlotPicker } from "./SlotPicker.js";
+import { BookingServiceRows } from "./BookingServiceRows.js";
 import { BookingConflictNotice } from "./BookingConflictNotice.js";
 import { Alert, Button, Eyebrow, Field, Select, TextInput, Textarea } from "./ui/index.js";
 import styles from "./CreateBookingModal.module.css";
@@ -38,7 +39,8 @@ export function CreateBookingModal({
 }: CreateBookingModalProps) {
   const { t } = useI18n();
   const [professionalId, setProfessionalId] = useState(lockedProfessionalId ?? "");
-  const [serviceId, setServiceId] = useState("");
+  // One empty row to start — a booking always has at least one service.
+  const [serviceIds, setServiceIds] = useState<string[]>([""]);
   const [date, setDate] = useState(defaultDate);
   const [time, setTime] = useState("");
   const [userName, setUserName] = useState("");
@@ -49,15 +51,19 @@ export function CreateBookingModal({
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
-  // R120: a deactivated service is simply not offered. R140: only pairings that
-  // exist in ServiceProfessional are selectable, from either direction.
-  const selectableServices = services.filter(
-    (s) => s.isActive && (!professionalId || s.professionalIds.includes(professionalId)),
-  );
+  const chosenServiceIds = serviceIds.filter(Boolean);
+  // R140: only professionals who perform *every* chosen service, matching
+  // AvailabilityService.resolveCandidates — the services run as one block, so
+  // anyone who can't do all of them has no availability for it at all.
   const selectableProfessionals = professionals.filter(
-    (p) => p.isActive && (!serviceId || p.serviceIds.includes(serviceId)),
+    (p) => p.isActive && chosenServiceIds.every((id) => p.serviceIds.includes(id)),
   );
   const lockedProfessional = professionals.find((p) => p.id === lockedProfessionalId);
+  // Distinguishes "nobody can do this combination" from "nobody is free" — the
+  // slot list is empty either way, and only one of them is fixable by changing
+  // the date.
+  const noProfessionalForAll =
+    chosenServiceIds.length > 0 && !lockedProfessionalId && selectableProfessionals.length === 0;
 
   // The warning the API sent describes one exact slot; any change to what's
   // being booked makes it stale, so confirmation starts over.
@@ -69,30 +75,36 @@ export function CreateBookingModal({
     };
   }
 
-  function handleServiceChange(next: string) {
+  function handleServicesChange(next: string[]) {
     setConflicts(null);
-    setServiceId(next);
-    // Keeping a professional who doesn't perform the new service would submit a
-    // pairing the API rejects (R140).
+    setError(null);
+    setServiceIds(next);
+    // Keeping a professional who doesn't perform every chosen service would
+    // submit a pairing the API rejects (R140).
     if (professionalId && !lockedProfessionalId) {
-      const stillValid = professionals.find((p) => p.id === professionalId)?.serviceIds.includes(next);
-      if (!stillValid) setProfessionalId("");
+      const performed = professionals.find((p) => p.id === professionalId)?.serviceIds ?? [];
+      if (!next.filter(Boolean).every((id) => performed.includes(id))) setProfessionalId("");
     }
   }
 
   function handleProfessionalChange(next: string) {
     setConflicts(null);
+    // Rows the new professional can't perform are dropped rather than silently
+    // submitted; an empty row is left behind so the list never becomes nothing.
+    const performed = professionals.find((p) => p.id === next)?.serviceIds ?? [];
+    const kept = serviceIds.filter((id) => !id || performed.includes(id));
     setProfessionalId(next);
-    if (serviceId) {
-      const stillValid = services.find((s) => s.id === serviceId)?.professionalIds.includes(next);
-      if (!stillValid) setServiceId("");
-    }
+    setServiceIds(kept.length > 0 ? kept : [""]);
   }
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setError(null);
-    if (!serviceId || !professionalId || !date || !time || !userName.trim() || !phoneNumber.trim()) {
+    if (chosenServiceIds.length === 0) {
+      setError(t("bookings.errNoServices"));
+      return;
+    }
+    if (!professionalId || !date || !time || !userName.trim() || !phoneNumber.trim()) {
       setError(t("bookings.errRequired"));
       return;
     }
@@ -100,7 +112,9 @@ export function CreateBookingModal({
     setSaving(true);
     try {
       await cachedApi.createAppointment({
-        serviceId,
+        // Empty rows are dropped; order is preserved, and it's what the
+        // appointment's service lines are stored in.
+        serviceIds: chosenServiceIds,
         professionalId,
         date,
         time,
@@ -141,18 +155,12 @@ export function CreateBookingModal({
       }
     >
       <form id="booking-form" onSubmit={handleSubmit} noValidate>
-        <Field label={t("bookings.serviceLabel")} htmlFor="booking-service">
-          <Select
-            id="booking-service"
-            value={serviceId}
-            onChange={handleServiceChange}
-            placeholder={t("bookings.servicePlaceholder")}
-            options={selectableServices.map((s) => ({
-              value: s.id,
-              label: t("bookings.serviceOption", { name: s.name, minutes: s.durationMinutes, price: s.price }),
-            }))}
-          />
-        </Field>
+        <BookingServiceRows
+          services={services}
+          value={serviceIds}
+          professionalId={professionalId}
+          onChange={handleServicesChange}
+        />
 
         <Field label={t("bookings.professionalLabel")} htmlFor="booking-professional">
           {lockedProfessionalId ? (
@@ -180,8 +188,10 @@ export function CreateBookingModal({
           />
         </Field>
 
+        {noProfessionalForAll && <Alert variant="warning">{t("bookings.noProfessionalForAll")}</Alert>}
+
         <SlotPicker
-          serviceId={serviceId}
+          serviceIds={chosenServiceIds}
           professionalId={professionalId}
           date={date}
           timezone={timezone}

@@ -26,7 +26,7 @@ import type {
   CmsAvailabilityQuery,
   CreateCmsAppointmentRequest,
   JwtClaims,
-  RescheduleCmsAppointmentRequest,
+  UpdateCmsAppointmentRequest,
   UpdateAppointmentStatusRequest,
 } from "@booking/shared-types";
 import type { Prisma } from "../../generated/prisma/index.js";
@@ -37,12 +37,13 @@ import { RolesGuard } from "../auth/guards/roles.guard.js";
 import { CurrentUser } from "../auth/decorators/current-user.decorator.js";
 import { APPOINTMENT_SUMMARY_INCLUDE, serializeAppointmentSummary } from "../common/serializers.js";
 import { addDaysToDateString, zonedTimeToUtc } from "../common/timezone.js";
+import { parseIdList } from "../common/query.js";
 import {
   AppointmentSummaryDto,
   AvailabilitySlotDto,
   BookingConflictResponseDto,
   CreateCmsAppointmentRequestDto,
-  RescheduleCmsAppointmentRequestDto,
+  UpdateCmsAppointmentRequestDto,
   UpdateAppointmentStatusRequestDto,
 } from "../common/dto.js";
 import { AvailabilityService } from "../booking/availability.service.js";
@@ -106,20 +107,27 @@ export class AppointmentsController {
    * enforce them — see R60 and BookingService.
    */
   @Get("availability")
-  @ApiQuery({ name: "serviceId" })
+  @ApiQuery({ name: "serviceIds", description: "Comma-separated; durations are summed into one block" })
   @ApiQuery({ name: "professionalId", required: false })
   @ApiQuery({ name: "date", description: "YYYY-MM-DD, tenant timezone" })
+  @ApiQuery({
+    name: "appointmentId",
+    required: false,
+    description: "Set when re-timing an existing appointment: excludes it from occupancy (R80)",
+  })
   @ApiOkResponse({ type: [AvailabilitySlotDto] })
   getAvailability(@Query() query: CmsAvailabilityQuery): Promise<AvailabilitySlot[]> {
-    if (!query.serviceId || !query.date) {
-      throw new BadRequestException("serviceId and date are required");
+    const serviceIds = parseIdList(query.serviceIds);
+    if (serviceIds.length === 0 || !query.date) {
+      throw new BadRequestException("serviceIds and date are required");
     }
     const professionalScope = this.professionalScope();
     return this.availability.computeSlots({
-      serviceIds: [query.serviceId],
+      serviceIds,
       // R20: a professional login can only ever ask about their own calendar.
       professionalId: professionalScope ?? query.professionalId ?? null,
       date: query.date,
+      excludeAppointmentId: query.appointmentId,
     });
   }
 
@@ -144,7 +152,7 @@ export class AppointmentsController {
     }
 
     const appointment = await this.booking.create({
-      serviceId: body.serviceId,
+      serviceIds: body.serviceIds ?? [],
       professionalId,
       date: body.date,
       time: body.time,
@@ -160,25 +168,27 @@ export class AppointmentsController {
     return serializeAppointmentSummary(appointment);
   }
 
+  /**
+   * The route keeps its `/reschedule` name for compatibility, but it now edits
+   * the service list too — see UpdateCmsAppointmentRequest.
+   */
   @Patch(":id/reschedule")
   @ApiParam({ name: "id" })
-  @ApiBody({ type: RescheduleCmsAppointmentRequestDto })
+  @ApiBody({ type: UpdateCmsAppointmentRequestDto })
   @ApiOkResponse({ type: AppointmentSummaryDto })
   @ApiConflictResponse({ type: BookingConflictResponseDto, description: "Unconfirmed availability conflict (R60)" })
-  async reschedule(
-    @Param("id") id: string,
-    @Body() body: RescheduleCmsAppointmentRequest,
-  ): Promise<AppointmentSummary> {
+  async update(@Param("id") id: string, @Body() body: UpdateCmsAppointmentRequest): Promise<AppointmentSummary> {
     const professionalScope = this.professionalScope();
     if (professionalScope && body.professionalId && body.professionalId !== professionalScope) {
       throw new ForbiddenException("professional logins may only book into their own calendar");
     }
 
-    const appointment = await this.booking.reschedule({
+    const appointment = await this.booking.update({
       appointmentId: id,
       date: body.date,
       time: body.time,
       professionalId: body.professionalId,
+      serviceIds: body.serviceIds,
       override: body.override,
       professionalScope,
     });

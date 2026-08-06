@@ -1,0 +1,18 @@
+.row {
+  display: grid;
+  /* The select takes the slack; the remove button keeps its intrinsic width so
+     every row's control lines up down the list. */
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.row + .row {
+  margin-top: 8px;
+}
+
+/* Reserves the button's space rather than removing it from the grid, so the
+   select doesn't resize when a second service appears. */
+.hidden {
+  visibility: hidden;
+}

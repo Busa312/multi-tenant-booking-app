@@ -1,5 +1,5 @@
 import { BadRequestException } from "@nestjs/common";
-import type { Prisma } from "../../generated/prisma/index.js";
+import { Prisma } from "../../generated/prisma/index.js";
 import { AvailabilityService } from "./availability.service.js";
 import type { PrismaService } from "../prisma/prisma.service.js";
 import type { TenantContextService } from "../tenant/tenant-context.service.js";
@@ -15,7 +15,9 @@ const timeOfDay = (hhmm: string) => new Date(`1970-01-01T${hhmm}:00.000Z`);
 
 interface Overrides {
   timezone?: string;
-  services?: { id: string; durationMinutes: number }[];
+  services?: { id: string; durationMinutes: number; isActive?: boolean }[];
+  /** Lines already stored on the appointment being re-timed, with their snapshots. */
+  existingLines?: { serviceId: string; durationMinutes: number; price: Prisma.Decimal }[];
   assignments?: { professionalId: string; serviceId: string }[];
   professionals?: { id: string; name: string }[];
   businessHours?: { professionalId: string | null; dayOfWeek: number; startTime: Date; endTime: Date }[];
@@ -26,7 +28,19 @@ interface Overrides {
 const setup = (overrides: Overrides = {}) => {
   const tx = {
     tenant: { findUniqueOrThrow: jest.fn().mockResolvedValue({ timezone: overrides.timezone ?? TZ }) },
-    service: { findMany: jest.fn().mockResolvedValue(overrides.services ?? [{ id: "s1", durationMinutes: 30 }]) },
+    service: {
+      // Name/price/isActive are filled in here so the many tests that only care
+      // about duration can keep declaring `{ id, durationMinutes }`.
+      findMany: jest.fn().mockResolvedValue(
+        (overrides.services ?? [{ id: "s1", durationMinutes: 30 }]).map((s) => ({
+          name: s.id,
+          price: new Prisma.Decimal("10.00"),
+          isActive: true,
+          ...s,
+        })),
+      ),
+    },
+    appointmentService: { findMany: jest.fn().mockResolvedValue(overrides.existingLines ?? []) },
     serviceProfessional: {
       findMany: jest.fn().mockResolvedValue(overrides.assignments ?? [{ professionalId: "p1", serviceId: "s1" }]),
     },
@@ -90,20 +104,39 @@ describe("AvailabilityService.computeSlots", () => {
 
     // R120: a deactivated or unknown service yields no availability at all,
     // rather than slots the booking call would then reject.
-    it("rejects when a requested service is unknown or deactivated", async () => {
+    it("rejects an unknown service", async () => {
       const { service } = setup({ services: [{ id: "s1", durationMinutes: 30 }] });
 
       await expect(service.computeSlots({ serviceIds: ["s1", "gone"], date: WEDNESDAY })).rejects.toThrow(
-        "one or more services are unknown or deactivated",
+        "Service not found",
       );
     });
 
-    it("only looks at active services", async () => {
+    it("rejects a deactivated service", async () => {
+      const { service } = setup({ services: [{ id: "s1", durationMinutes: 30, isActive: false }] });
+
+      await expect(service.computeSlots({ serviceIds: ["s1"], date: WEDNESDAY })).rejects.toThrow(
+        "is deactivated and can't take new bookings",
+      );
+    });
+
+    it("scopes the service lookup to the tenant", async () => {
       const { service, tx } = setup();
       await service.computeSlots({ serviceIds: ["s1"], date: WEDNESDAY });
 
       expect(tx.service.findMany).toHaveBeenCalledWith(
-        expect.objectContaining({ where: expect.objectContaining({ tenantId: TENANT_ID, isActive: true }) }),
+        expect.objectContaining({ where: expect.objectContaining({ tenantId: TENANT_ID }) }),
+      );
+    });
+
+    // Booking the same service twice isn't offered yet. Rejecting it also
+    // closes a hole: `IN` collapses a repeated id to one row, so a deduplicated
+    // sum would quote 30 minutes for two 30-minute haircuts.
+    it("rejects the same service listed twice", async () => {
+      const { service } = setup();
+
+      await expect(service.computeSlots({ serviceIds: ["s1", "s1"], date: WEDNESDAY })).rejects.toThrow(
+        "a service can only be booked once per appointment",
       );
     });
   });
@@ -467,6 +500,63 @@ describe("AvailabilityService.computeSlots", () => {
       expect(tx.appointment.findMany).toHaveBeenCalledWith(
         expect.objectContaining({ where: expect.objectContaining({ status: { not: "cancelled" } }) }),
       );
+    });
+
+    // R80: the reschedule picker must offer the times the appointment being
+    // moved already covers — otherwise moving a 10:00 booking to 10:15 is
+    // impossible, because it is standing in its own way.
+    it("excludes the appointment being moved from the occupancy set", async () => {
+      const { service, tx } = setup();
+
+      await service.computeSlots({ serviceIds: ["s1"], date: WEDNESDAY, excludeAppointmentId: "a1" });
+
+      expect(tx.appointment.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where: expect.objectContaining({ id: { not: "a1" } }) }),
+      );
+    });
+
+    it("does not filter by id when nothing is being moved", async () => {
+      const { service, tx } = setup();
+
+      await service.computeSlots({ serviceIds: ["s1"], date: WEDNESDAY });
+
+      expect(tx.appointment.findMany.mock.calls[0]?.[0]?.where).not.toHaveProperty("id");
+    });
+
+    // The picker and the write path have to measure the same block, or the CMS
+    // offers a slot that the reschedule call then rejects as a conflict.
+    it("measures a re-timed appointment by its booked duration, not the service's current one", async () => {
+      const { service } = setup({
+        services: [{ id: "s1", durationMinutes: 90 }],
+        existingLines: [{ serviceId: "s1", durationMinutes: 30, price: new Prisma.Decimal("45.00") }],
+      });
+
+      const slots = await service.computeSlots({
+        serviceIds: ["s1"],
+        date: WEDNESDAY,
+        excludeAppointmentId: "a1",
+      });
+
+      // 30-minute slots across 09:00–12:00, not the 90 minutes the service now takes.
+      expect(slots).toHaveLength(11);
+      expect(slots[0]?.endAt).toBe("2026-08-05T05:30:00.000Z");
+    });
+
+    // Otherwise deactivating a service would make every appointment already
+    // holding it unmovable: the picker would 400 and show no slots at all.
+    it("still offers slots for a re-timed appointment whose service was deactivated", async () => {
+      const { service } = setup({
+        services: [{ id: "s1", durationMinutes: 30, isActive: false }],
+        existingLines: [{ serviceId: "s1", durationMinutes: 30, price: new Prisma.Decimal("45.00") }],
+      });
+
+      const slots = await service.computeSlots({
+        serviceIds: ["s1"],
+        date: WEDNESDAY,
+        excludeAppointmentId: "a1",
+      });
+
+      expect(slots).toHaveLength(11);
     });
 
     it("queries only the requested local day's window", async () => {

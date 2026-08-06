@@ -1,5 +1,6 @@
 import type { AppointmentSummary } from "@booking/shared-types";
 import { useI18n } from "../i18n/I18nContext.js";
+import { serviceLabel } from "../lib/appointmentServices.js";
 import { cx } from "../lib/cx.js";
 import { formatTimeLabel } from "../lib/tenantTime.js";
 import { BookingStatusPill } from "./BookingStatusPill.js";
@@ -32,7 +33,7 @@ export function BookingCard({ appointment, timezone, actions }: BookingCardProps
         />
       </div>
       <div className={styles.name}>{appointment.userName}</div>
-      <div className={styles.service}>{appointment.serviceName}</div>
+      <div className={styles.service}>{serviceLabel(appointment)}</div>
       {/* The professional is worth naming for an owner looking across the team;
           a professional login only ever sees their own rows, so it's redundant
           there but never wrong. */}

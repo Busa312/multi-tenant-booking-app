@@ -12,7 +12,7 @@ import {
 } from "../lib/tenantTime.js";
 import { AppShell } from "../components/AppShell.js";
 import { CreateBookingModal } from "../components/CreateBookingModal.js";
-import { RescheduleBookingModal } from "../components/RescheduleBookingModal.js";
+import { EditBookingModal } from "../components/EditBookingModal.js";
 import { BookingsDayTable } from "../components/BookingsDayTable.js";
 import { BookingsWeekGrid } from "../components/BookingsWeekGrid.js";
 import { CardSkeleton } from "../components/CardSkeleton.js";
@@ -305,13 +305,14 @@ export function BookingsPage() {
       )}
 
       {rescheduleTarget && context && (
-        <RescheduleBookingModal
+        <EditBookingModal
           appointment={rescheduleTarget}
+          services={context.services}
           professionals={context.professionals}
           timezone={context.timezone}
           lockedProfessionalId={lockedProfessionalId}
           onClose={() => setRescheduleTarget(null)}
-          onRescheduled={(movedDate) => {
+          onSaved={(movedDate) => {
             setRescheduleTarget(null);
             showDay(movedDate);
           }}

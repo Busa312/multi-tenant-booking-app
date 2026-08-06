@@ -1,6 +1,7 @@
 import type { Prisma } from "../../generated/prisma/index.js";
 import type {
   Appointment,
+  AppointmentServiceLine,
   AppointmentSummary,
   Professional,
   Service,
@@ -17,7 +18,26 @@ type PrismaTenant = Prisma.TenantGetPayload<Record<string, never>>;
 type PrismaProfessional = Prisma.ProfessionalGetPayload<Record<string, never>>;
 type PrismaService = Prisma.ServiceGetPayload<Record<string, never>>;
 type PrismaTimeOff = Prisma.TimeOffGetPayload<Record<string, never>>;
-type PrismaAppointment = Prisma.AppointmentGetPayload<Record<string, never>>;
+
+// The service lines every appointment shape carries. `orderBy` is not optional:
+// without it Postgres returns the lines in whatever order it likes, and a
+// calendar card would list "Haircut + Colour" one render and "Colour + Haircut"
+// the next.
+export const APPOINTMENT_INCLUDE = {
+  services: {
+    orderBy: { position: "asc" },
+    include: { service: { select: { name: true } } },
+  },
+} satisfies Prisma.AppointmentInclude;
+
+type PrismaAppointment = Prisma.AppointmentGetPayload<{ include: typeof APPOINTMENT_INCLUDE }>;
+
+const serializeServiceLine = (line: PrismaAppointment["services"][number]): AppointmentServiceLine => ({
+  serviceId: line.serviceId,
+  name: line.service.name,
+  durationMinutes: line.durationMinutes,
+  price: line.price.toString(),
+});
 
 export const serializeTenant = (t: PrismaTenant): Tenant => ({
   id: t.id,
@@ -61,7 +81,7 @@ export const serializeTimeOff = (t: PrismaTimeOff): TimeOff => ({
 export const serializeAppointment = (a: PrismaAppointment): Appointment => ({
   id: a.id,
   tenantId: a.tenantId,
-  serviceId: a.serviceId,
+  services: a.services.map(serializeServiceLine),
   professionalId: a.professionalId,
   userName: a.userName,
   phoneNumber: a.phoneNumber,
@@ -76,11 +96,11 @@ export const serializeAppointment = (a: PrismaAppointment): Appointment => ({
 
 // The joined shape the CMS appointment list/calendar reads. Staff-only fields
 // (notes, who created it) live here rather than on the plain Appointment because
-// that one is also what a customer's magic link returns; service and
-// professional names come along so a row doesn't need a second lookup, and the
-// magic link is reduced to a boolean because the token hash never leaves the API.
+// that one is also what a customer's magic link returns; the professional's name
+// comes along so a row doesn't need a second lookup, and the magic link is
+// reduced to a boolean because the token hash never leaves the API.
 export const APPOINTMENT_SUMMARY_INCLUDE = {
-  service: { select: { name: true, durationMinutes: true } },
+  ...APPOINTMENT_INCLUDE,
   professional: { select: { name: true } },
 } satisfies Prisma.AppointmentInclude;
 
@@ -92,8 +112,6 @@ export const serializeAppointmentSummary = (a: PrismaAppointmentSummary): Appoin
   ...serializeAppointment(a),
   createdByUserId: a.createdByUserId,
   notes: a.notes,
-  serviceName: a.service.name,
-  serviceDurationMinutes: a.service.durationMinutes,
   professionalName: a.professional?.name ?? null,
   hasMagicLink: a.accessTokenHash !== null,
 });
