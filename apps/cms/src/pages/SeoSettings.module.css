@@ -1,0 +1,102 @@
+.layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 340px;
+  gap: 22px;
+  align-items: start;
+}
+
+/* The preview is a reference, not a control — below this width it belongs under
+   the form rather than squeezed beside it. */
+@media (max-width: 900px) {
+  .layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+.form {
+  min-width: 0;
+}
+
+.previewPanel {
+  position: sticky;
+  top: 90px;
+}
+
+@media (max-width: 900px) {
+  .previewPanel {
+    position: static;
+  }
+}
+
+/* ---------- status ---------- */
+
+.status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 10px;
+  margin-bottom: 18px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+}
+
+.indexed {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+/* Hidden and "needs a description" are both states the tenant probably wants to
+   act on, so neither gets the quiet treatment. */
+.hidden,
+.pending {
+  color: var(--danger);
+  font-weight: 600;
+}
+
+.canonical {
+  color: var(--ink-soft);
+  overflow-wrap: anywhere;
+}
+
+/* ---------- fields ---------- */
+
+.labelRow {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.counter {
+  font-size: 11.5px;
+  font-weight: 400;
+  color: var(--ink-soft);
+  font-variant-numeric: tabular-nums;
+}
+
+.addressGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0 14px;
+}
+
+@media (max-width: 560px) {
+  .addressGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.hint {
+  margin: 4px 0 14px;
+  font-size: 12.5px;
+  color: var(--ink-soft);
+}
+
+.fieldError {
+  margin: 6px 0 0;
+}
+
+.saveBtn {
+  margin-top: 18px;
+}

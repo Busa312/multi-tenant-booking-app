@@ -8,9 +8,15 @@ import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard.js";
 import { RolesGuard } from "../auth/guards/roles.guard.js";
 import { Roles } from "../auth/decorators/roles.decorator.js";
 import { serializeTenant } from "../common/serializers.js";
-import { TenantDto, UpdateTenantColorsRequestDto, UpdateTenantConfigRequestDto } from "../common/dto.js";
+import {
+  TenantDto,
+  UpdateTenantColorsRequestDto,
+  UpdateTenantConfigRequestDto,
+  UpdateTenantSeoRequestDto,
+} from "../common/dto.js";
 import { RevalidationService } from "./revalidation.service.js";
 import { isValidColor } from "./color-validation.js";
+import { validateBusinessInfo, validateSeo } from "./seo-validation.js";
 
 @ApiTags("cms-tenant")
 @ApiBearerAuth()
@@ -43,6 +49,15 @@ export class TenantController {
     if (next.colors !== undefined) {
       this.validateColors(next.colors);
     }
+    // The dedicated /seo endpoint is not the only door into these keys — this
+    // generic one can write them too, so it has to apply the same rules or the
+    // validation is optional in practice.
+    if (next.seo !== undefined) {
+      next.seo = validateSeo(next.seo);
+    }
+    if (next.business !== undefined) {
+      next.business = validateBusinessInfo(next.business);
+    }
 
     const { tenantId } = this.tenantContext.current;
     // Merges rather than replacing the whole column: a caller updating
@@ -66,6 +81,40 @@ export class TenantController {
     return this.mutateConfig(tenantId, (current) => ({
       ...current,
       colors: { ...current.colors, ...(colors as TenantColors) },
+    }));
+  }
+
+  /**
+   * Search-engine settings and the salon's real business details.
+   *
+   * A dedicated endpoint rather than `PATCH /config` for the same reason
+   * `/colors` is one: that endpoint's shallow top-level merge would let a caller
+   * sending `{ seo: { title } }` silently wipe the description.
+   *
+   * Each sub-object provided is **replaced**, not merged — unlike `/colors`. A
+   * merge cannot express deletion (`{ description: undefined }` doesn't remove
+   * anything), so a tenant could never clear a description they'd typed. The
+   * form always holds and sends every field, so a replace is the honest
+   * semantic, and it needs no companion reset endpoint.
+   */
+  @Patch("seo")
+  @Roles("owner")
+  @ApiBody({ type: UpdateTenantSeoRequestDto })
+  @ApiOkResponse({ type: TenantDto })
+  async updateSeo(@Body("seo") seo: unknown, @Body("business") business: unknown): Promise<Tenant> {
+    if (seo === undefined && business === undefined) {
+      throw new BadRequestException("send seo, business, or both");
+    }
+    // Validated before the transaction opens: a rejected payload shouldn't take
+    // a row lock.
+    const nextSeo = seo === undefined ? undefined : validateSeo(seo);
+    const nextBusiness = business === undefined ? undefined : validateBusinessInfo(business);
+
+    const { tenantId } = this.tenantContext.current;
+    return this.mutateConfig(tenantId, (current) => ({
+      ...current,
+      ...(nextSeo === undefined ? {} : { seo: nextSeo }),
+      ...(nextBusiness === undefined ? {} : { business: nextBusiness }),
     }));
   }
 

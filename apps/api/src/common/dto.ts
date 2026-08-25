@@ -19,10 +19,33 @@ export class TenantConfigCopyDto {
   @ApiPropertyOptional() aboutText?: string;
 }
 
+export class TenantConfigSeoDto {
+  @ApiPropertyOptional({ description: "Overrides the generated `${name} — Book online`" }) title?: string;
+  @ApiPropertyOptional({ description: "Meta description; falls back to copy.tagline" }) description?: string;
+  @ApiPropertyOptional({ description: "Absolute https URL" }) ogImageUrl?: string;
+  @ApiPropertyOptional({
+    description: "Tenant's explicit opt-out. Can only hide — indexability is otherwise computed.",
+  })
+  noindex?: boolean;
+}
+
+export class TenantConfigBusinessDto {
+  @ApiPropertyOptional() streetAddress?: string;
+  @ApiPropertyOptional() city?: string;
+  @ApiPropertyOptional() region?: string;
+  @ApiPropertyOptional() postalCode?: string;
+  @ApiPropertyOptional({ description: "ISO 3166-1 alpha-2, e.g. GE" }) country?: string;
+  @ApiPropertyOptional() telephone?: string;
+  @ApiPropertyOptional({ description: "Sent together with longitude" }) latitude?: number;
+  @ApiPropertyOptional({ description: "Sent together with latitude" }) longitude?: number;
+}
+
 export class TenantConfigDto {
   @ApiPropertyOptional() logoUrl?: string;
   @ApiPropertyOptional({ type: TenantConfigColorsDto }) colors?: TenantConfigColorsDto;
   @ApiPropertyOptional({ type: TenantConfigCopyDto }) copy?: TenantConfigCopyDto;
+  @ApiPropertyOptional({ type: TenantConfigSeoDto }) seo?: TenantConfigSeoDto;
+  @ApiPropertyOptional({ type: TenantConfigBusinessDto }) business?: TenantConfigBusinessDto;
   @ApiPropertyOptional({
     type: [String],
     description: "Public content locales, first entry = default (R80). Absent or single-entry = monolingual.",
@@ -288,6 +311,13 @@ export class UpdateTenantConfigRequestDto {
 
 export class UpdateTenantColorsRequestDto {
   @ApiProperty({ type: TenantConfigColorsDto }) colors!: TenantConfigColorsDto;
+}
+
+export class UpdateTenantSeoRequestDto {
+  @ApiPropertyOptional({ type: TenantConfigSeoDto, description: "Replaces the stored seo object wholesale" })
+  seo?: TenantConfigSeoDto;
+  @ApiPropertyOptional({ type: TenantConfigBusinessDto, description: "Replaces the stored business object wholesale" })
+  business?: TenantConfigBusinessDto;
 }
 
 export class OnboardTenantRequestDto {
