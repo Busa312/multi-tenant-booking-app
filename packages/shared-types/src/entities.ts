@@ -7,6 +7,7 @@ export type TenantUserRole = "owner" | "professional";
 export type AppointmentStatus = "booked" | "cancelled" | "completed" | "no_show";
 
 import type { TenantColors } from "./colors";
+import type { TenantBusinessInfo, TenantSeo } from "./seo";
 
 export interface Tenant {
   id: string;
@@ -32,6 +33,10 @@ export interface TenantConfig {
   // renders per-locale tabs once this lists more than one. Actual per-locale
   // *storage* (JSONB per field) is owned by the Translations feature.
   enabledLocales?: string[];
+  /** Search-engine settings; see packages/shared-types/src/seo.ts. */
+  seo?: TenantSeo;
+  /** The salon's real address/phone — factual data, not SEO-only. */
+  business?: TenantBusinessInfo;
 }
 
 export interface Professional {

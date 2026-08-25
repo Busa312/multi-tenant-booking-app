@@ -14,7 +14,7 @@ import type {
 } from "@booking/shared-types";
 import { PrismaService } from "../prisma/prisma.service.js";
 import { TenantContextService } from "../tenant/tenant-context.service.js";
-import { serializeProfessional, serializeService, serializeTenant } from "../common/serializers.js";
+import { serializeProfessional, serializePublicTenant, serializeService } from "../common/serializers.js";
 import { parseIdList } from "../common/query.js";
 import {
   AppointmentDto,
@@ -55,7 +55,8 @@ export class PublicController {
   async getTenant(): Promise<Tenant> {
     const { tenantId } = this.tenantContext.current;
     const tenant = await this.prisma.forTenant((tx) => tx.tenant.findUniqueOrThrow({ where: { id: tenantId } }));
-    return serializeTenant(tenant);
+    // Allowlisted rather than the full serializer: this route is unauthenticated.
+    return serializePublicTenant(tenant);
   }
 
   @Get("services")

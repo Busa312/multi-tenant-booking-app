@@ -40,6 +40,7 @@ export function AppShell({ title, subtitle, tenantSubdomain, children }: AppShel
           { to: "/services", icon: "design_services", labelKey: "nav.services" },
           { to: "/professionals", icon: "diversity_3", labelKey: "nav.professionals" },
           { to: "/settings/colors", icon: "palette", labelKey: "nav.colors" },
+          { to: "/settings/seo", icon: "travel_explore", labelKey: "nav.seo" },
         ]
       : []),
   ];

@@ -50,6 +50,35 @@ export const serializeTenant = (t: PrismaTenant): Tenant => ({
   createdAt: t.createdAt.toISOString(),
 });
 
+/**
+ * The tenant shape for `GET /public/tenant`, which is unauthenticated.
+ *
+ * `configJson` is a free-form JSONB blob, so passing it through wholesale means
+ * anything ever written into it is world-readable. Everything in it today is
+ * meant to be public (branding, SEO, the salon's own address), but the blob is
+ * the obvious place for a future "internal notes" or "billing plan" key, and by
+ * then narrowing this would break consumers. Allowlisting each key now costs
+ * nothing and makes leaking a new one a deliberate act.
+ */
+export const serializePublicTenant = (t: PrismaTenant): Tenant => {
+  const full = serializeTenant(t);
+  // `?? {}` for the same reason mutateConfig does it: the column is NOT NULL but
+  // its *value* can be JSON `null`, which would throw on destructure and 500 an
+  // unauthenticated route.
+  const { logoUrl, colors, copy, enabledLocales, seo, business } = full.configJson ?? {};
+  return {
+    ...full,
+    configJson: {
+      ...(logoUrl === undefined ? {} : { logoUrl }),
+      ...(colors === undefined ? {} : { colors }),
+      ...(copy === undefined ? {} : { copy }),
+      ...(enabledLocales === undefined ? {} : { enabledLocales }),
+      ...(seo === undefined ? {} : { seo }),
+      ...(business === undefined ? {} : { business }),
+    },
+  };
+};
+
 export const serializeProfessional = (p: PrismaProfessional): Professional => ({
   id: p.id,
   tenantId: p.tenantId,

@@ -21,6 +21,7 @@ const chunks = {
   dashboard: () => import("./pages/Dashboard.js"),
   bookings: () => import("./pages/Bookings.js"),
   branding: () => import("./pages/BrandingSettings.js"),
+  seo: () => import("./pages/SeoSettings.js"),
   professionals: () => import("./pages/Professionals.js"),
   services: () => import("./pages/Services.js"),
   hours: () => import("./pages/Hours.js"),
@@ -32,6 +33,7 @@ const SetPasswordPage = lazy(() => chunks.setPassword().then((m) => ({ default: 
 const DashboardPage = lazy(() => chunks.dashboard().then((m) => ({ default: m.DashboardPage })));
 const BookingsPage = lazy(() => chunks.bookings().then((m) => ({ default: m.BookingsPage })));
 const BrandingSettingsPage = lazy(() => chunks.branding().then((m) => ({ default: m.BrandingSettingsPage })));
+const SeoSettingsPage = lazy(() => chunks.seo().then((m) => ({ default: m.SeoSettingsPage })));
 const ProfessionalsPage = lazy(() => chunks.professionals().then((m) => ({ default: m.ProfessionalsPage })));
 const ServicesPage = lazy(() => chunks.services().then((m) => ({ default: m.ServicesPage })));
 const HoursPage = lazy(() => chunks.hours().then((m) => ({ default: m.HoursPage })));
@@ -51,6 +53,7 @@ const NAV_CHUNKS = [
   chunks.dashboard,
   chunks.bookings,
   chunks.branding,
+  chunks.seo,
   chunks.professionals,
   chunks.services,
   chunks.hours,
@@ -123,6 +126,16 @@ export function App() {
               <RequireAuth>
                 <RequireOwner>
                   <BrandingSettingsPage />
+                </RequireOwner>
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/settings/seo"
+            element={
+              <RequireAuth>
+                <RequireOwner>
+                  <SeoSettingsPage />
                 </RequireOwner>
               </RequireAuth>
             }

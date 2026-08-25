@@ -5,12 +5,16 @@ import type { Tenant, TenantColors } from "@booking/shared-types";
 
 /**
  * Every tenant hits the same API path (`/public/tenant`), differentiated only
- * by the `x-forwarded-host` header — Next's fetch/Data Cache does not key on
- * arbitrary headers, so caching this naively would leak one tenant's config
- * to another. Instead this is cached explicitly via `unstable_cache`, keyed
- * AND tagged by the resolved Host header, so `revalidateTag` can target one
- * tenant's cache entry precisely after a CMS color save (see
- * apps/api/src/cms/revalidation.service.ts + app/api/revalidate/route.ts).
+ * by the `x-forwarded-host` header. This is cached explicitly via
+ * `unstable_cache`, keyed AND tagged by the resolved Host header, so
+ * `revalidateTag` can target one tenant's cache entry precisely after a CMS
+ * config save (see apps/api/src/cms/revalidation.service.ts +
+ * app/api/revalidate/route.ts).
+ *
+ * The *tagging* is the reason, not cache-key safety: Next's Data Cache does
+ * include request headers in its fetch cache key (IncrementalCache.fetchCacheKey),
+ * so a plain `fetch` would not cross-contaminate tenants — it simply could not
+ * be invalidated on demand.
  *
  * `host` must be resolved by the caller (e.g. `headers().get("host")`)
  * *before* calling this — `unstable_cache` callbacks can't call Dynamic APIs
