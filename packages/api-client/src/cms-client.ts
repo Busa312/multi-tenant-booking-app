@@ -19,7 +19,6 @@ import type {
   Tenant,
   TenantColors,
   TenantConfig,
-  UpdateTenantSeoRequest,
   TimeOff,
   UpcomingAppointmentCountResponse,
   UpdateAppointmentStatusRequest,
@@ -55,14 +54,6 @@ export class CmsApiClient {
 
   updateTenantColors(colors: TenantColors) {
     return this.http.patch<Tenant>("/cms/tenant/colors", { colors });
-  }
-
-  /**
-   * Search settings + the salon's business details. Each sub-object sent is
-   * replaced wholesale, so send the complete object (the form holds it all).
-   */
-  updateTenantSeo(payload: UpdateTenantSeoRequest) {
-    return this.http.patch<Tenant>("/cms/tenant/seo", payload);
   }
 
   resetTenantColors() {

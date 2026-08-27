@@ -10,7 +10,6 @@ import type {
   UpdateCmsAppointmentRequest,
   TenantColors,
   TenantConfig,
-  UpdateTenantSeoRequest,
   UpdateAppointmentStatusRequest,
   UpdateProfessionalRequest,
   UpdateServiceRequest,
@@ -241,7 +240,6 @@ export const cachedApi = {
   updateTenantConfig: (configJson: TenantConfig) => mutating(cmsApiClient.updateTenantConfig(configJson), ["tenant"]),
   updateTenantColors: (colors: TenantColors) => mutating(cmsApiClient.updateTenantColors(colors), ["tenant"]),
   resetTenantColors: () => mutating(cmsApiClient.resetTenantColors(), ["tenant"]),
-  updateTenantSeo: (payload: UpdateTenantSeoRequest) => mutating(cmsApiClient.updateTenantSeo(payload), ["tenant"]),
 
   createService: (payload: CreateServiceRequest) => mutating(cmsApiClient.createService(payload), SERVICE_ASSIGNMENT),
   updateService: (id: string, payload: UpdateServiceRequest) =>

@@ -2,19 +2,9 @@
 
 import type { AppointmentStatus } from "./entities";
 import type { TenantColors } from "./colors";
-import type { TenantBusinessInfo, TenantSeo } from "./seo";
 
 export interface UpdateTenantColorsRequest {
   colors: TenantColors;
-}
-
-/**
- * Each sub-object present **replaces** the stored one rather than merging into
- * it — a merge can't express clearing a field. Send the complete object.
- */
-export interface UpdateTenantSeoRequest {
-  seo?: TenantSeo;
-  business?: TenantBusinessInfo;
 }
 
 export interface CreateAppointmentRequest {

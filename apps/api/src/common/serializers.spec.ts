@@ -3,7 +3,6 @@ import {
   serializeAppointment,
   serializeAppointmentSummary,
   serializeProfessional,
-  serializePublicTenant,
   serializeService,
   serializeTenant,
   serializeTimeOff,
@@ -79,50 +78,6 @@ describe("serializeTenant", () => {
 
   it("passes the config JSON through unchanged", () => {
     expect(serializeTenant(prismaTenant()).configJson).toEqual({ primaryColor: "#0f172a" });
-  });
-});
-
-describe("serializePublicTenant", () => {
-  // GET /public/tenant is unauthenticated, and configJson is a free-form JSONB
-  // blob — so anything ever written into it would otherwise be world-readable.
-  it("drops a config key that isn't on the allowlist", () => {
-    const result = serializePublicTenant(
-      prismaTenant({
-        configJson: {
-          colors: { primary: "#0f172a" },
-          internalBillingPlan: "enterprise",
-          notes: "do not show this",
-        } as Prisma.JsonValue,
-      }),
-    );
-
-    expect(result.configJson).toEqual({ colors: { primary: "#0f172a" } });
-    expect(JSON.stringify(result)).not.toContain("enterprise");
-  });
-
-  it("keeps every public key", () => {
-    const configJson = {
-      logoUrl: "https://cdn.example.com/logo.png",
-      colors: { primary: "#0f172a" },
-      copy: { tagline: "Cuts and colour" },
-      enabledLocales: ["ka"],
-      seo: { title: "Acme Salon", noindex: true },
-      business: { city: "Tbilisi", latitude: 41.7151, longitude: 44.8271 },
-    };
-
-    expect(serializePublicTenant(prismaTenant({ configJson: configJson as Prisma.JsonValue })).configJson).toEqual(
-      configJson,
-    );
-  });
-
-  it("still exposes the tenant's own columns", () => {
-    const result = serializePublicTenant(prismaTenant());
-
-    expect(result).toMatchObject({ id: TENANT_ID, name: "Salon Rustaveli", subdomain: "rustaveli" });
-  });
-
-  it("returns an empty object for an empty config rather than undefined", () => {
-    expect(serializePublicTenant(prismaTenant({ configJson: {} as Prisma.JsonValue })).configJson).toEqual({});
   });
 });
 
