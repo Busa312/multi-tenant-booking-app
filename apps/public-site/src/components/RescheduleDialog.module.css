@@ -1,0 +1,109 @@
+.backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: var(--space-4);
+  background: rgb(0 0 0 / 45%);
+}
+
+.dialog {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  width: 100%;
+  max-width: 32rem;
+  max-height: 85dvh;
+  overflow-y: auto;
+  padding: var(--space-5);
+  border-radius: var(--radius-lg);
+  background: var(--color-background);
+  box-shadow: var(--shadow);
+}
+
+.heading {
+  font-size: 1.125rem;
+  font-weight: 650;
+}
+
+.footer {
+  display: flex;
+  gap: var(--space-3);
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+
+@media (min-width: 40rem) {
+  .backdrop {
+    align-items: center;
+  }
+}
+
+.note {
+  font-size: 0.875rem;
+  color: var(--muted);
+}
+
+.days {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.day {
+  font-weight: 600;
+}
+
+.dayNav {
+  width: 2.5rem;
+  height: 2.5rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-raised);
+  font-size: 1.125rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.dayNav:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.status {
+  color: var(--muted);
+  font-size: 0.9375rem;
+  text-align: center;
+  padding: var(--space-4) 0;
+}
+
+.primary {
+  padding: var(--space-3) var(--space-5);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: var(--color-primary);
+  color: var(--color-background);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.primary:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.secondary {
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}

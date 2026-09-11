@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import type { AppointmentStatus, AppointmentSummary, ProfessionalSummary, ServiceSummary } from "@booking/shared-types";
+import { useEffect, useMemo, useState } from "react";
+import type { LocationSummary, AppointmentStatus, AppointmentSummary, ProfessionalSummary, ServiceSummary } from "@booking/shared-types";
 import { cachedApi } from "../lib/cache.js";
 import { useAuth } from "../auth/AuthContext.js";
 import { useI18n } from "../i18n/I18nContext.js";
@@ -11,6 +11,7 @@ import {
   tenantDateString,
 } from "../lib/tenantTime.js";
 import { AppShell } from "../components/AppShell.js";
+import { LocationTabs } from "../components/LocationTabs.js";
 import { CreateBookingModal } from "../components/CreateBookingModal.js";
 import { EditBookingModal } from "../components/EditBookingModal.js";
 import { BookingsDayTable } from "../components/BookingsDayTable.js";
@@ -19,12 +20,6 @@ import { CardSkeleton } from "../components/CardSkeleton.js";
 import { type ActionMenuItem, Alert, Button, TextInput } from "../components/ui/index.js";
 import styles from "./Bookings.module.css";
 
-/** Everything that doesn't change as the visible day moves. */
-/**
- * Loading-placeholder row heights. A day-table row carries a time, a customer,
- * a service and a status pill on one line; a week-grid column is a day's stack
- * of BookingCards, so it reserves a good deal more per row.
- */
 const DAY_ROW = "48px";
 const WEEK_ROW = "74px";
 
@@ -32,47 +27,59 @@ interface PageContext {
   timezone: string;
   services: ServiceSummary[];
   professionals: ProfessionalSummary[];
+  // R150: active branches only
+  locations: LocationSummary[];
 }
 
 type View = "day" | "week";
 
-/**
- * The salon's calendar: phone bookings, walk-ins and off-site changes all land
- * here alongside the public-site ones (R10).
- *
- * A `professional` login sees only their own appointments — enforced by the API
- * (R20); this page never has the others to render in the first place.
- */
 export function BookingsPage() {
   const { t, lang } = useI18n();
   const { role, professionalId } = useAuth();
   const lockedProfessionalId = role === "professional" ? professionalId : null;
 
   const [context, setContext] = useState<PageContext | null>(null);
-  // Null until the tenant's timezone is known — "today" is the salon's today,
-  // which the staff browser's clock can't answer on its own.
+
   const [date, setDate] = useState<string | null>(null);
   const [view, setView] = useState<View>("day");
   const [appointments, setAppointments] = useState<AppointmentSummary[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
+  // R150: null = every branch. Filtered here rather than refetched — the rows
+  // are already loaded and carry their locationId, so switching tab is instant
+  // and costs no request.
+  const [locationId, setLocationId] = useState<string | null>(null);
   const [rescheduleTarget, setRescheduleTarget] = useState<AppointmentSummary | null>(null);
 
-  // The fetched span: one day, or the Monday-based week the day falls in.
   const weekStart = date ? startOfWeek(date) : null;
   const range =
     date && weekStart ? (view === "week" ? { from: weekStart, to: addDays(weekStart, 6) } : { from: date, to: date }) : null;
 
   useEffect(() => {
-    Promise.all([cachedApi.getTenant(), cachedApi.listServices(), cachedApi.listProfessionals()])
-      .then(([tenant, services, professionals]) => {
-        setContext({ timezone: tenant.timezone, services, professionals });
+    Promise.all([
+      cachedApi.getTenant(),
+      cachedApi.listServices(),
+      cachedApi.listProfessionals(),
+      cachedApi.listLocations(),
+    ])
+      .then(([tenant, services, professionals, locations]) => {
+        setContext({
+          timezone: tenant.timezone,
+          services,
+          professionals,
+          locations: locations.filter((location) => location.isActive),
+        });
         setDate(tenantDateString(tenant.timezone));
       })
       .catch(() => setError(t("bookings.errLoad")));
-    // Fetch once on mount; a language switch shouldn't trigger a refetch.
+
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const visible = useMemo(
+    () => (!appointments || !locationId ? appointments : appointments.filter((a) => a.locationId === locationId)),
+    [appointments, locationId],
+  );
 
   function load(from: string, to: string) {
     setAppointments(null);
@@ -84,8 +91,7 @@ export function BookingsPage() {
 
   useEffect(() => {
     if (range) load(range.from, range.to);
-    // Refetch when the span moves — in week view that's only when the week
-    // changes, not on every day within it.
+
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [range?.from, range?.to]);
 
@@ -94,7 +100,6 @@ export function BookingsPage() {
     setDate(day);
   }
 
-  /** After a write: show the day it landed on, reloading if it's already in view. */
   function showDay(day: string) {
     if (range && day >= range.from && day <= range.to) {
       load(range.from, range.to);
@@ -138,7 +143,7 @@ export function BookingsPage() {
         onSelect: () => setRescheduleTarget(appointment),
       });
     }
-    // R100: marking is manual, always — nothing here happens because a time passed.
+    // R100: marking is manual
     if (appointment.status !== "completed") {
       items.push({
         label: t("bookings.actionComplete"),
@@ -154,7 +159,6 @@ export function BookingsPage() {
       });
     }
     if (appointment.status !== "booked") {
-      // The way back from a mis-click, and how a cancelled booking is revived.
       items.push({
         label: t("bookings.actionRestore"),
         icon: "undo",
@@ -162,7 +166,7 @@ export function BookingsPage() {
       });
     }
     if (appointment.status !== "cancelled") {
-      // R90: status change only — the row stays in history either way.
+      // R90: status change only
       items.push({
         label: t("bookings.actionCancel"),
         icon: "event_busy",
@@ -219,8 +223,6 @@ export function BookingsPage() {
             </Button>
           </div>
 
-          {/* Two buttons rather than a Select: two mutually exclusive layouts,
-              both worth reaching in one click. */}
           <div className={styles.viewToggle} role="group" aria-label={t("bookings.viewLabel")}>
             <Button
               size="sm"
@@ -240,8 +242,6 @@ export function BookingsPage() {
             </Button>
           </div>
 
-          {/* Disabled until the service and professional rosters are in — the
-              create form can't be rendered without them. */}
           <Button className={styles.add} icon="add" disabled={!context || !date} onClick={() => setCreateOpen(true)}>
             {t("bookings.add")}
           </Button>
@@ -249,20 +249,24 @@ export function BookingsPage() {
 
         {error && <Alert>{error}</Alert>}
 
+        {context && (
+          <LocationTabs locations={context.locations} selectedId={locationId} onSelect={setLocationId} />
+        )}
+
         <div className={styles.count}>
-          {appointments
-            ? t(view === "week" ? "bookings.countWeek" : "bookings.count", { count: appointments.length })
+          {visible
+            ? t(view === "week" ? "bookings.countWeek" : "bookings.count", { count: visible.length })
             : t("common.loading")}
         </div>
 
-        {appointments && context && view === "day" && (
-          <BookingsDayTable appointments={appointments} timezone={context.timezone} actionsFor={rowActions} />
+        {visible && context && view === "day" && (
+          <BookingsDayTable appointments={visible} timezone={context.timezone} actionsFor={rowActions} />
         )}
 
-        {appointments && context && view === "week" && weekStart && (
+        {visible && context && view === "week" && weekStart && (
           <BookingsWeekGrid
             weekStart={weekStart}
-            appointments={appointments}
+            appointments={visible}
             timezone={context.timezone}
             actionsFor={rowActions}
             onSelectDay={(day) => {
@@ -272,13 +276,6 @@ export function BookingsPage() {
           />
         )}
 
-        {/* Mirrors the `appointments && context` guard on both tables above —
-            the two load independently, so keying the placeholder off the
-            payload alone leaves a blank gap whenever appointments land first.
-
-            The week grid is seven day-columns tall and the day table is a list,
-            so the two views reserve different amounts — sized per view rather
-            than sharing one number that would be wrong for both. */}
         {(!appointments || !context) &&
           (view === "week" ? (
             <CardSkeleton rows={7} rowHeight={WEEK_ROW} />
@@ -291,14 +288,15 @@ export function BookingsPage() {
         <CreateBookingModal
           services={context.services}
           professionals={context.professionals}
+          locations={context.locations}
+          defaultLocationId={locationId}
           timezone={context.timezone}
           lockedProfessionalId={lockedProfessionalId}
           defaultDate={date}
           onClose={() => setCreateOpen(false)}
           onCreated={(bookedDate) => {
             setCreateOpen(false);
-            // Jump to the day it landed on, so the new booking is on screen even
-            // when it was made for next week.
+
             showDay(bookedDate);
           }}
         />

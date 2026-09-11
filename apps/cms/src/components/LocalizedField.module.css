@@ -22,6 +22,16 @@
   border-color: var(--accent-soft);
   color: var(--accent);
 }
+
+.filled {
+  display: inline-block;
+  width: 5px;
+  height: 5px;
+  margin-left: 5px;
+  border-radius: 50%;
+  background: currentColor;
+  vertical-align: middle;
+}
 .hint {
   margin: 6px 0 0;
   font-size: 12px;

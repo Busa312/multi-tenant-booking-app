@@ -40,6 +40,7 @@ const prismaAppointment = (overrides: Partial<Parameters<typeof serializeAppoint
   tenantId: TENANT_ID,
   services: [line()],
   professionalId: "pppppppp-pppp-pppp-pppp-pppppppppppp",
+  locationId: null,
   userName: "ნინო",
   phoneNumber: "+995555123456",
   email: "nino@example.com",
@@ -61,6 +62,7 @@ const prismaAppointmentSummary = (
 ): PrismaAppointmentSummary => ({
   ...prismaAppointment(),
   professional: { name: "Levan" },
+  location: null,
   ...overrides,
 });
 
@@ -86,6 +88,8 @@ describe("serializeProfessional", () => {
     const result = serializeProfessional({
       id: "pppppppp-pppp-pppp-pppp-pppppppppppp",
       tenantId: TENANT_ID,
+      nameI18n: null,
+      locationId: null,
       name: "Levan",
       isActive: false,
       createdAt: new Date("2026-01-02T03:04:05Z"),
@@ -94,6 +98,8 @@ describe("serializeProfessional", () => {
     expect(result).toEqual({
       id: "pppppppp-pppp-pppp-pppp-pppppppppppp",
       tenantId: TENANT_ID,
+      nameI18n: null,
+      locationId: null,
       name: "Levan",
       isActive: false,
       createdAt: "2026-01-02T03:04:05.000Z",
@@ -106,7 +112,9 @@ describe("serializeService", () => {
     id: "ssssssss-ssss-ssss-ssss-ssssssssssss",
     tenantId: TENANT_ID,
     name: "Haircut",
+    nameI18n: null,
     description: null,
+    descriptionI18n: null,
     durationMinutes: 30,
     price,
     isActive: true,
@@ -195,8 +203,6 @@ describe("serializeAppointment", () => {
       expect(result.services.map((entry) => entry.name)).toEqual(["Haircut", "Beard trim"]);
     });
 
-    // The database no longer guarantees at least one line — dropping
-    // appointment.service_id gave that up — so the serializer must not assume it.
     it("serializes an appointment with no lines as an empty array", () => {
       const result = serializeAppointment(prismaAppointment({ services: [] }));
 

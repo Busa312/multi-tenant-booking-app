@@ -20,14 +20,15 @@ import { RolesGuard } from "../auth/guards/roles.guard.js";
 import { Roles } from "../auth/decorators/roles.decorator.js";
 import { serializeService } from "../common/serializers.js";
 import { CreateServiceRequestDto, ServiceSummaryDto, UpdateServiceRequestDto } from "../common/dto.js";
+import {
+  enabledLocalesOf,
+  validateLocalizedText,
+  LOCALIZED_TEXT_MAX,
+} from "../common/i18n-validation.js";
 import { RevalidationService } from "./revalidation.service.js";
 
 const SERVICE_SUMMARY_INCLUDE = {
   serviceProfessionals: true,
-  // Counted through the join, not through a column on `appointment`: a service
-  // that only ever appears as the *second* service of an appointment still has
-  // history, and reporting it as unused would let the delete below through to a
-  // foreign-key error.
   _count: { select: { appointmentServices: true } },
 } satisfies Prisma.ServiceInclude;
 
@@ -100,12 +101,22 @@ export class ServicesController {
     const price = parsePrice(body.price);
     const durationMinutes = validateDuration(body.durationMinutes);
 
-    const service = await this.prisma.forTenant((tx) =>
-      tx.service.create({
+    const service = await this.prisma.forTenant(async (tx) => {
+      const locales = await this.enabledLocales(tx, tenantId);
+      return tx.service.create({
         data: {
           tenantId,
           name,
+          // R160: the plain columns above hold the default locale
+
+          nameI18n: validateLocalizedText(body.nameI18n, "nameI18n", locales),
           description: body.description ?? null,
+          descriptionI18n: validateLocalizedText(
+            body.descriptionI18n,
+            "descriptionI18n",
+            locales,
+            LOCALIZED_TEXT_MAX,
+          ),
           durationMinutes,
           price,
           serviceProfessionals: {
@@ -113,8 +124,8 @@ export class ServicesController {
           },
         },
         include: SERVICE_SUMMARY_INCLUDE,
-      }),
-    );
+      });
+    });
 
     await this.revalidate(tenantId);
     return toSummary(service);
@@ -127,7 +138,7 @@ export class ServicesController {
   @ApiOkResponse({ type: ServiceSummaryDto })
   async update(@Param("id") id: string, @Body() body: UpdateServiceRequest): Promise<ServiceSummary> {
     const { tenantId } = this.tenantContext.current;
-    const { professionalIds, name, price, durationMinutes, ...rest } = body;
+    const { professionalIds, name, price, durationMinutes, nameI18n, descriptionI18n, ...rest } = body;
 
     const data: Prisma.ServiceUpdateInput = { ...rest };
     if (name !== undefined) {
@@ -141,6 +152,20 @@ export class ServicesController {
     }
 
     const service = await this.prisma.forTenant(async (tx) => {
+      if (nameI18n !== undefined || descriptionI18n !== undefined) {
+        const locales = await this.enabledLocales(tx, tenantId);
+        if (nameI18n !== undefined) {
+          data.nameI18n = validateLocalizedText(nameI18n, "nameI18n", locales);
+        }
+        if (descriptionI18n !== undefined) {
+          data.descriptionI18n = validateLocalizedText(
+            descriptionI18n,
+            "descriptionI18n",
+            locales,
+            LOCALIZED_TEXT_MAX,
+          );
+        }
+      }
       if (professionalIds !== undefined) {
         await tx.serviceProfessional.deleteMany({ where: { tenantId, serviceId: id } });
         if (professionalIds.length > 0) {
@@ -162,9 +187,6 @@ export class ServicesController {
   async remove(@Param("id") id: string): Promise<void> {
     const { tenantId } = this.tenantContext.current;
     await this.prisma.forTenant(async (tx) => {
-      // Any line on any appointment counts, not just the first one — otherwise
-      // the RESTRICT foreign key on appointment_service turns this 409 into a
-      // 500 for exactly the services multi-service bookings introduced.
       const appointmentCount = await tx.appointmentService.count({ where: { tenantId, serviceId: id } });
       if (appointmentCount > 0) {
         throw new ConflictException("This service has appointment history and can only be deactivated, not deleted");
@@ -173,6 +195,11 @@ export class ServicesController {
     });
 
     await this.revalidate(tenantId);
+  }
+
+  private async enabledLocales(tx: Prisma.TransactionClient, tenantId: string): Promise<string[]> {
+    const tenant = await tx.tenant.findUniqueOrThrow({ where: { id: tenantId }, select: { configJson: true } });
+    return enabledLocalesOf(tenant.configJson);
   }
 
   private async revalidate(tenantId: string): Promise<void> {

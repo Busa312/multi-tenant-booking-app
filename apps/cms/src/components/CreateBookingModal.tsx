@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from "react";
-import type { BookingConflict, ProfessionalSummary, ServiceSummary } from "@booking/shared-types";
+import type { BookingConflict, LocationSummary, ProfessionalSummary, ServiceSummary } from "@booking/shared-types";
 import { cachedApi } from "../lib/cache.js";
 import { useI18n } from "../i18n/I18nContext.js";
 import { conflictsFromError } from "../lib/bookingConflicts.js";
@@ -13,24 +13,25 @@ import styles from "./CreateBookingModal.module.css";
 interface CreateBookingModalProps {
   services: ServiceSummary[];
   professionals: ProfessionalSummary[];
+  // R150: active branches
+  locations: LocationSummary[];
+  /** R150: the branch the page is filtered to, so a new booking starts there. */
+  defaultLocationId?: string | null;
   timezone: string;
-  /** Non-null for a `professional` login: the selector is pinned to them (R20). */
+
   lockedProfessionalId: string | null;
-  /** The day the calendar is showing — most phone bookings are for it or near it. */
+
   defaultDate: string;
   onClose: () => void;
   onCreated: (date: string) => void;
 }
 
-/**
- * R30: a booking taken over the phone or at the desk. end_at and price aren't
- * collected — the API derives the first from the service duration and snapshots
- * the second (R40), exactly as a public-site booking does. No magic link is
- * issued and no email goes out (R70).
- */
+// R30: a booking taken over the phone or at the desk
 export function CreateBookingModal({
   services,
   professionals,
+  locations,
+  defaultLocationId,
   timezone,
   lockedProfessionalId,
   defaultDate,
@@ -39,7 +40,12 @@ export function CreateBookingModal({
 }: CreateBookingModalProps) {
   const { t } = useI18n();
   const [professionalId, setProfessionalId] = useState(lockedProfessionalId ?? "");
-  // One empty row to start — a booking always has at least one service.
+  // R150: preselected when there is only one branch
+
+  const [locationId, setLocationId] = useState(
+    defaultLocationId ?? (locations.length === 1 ? (locations[0]?.id ?? "") : ""),
+  );
+
   const [serviceIds, setServiceIds] = useState<string[]>([""]);
   const [date, setDate] = useState(defaultDate);
   const [time, setTime] = useState("");
@@ -52,21 +58,21 @@ export function CreateBookingModal({
   const [saving, setSaving] = useState(false);
 
   const chosenServiceIds = serviceIds.filter(Boolean);
-  // R140: only professionals who perform *every* chosen service, matching
-  // AvailabilityService.resolveCandidates — the services run as one block, so
-  // anyone who can't do all of them has no availability for it at all.
+  // R140: only professionals who perform *every* chosen service
+
   const selectableProfessionals = professionals.filter(
-    (p) => p.isActive && chosenServiceIds.every((id) => p.serviceIds.includes(id)),
+    (p) =>
+      p.isActive &&
+      chosenServiceIds.every((id) => p.serviceIds.includes(id)) &&
+      // R180: at the chosen branch
+
+      (!locationId || p.locationId === null || p.locationId === locationId),
   );
   const lockedProfessional = professionals.find((p) => p.id === lockedProfessionalId);
-  // Distinguishes "nobody can do this combination" from "nobody is free" — the
-  // slot list is empty either way, and only one of them is fixable by changing
-  // the date.
+
   const noProfessionalForAll =
     chosenServiceIds.length > 0 && !lockedProfessionalId && selectableProfessionals.length === 0;
 
-  // The warning the API sent describes one exact slot; any change to what's
-  // being booked makes it stale, so confirmation starts over.
   function reset<T>(setter: (value: T) => void) {
     return (value: T) => {
       setConflicts(null);
@@ -79,8 +85,7 @@ export function CreateBookingModal({
     setConflicts(null);
     setError(null);
     setServiceIds(next);
-    // Keeping a professional who doesn't perform every chosen service would
-    // submit a pairing the API rejects (R140).
+
     if (professionalId && !lockedProfessionalId) {
       const performed = professionals.find((p) => p.id === professionalId)?.serviceIds ?? [];
       if (!next.filter(Boolean).every((id) => performed.includes(id))) setProfessionalId("");
@@ -89,8 +94,7 @@ export function CreateBookingModal({
 
   function handleProfessionalChange(next: string) {
     setConflicts(null);
-    // Rows the new professional can't perform are dropped rather than silently
-    // submitted; an empty row is left behind so the list never becomes nothing.
+
     const performed = professionals.find((p) => p.id === next)?.serviceIds ?? [];
     const kept = serviceIds.filter((id) => !id || performed.includes(id));
     setProfessionalId(next);
@@ -109,21 +113,25 @@ export function CreateBookingModal({
       return;
     }
 
+    if (locations.length > 0 && !locationId) {
+      setError(t("bookings.errLocationRequired"));
+      return;
+    }
+
     setSaving(true);
     try {
       await cachedApi.createAppointment({
-        // Empty rows are dropped; order is preserved, and it's what the
-        // appointment's service lines are stored in.
         serviceIds: chosenServiceIds,
         professionalId,
+        locationId: locationId || undefined,
         date,
         time,
         userName: userName.trim(),
         phoneNumber: phoneNumber.trim(),
         email: email.trim() || undefined,
         notes: notes.trim() || undefined,
-        // R60: only ever true on the second attempt, once the staff member has
-        // read the named conflicts and pressed "book anyway".
+        // R60: only ever true on the second attempt
+
         override: conflicts !== null,
       });
       onCreated(date);
@@ -162,10 +170,28 @@ export function CreateBookingModal({
           onChange={handleServicesChange}
         />
 
+        {locations.length > 1 && (
+          <Field label={t("bookings.locationLabel")} htmlFor="booking-location">
+            <Select
+              id="booking-location"
+              value={locationId}
+              onChange={(next) => {
+                setConflicts(null);
+                setError(null);
+                setLocationId(next);
+                if (!lockedProfessionalId) setProfessionalId("");
+                setTime("");
+              }}
+              placeholder={t("bookings.locationPlaceholder")}
+              options={locations.map((location) => ({ value: location.id, label: location.name }))}
+            />
+          </Field>
+        )}
+
         <Field label={t("bookings.professionalLabel")} htmlFor="booking-professional">
           {lockedProfessionalId ? (
-            // R20: a professional books into their own calendar and no other —
-            // shown as a read-only value rather than a one-option dropdown.
+            // R20: a professional books into their own calendar and no other
+
             <TextInput id="booking-professional" value={lockedProfessional?.name ?? ""} readOnly disabled />
           ) : (
             <Select
@@ -240,7 +266,7 @@ export function CreateBookingModal({
           />
         </Field>
 
-        {/* R70: worth saying out loud — nobody is emailing this customer. */}
+        {/* R70: worth saying out loud */}
         <p className={styles.hint}>{t("bookings.noNotificationHint")}</p>
 
         {conflicts && <BookingConflictNotice conflicts={conflicts} timezone={timezone} />}

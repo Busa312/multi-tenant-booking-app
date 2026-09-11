@@ -5,14 +5,19 @@ import type {
   CmsAppointmentListQuery,
   CmsAvailabilityQuery,
   CreateCmsAppointmentRequest,
+  CreateLocationRequest,
   CreateProfessionalRequest,
   CreateServiceRequest,
   CreateTimeOffRequest,
   InviteProfessionalRequest,
   InviteProfessionalResponse,
+  LocationSummary,
   LoginRequest,
   LoginResponse,
   ProfessionalSummary,
+  UpdateLocationRequest,
+  UpdateTenantCopyRequest,
+  UpdateTenantLocalesRequest,
   UpdateCmsAppointmentRequest,
   ServiceSummary,
   SetPasswordRequest,
@@ -28,7 +33,6 @@ import type {
 } from "@booking/shared-types";
 import { HttpClient, type ApiClientOptions } from "./http";
 
-/** Client for apps/cms — every call after login carries the JWT via ApiClientOptions.getAuthToken. */
 export class CmsApiClient {
   private readonly http: HttpClient;
 
@@ -58,6 +62,32 @@ export class CmsApiClient {
 
   resetTenantColors() {
     return this.http.post<Tenant>("/cms/tenant/colors/reset");
+  }
+
+  // R170: the public site's title and description
+  updateTenantCopy(payload: UpdateTenantCopyRequest) {
+    return this.http.patch<Tenant>("/cms/tenant/copy", payload);
+  }
+
+  // R160: which languages the public site publishes in.
+  updateTenantLocales(payload: UpdateTenantLocalesRequest) {
+    return this.http.patch<Tenant>("/cms/tenant/locales", payload);
+  }
+
+  listLocations() {
+    return this.http.get<LocationSummary[]>("/cms/locations");
+  }
+
+  createLocation(payload: CreateLocationRequest) {
+    return this.http.post<LocationSummary>("/cms/locations", payload);
+  }
+
+  updateLocation(id: string, payload: UpdateLocationRequest) {
+    return this.http.patch<LocationSummary>(`/cms/locations/${id}`, payload);
+  }
+
+  deleteLocation(id: string) {
+    return this.http.delete<void>(`/cms/locations/${id}`);
   }
 
   listServices() {
@@ -124,7 +154,6 @@ export class CmsApiClient {
     return this.http.delete<void>(`/cms/time-off/${id}`);
   }
 
-  /** Both dates are tenant-local YYYY-MM-DD days, inclusive. */
   listAppointments(query: CmsAppointmentListQuery = {}) {
     const params = new URLSearchParams();
     if (query.from) params.set("from", query.from);
@@ -133,29 +162,19 @@ export class CmsApiClient {
     return this.http.get<AppointmentSummary[]>(`/cms/appointments${search ? `?${search}` : ""}`);
   }
 
-  /** R50: the same open slots the public site would offer for this pairing. */
+  // R50: the same open slots the public site would offer for this pairing
   listAppointmentAvailability(query: CmsAvailabilityQuery) {
-    // Comma-joined onto one key, matching PublicApiClient.getAvailability.
     const params = new URLSearchParams({ serviceIds: query.serviceIds.join(","), date: query.date });
     if (query.professionalId) params.set("professionalId", query.professionalId);
+    if (query.locationId) params.set("locationId", query.locationId);
     if (query.appointmentId) params.set("appointmentId", query.appointmentId);
     return this.http.get<AvailabilitySlot[]>(`/cms/appointments/availability?${params.toString()}`);
   }
 
-  /**
-   * Answers 409 with a BookingConflictResponse body when the chosen time
-   * collides with anything and `override` isn't set (R60) — the caller shows the
-   * named conflicts and retries with `override: true` if staff confirms.
-   */
   createAppointment(payload: CreateCmsAppointmentRequest) {
     return this.http.post<AppointmentSummary>("/cms/appointments", payload);
   }
 
-  /**
-   * Edits an existing appointment's time, professional and/or services. Same
-   * 409-then-override contract as createAppointment. The route keeps its
-   * `/reschedule` path for compatibility.
-   */
   updateAppointment(id: string, payload: UpdateCmsAppointmentRequest) {
     return this.http.patch<AppointmentSummary>(`/cms/appointments/${id}/reschedule`, payload);
   }

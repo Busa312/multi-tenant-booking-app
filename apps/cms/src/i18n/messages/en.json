@@ -9,7 +9,8 @@
     "loading": "Loading…",
     "rowActions": "Actions for {name}",
     "somethingWrong": "Something went wrong",
-    "passwordPlaceholder": "••••••••"
+    "passwordPlaceholder": "••••••••",
+    "translationFallback": "Not translated — visitors see the {locale} text."
   },
   "error": {
     "staleTitle": "The app has been updated",
@@ -23,7 +24,9 @@
     "bookings": "Bookings",
     "services": "Services",
     "professionals": "Professionals",
-    "colors": "Public site colors"
+    "colors": "Public site colors",
+    "locations": "Locations",
+    "publicSite": "Public site text"
   },
   "roles": {
     "owner": "Owner",
@@ -183,7 +186,10 @@
     "errCreate": "Could not create this booking",
     "errReschedule": "Could not move this booking",
     "errStatus": "Could not update this booking's status",
-    "errCancel": "Could not cancel this booking"
+    "errCancel": "Could not cancel this booking",
+    "locationLabel": "Location",
+    "locationPlaceholder": "Choose a location",
+    "errLocationRequired": "Choose a location."
   },
   "professionals": {
     "title": "Professionals",
@@ -231,7 +237,9 @@
     "createLink": "Create invite link",
     "sending": "Sending…",
     "errEmailInUse": "That email is already in use for this tenant",
-    "inviteSuccess": "Invite created. Send this link to {email} — it expires {date}."
+    "inviteSuccess": "Invite created. Send this link to {email} — it expires {date}.",
+    "locationLabel": "Location",
+    "locationAny": "Works at every location"
   },
   "services": {
     "title": "Services",
@@ -358,5 +366,66 @@
     "confirmReset": "Reset colors to the platform default palette? This can't be undone.",
     "previewTitle": "Public site preview",
     "previewUnavailable": "Preview unavailable — VITE_PUBLIC_SITE_BASE_DOMAIN is not configured."
+  },
+  "locations": {
+    "title": "Locations",
+    "subtitle": "Your branches. Customers pick one when booking, and it's recorded on the appointment.",
+    "count": "{count} locations",
+    "add": "Add location",
+    "empty": "No locations yet.",
+    "firstLocationNotice": "No locations yet. While this list is empty, bookings aren't tied to a branch. Adding your first one makes choosing a location part of every booking — including the ones your staff take by phone.",
+    "colName": "Name",
+    "colAddress": "Address",
+    "colStaff": "Staff",
+    "colStatus": "Status",
+    "staffCount": "{count} assigned",
+    "active": "Active",
+    "inactive": "Closed",
+    "edit": "Edit",
+    "deactivate": "Mark as closed",
+    "reactivate": "Reopen",
+    "delete": "Delete",
+    "confirmDelete": "Delete “{name}”? This can't be undone.",
+    "editTitleNew": "Add a location",
+    "editTitleEdit": "Edit location",
+    "nameLabel": "Name",
+    "namePlaceholder": "Vake",
+    "addressLabel": "Street address",
+    "addressPlaceholder": "12 Chavchavadze Ave",
+    "cityLabel": "City",
+    "phoneLabel": "Phone",
+    "latitudeLabel": "Latitude",
+    "longitudeLabel": "Longitude",
+    "coordinatesHint": "Optional. Set both to give customers an accurate map pin; leave both blank to search by address instead.",
+    "errLoad": "Couldn't load locations.",
+    "errSave": "Couldn't save this location.",
+    "errNameRequired": "Name is required.",
+    "errAddressRequired": "Street address is required.",
+    "errCoordinatePair": "Set both latitude and longitude, or neither.",
+    "errLatitudeRange": "Latitude must be between -90 and 90.",
+    "errLongitudeRange": "Longitude must be between -180 and 180.",
+    "errHasHistory": "This location has appointment history, so it can only be marked as closed — not deleted.",
+    "allTab": "All locations",
+    "filterLabel": "Filter by location"
+  },
+  "publicSite": {
+    "title": "Public site text",
+    "subtitle": "The heading and the short description customers see on your booking page.",
+    "titleLabel": "Title",
+    "titlePlaceholder": "Book at Salon Rustaveli",
+    "titleHint": "Shown as the page heading and in the browser tab. Leave blank to use your business name.",
+    "descriptionLabel": "Description",
+    "descriptionPlaceholder": "Walk-ins welcome. Book online in under a minute.",
+    "descriptionHint": "One or two sentences under the heading. Leave blank and we'll generate one.",
+    "saved": "Saved — your site updates shortly.",
+    "errLoad": "Couldn't load your site text.",
+    "errSave": "Couldn't save your site text.",
+    "languagesTitle": "Languages",
+    "languagesHint": "Which languages your booking page is published in. Visitors get a switcher when more than one is on.",
+    "languageMain": "main language",
+    "language": {
+      "en": "English",
+      "ka": "Georgian"
+    }
   }
 }

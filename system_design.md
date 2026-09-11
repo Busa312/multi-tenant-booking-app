@@ -56,9 +56,13 @@ Either way, the resolved `tenant_id` is handed to a request-scoped `TenantContex
 
 ## 5. Data Layer
 
-Postgres is the only datastore (no Mongo). Full entity list, column types, and the ER diagram are in `Unified Requirements and Data Model.md`; the short version: `Tenant`, `Professional`, `TenantUser`, `Service`, `ServiceProfessional` (join table), `BusinessHours`, `TimeOff`, `Appointment`. Availability is computed at query time (`BusinessHours` minus `TimeOff` minus existing `Appointment`s) rather than stored as pre-generated slot rows — avoids keeping a second table in sync with every booking/cancellation.
+Postgres is the only datastore (no Mongo). Full entity list, column types, and the ER diagram are in `Unified Requirements and Data Model.md`; the short version: `Tenant`, `Location`, `Professional`, `TenantUser`, `Service`, `ServiceProfessional` (join table), `BusinessHours`, `TimeOff`, `Appointment`. Availability is computed at query time (`BusinessHours` minus `TimeOff` minus existing `Appointment`s) rather than stored as pre-generated slot rows — avoids keeping a second table in sync with every booking/cancellation.
 
 `Tenant.config_json` (JSONB) holds presentation config (theme, logo, copy); everything queryable — pricing, hours, staff, bookings — is normalized columns, not JSON blobs.
+
+**One bounded exception: translations.** Customer-facing text a tenant authors in more than one language keeps its default locale in the normal column and its other locales in a sibling `*_i18n jsonb` column (`service.name` + `service.name_i18n`, and so on — the convention is spelled out in `Unified Requirements and Data Model.md` → "Localized content"). The rule holds where it matters: the plain column is still what anything filters, sorts or joins on, and only presentation text is ever stored this way. The alternative — a `translation(entity, entity_id, field, locale, value)` table — buys generality this product has no use for and turns every service listing into a join.
+
+Locale resolution deliberately does **not** happen in the API. `apps/api` returns both the plain value and the map; the two frontends apply the fallback using one shared function in `packages/shared-types`. This keeps a single copy of the rule (the API can only `import type` from that package, so anything it called would have to be hand-duplicated) and keeps cached public-site payloads locale-independent, so switching language needs no refetch.
 
 ## 6. Authentication & Authorization
 
@@ -74,7 +78,9 @@ Two separate identity systems, deliberately not unified:
 3. Server emails a link to `/manage/{token}`.
 4. The link scopes access to that single appointment — it's not a login, and it grants no access to any other booking.
 5. Rescheduling rotates the token (old one invalidated).
-6. Lost-link recovery: customer enters their phone number; server looks up upcoming, non-cancelled appointments for that number and re-sends valid tokens — rate-limited to prevent phone-number enumeration.
+6. Lost-link recovery: customer enters their phone number; server looks up upcoming, non-cancelled appointments for that number and re-sends valid tokens — rate-limited to prevent phone-number enumeration, and answering identically whether or not anything matched.
+
+**Delivery is stubbed.** The `NOTIFY` box in §2 is an interface with a log-only implementation; no mail provider is integrated. Until one is, `POST /public/appointments` returns the manage URL in its response so the flow is complete and testable end to end — the same approach already taken for professional invites (`InviteProfessionalResponse`). Swapping in a real provider is one class, not a refactor. Token generation, hashing, expiry and rotation are real regardless of how the link is delivered.
 
 ## 7. Domain & Tenant Routing
 
@@ -121,7 +127,7 @@ The shared-tables-plus-RLS decision doesn't change at any of these points — wh
 
 | requirement | how it's met |
 |---|---|
-| SEO | ISR pages (landing, services) on `public-site`, not client-rendered |
+| SEO | ISR pages (landing, services) on `public-site`, not client-rendered. Language is a cookie rather than a URL segment, so middleware *rewrites* (never redirects) to an internal per-locale route — the visitor keeps one clean URL and each locale keeps its own ISR entry. The trade-off is accepted knowingly: crawlers only ever see the tenant's default locale. |
 | P95 < 300ms | Redis-cached domain resolution on the hot path; flagged as an aggressive target worth validating against cold-cache/custom-domain cases early |
 | Mobile-first | `public-site` design constraint, not an infra concern |
 | Every table tenant-scoped | Postgres RLS on every table, enforced via `TenantContextService`, no exceptions |

@@ -2,6 +2,7 @@ import { Module } from "@nestjs/common";
 import { BookingModule } from "../booking/booking.module.js";
 import { TenantController } from "./tenant.controller.js";
 import { ServicesController } from "./services.controller.js";
+import { LocationsController } from "./locations.controller.js";
 import { ProfessionalsController } from "./professionals.controller.js";
 import { BusinessHoursController } from "./business-hours.controller.js";
 import { TimeOffController } from "./time-off.controller.js";
@@ -13,6 +14,7 @@ import { RevalidationService } from "./revalidation.service.js";
   controllers: [
     TenantController,
     ServicesController,
+    LocationsController,
     ProfessionalsController,
     BusinessHoursController,
     TimeOffController,

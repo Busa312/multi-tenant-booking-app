@@ -3,6 +3,8 @@ import type {
   Appointment,
   AppointmentServiceLine,
   AppointmentSummary,
+  LocalizedText,
+  Location,
   Professional,
   Service,
   Tenant,
@@ -10,19 +12,22 @@ import type {
   TimeOff,
 } from "@booking/shared-types";
 
-// Prisma returns Date/Decimal; shared-types (the wire contract) uses strings
-// throughout so JSON.stringify can't silently reformat them. These are the
-// single place that conversion happens, rather than casting at each call site.
-
 type PrismaTenant = Prisma.TenantGetPayload<Record<string, never>>;
 type PrismaProfessional = Prisma.ProfessionalGetPayload<Record<string, never>>;
 type PrismaService = Prisma.ServiceGetPayload<Record<string, never>>;
 type PrismaTimeOff = Prisma.TimeOffGetPayload<Record<string, never>>;
+type PrismaLocation = Prisma.LocationGetPayload<Record<string, never>>;
 
-// The service lines every appointment shape carries. `orderBy` is not optional:
-// without it Postgres returns the lines in whatever order it likes, and a
-// calendar card would list "Haircut + Colour" one render and "Colour + Haircut"
-// the next.
+const serializeLocalizedText = (value: Prisma.JsonValue | null): LocalizedText | null => {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return null;
+  }
+  const entries = Object.entries(value).filter(
+    (entry): entry is [string, string] => typeof entry[1] === "string",
+  );
+  return entries.length > 0 ? Object.fromEntries(entries) : null;
+};
+
 export const APPOINTMENT_INCLUDE = {
   services: {
     orderBy: { position: "asc" },
@@ -50,9 +55,26 @@ export const serializeTenant = (t: PrismaTenant): Tenant => ({
   createdAt: t.createdAt.toISOString(),
 });
 
+export const serializePublicTenant = (t: PrismaTenant): Tenant => {
+  const full = serializeTenant(t);
+
+  const { logoUrl, colors, copy, enabledLocales } = full.configJson ?? {};
+  return {
+    ...full,
+    configJson: {
+      ...(logoUrl === undefined ? {} : { logoUrl }),
+      ...(colors === undefined ? {} : { colors }),
+      ...(copy === undefined ? {} : { copy }),
+      ...(enabledLocales === undefined ? {} : { enabledLocales }),
+    },
+  };
+};
+
 export const serializeProfessional = (p: PrismaProfessional): Professional => ({
   id: p.id,
   tenantId: p.tenantId,
+  nameI18n: serializeLocalizedText(p.nameI18n),
+  locationId: p.locationId,
   name: p.name,
   isActive: p.isActive,
   createdAt: p.createdAt.toISOString(),
@@ -62,11 +84,31 @@ export const serializeService = (s: PrismaService): Service => ({
   id: s.id,
   tenantId: s.tenantId,
   name: s.name,
+  nameI18n: serializeLocalizedText(s.nameI18n),
   description: s.description,
+  descriptionI18n: serializeLocalizedText(s.descriptionI18n),
   durationMinutes: s.durationMinutes,
   price: s.price.toString(),
   isActive: s.isActive,
   createdAt: s.createdAt.toISOString(),
+});
+
+// R160: both halves go over the wire
+
+export const serializeLocation = (l: PrismaLocation): Location => ({
+  id: l.id,
+  tenantId: l.tenantId,
+  name: l.name,
+  nameI18n: serializeLocalizedText(l.nameI18n),
+  addressLine: l.addressLine,
+  addressLineI18n: serializeLocalizedText(l.addressLineI18n),
+  city: l.city,
+  phone: l.phone,
+  latitude: l.latitude?.toString() ?? null,
+  longitude: l.longitude?.toString() ?? null,
+  position: l.position,
+  isActive: l.isActive,
+  createdAt: l.createdAt.toISOString(),
 });
 
 export const serializeTimeOff = (t: PrismaTimeOff): TimeOff => ({
@@ -83,6 +125,7 @@ export const serializeAppointment = (a: PrismaAppointment): Appointment => ({
   tenantId: a.tenantId,
   services: a.services.map(serializeServiceLine),
   professionalId: a.professionalId,
+  locationId: a.locationId,
   userName: a.userName,
   phoneNumber: a.phoneNumber,
   email: a.email,
@@ -94,14 +137,10 @@ export const serializeAppointment = (a: PrismaAppointment): Appointment => ({
   updatedAt: a.updatedAt.toISOString(),
 });
 
-// The joined shape the CMS appointment list/calendar reads. Staff-only fields
-// (notes, who created it) live here rather than on the plain Appointment because
-// that one is also what a customer's magic link returns; the professional's name
-// comes along so a row doesn't need a second lookup, and the magic link is
-// reduced to a boolean because the token hash never leaves the API.
 export const APPOINTMENT_SUMMARY_INCLUDE = {
   ...APPOINTMENT_INCLUDE,
   professional: { select: { name: true } },
+  location: { select: { name: true } },
 } satisfies Prisma.AppointmentInclude;
 
 export type PrismaAppointmentSummary = Prisma.AppointmentGetPayload<{
@@ -113,5 +152,6 @@ export const serializeAppointmentSummary = (a: PrismaAppointmentSummary): Appoin
   createdByUserId: a.createdByUserId,
   notes: a.notes,
   professionalName: a.professional?.name ?? null,
+  locationName: a.location?.name ?? null,
   hasMagicLink: a.accessTokenHash !== null,
 });

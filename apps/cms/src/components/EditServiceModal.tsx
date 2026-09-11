@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from "react";
-import type { ProfessionalSummary, ServiceSummary } from "@booking/shared-types";
+import type { LocalizedText, ProfessionalSummary, ServiceSummary } from "@booking/shared-types";
 import { cachedApi } from "../lib/cache.js";
 import { useI18n } from "../i18n/I18nContext.js";
 import { Modal } from "./Modal.js";
@@ -8,10 +8,9 @@ import { Alert, Button, Checkbox, Eyebrow, Field, TextInput } from "./ui/index.j
 import styles from "./EditServiceModal.module.css";
 
 interface EditServiceModalProps {
-  /** An existing service to edit, or "new" for the create form. */
   target: ServiceSummary | "new";
   professionals: ProfessionalSummary[];
-  /** Tenant content locales, first entry = default. */
+
   locales: string[];
   onClose: () => void;
   onSaved: (saved: ServiceSummary) => void;
@@ -37,7 +36,13 @@ export function EditServiceModal({ target, professionals, locales, onClose, onSa
   const { t } = useI18n();
   const isNew = target === "new";
   const [name, setName] = useState(isNew ? "" : target.name);
+  // R160: the non-default locales
+
+  const [nameI18n, setNameI18n] = useState<LocalizedText>(isNew ? {} : (target.nameI18n ?? {}));
   const [description, setDescription] = useState(isNew ? "" : (target.description ?? ""));
+  const [descriptionI18n, setDescriptionI18n] = useState<LocalizedText>(
+    isNew ? {} : (target.descriptionI18n ?? {}),
+  );
   const [durationMinutes, setDurationMinutes] = useState(isNew ? "" : String(target.durationMinutes));
   const [price, setPrice] = useState(isNew ? "" : target.price);
   const [professionalIds, setProfessionalIds] = useState<string[]>(isNew ? [] : target.professionalIds);
@@ -45,8 +50,6 @@ export function EditServiceModal({ target, professionals, locales, onClose, onSa
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Only active professionals can be newly assigned; a deactivated one that is
-  // already on the service stays listed so saving doesn't silently drop it.
   const assignable = professionals.filter((p) => p.isActive || professionalIds.includes(p.id));
 
   function toggleProfessional(id: string) {
@@ -65,7 +68,9 @@ export function EditServiceModal({ target, professionals, locales, onClose, onSa
     try {
       const payload = {
         name: name.trim(),
+        nameI18n,
         description: description.trim() || null,
+        descriptionI18n,
         durationMinutes: Number(durationMinutes),
         price: price.trim(),
         professionalIds,
@@ -104,6 +109,8 @@ export function EditServiceModal({ target, professionals, locales, onClose, onSa
           locales={locales}
           value={name}
           onChange={setName}
+          i18n={nameI18n}
+          onI18nChange={setNameI18n}
           placeholder={t("services.namePlaceholder")}
           required
         />
@@ -115,6 +122,8 @@ export function EditServiceModal({ target, professionals, locales, onClose, onSa
           locales={locales}
           value={description}
           onChange={setDescription}
+          i18n={descriptionI18n}
+          onI18nChange={setDescriptionI18n}
           placeholder={t("services.descriptionPlaceholder")}
           multiline
         />

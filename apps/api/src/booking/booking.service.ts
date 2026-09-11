@@ -14,19 +14,11 @@ import {
   type ResolvedServiceLine,
 } from "./service-lines.js";
 
-/**
- * Writes to `Appointment`, shared by the CMS booking flow and (once its
- * endpoints are implemented) the public magic-link flow.
- *
- * Everything both paths must agree on lives here: `end_at` derived from the
- * service duration, `price` snapshotted at creation, the availability check, and
- * magic-link token rotation on reschedule. What differs is one flag — a CMS
- * booking issues no token at all (R70) — and whether a conflict is fatal.
- */
-
-// Magic-link lifetime past the appointment (Data Model doc, "Booking Access"):
-// the customer keeps a working link for a day after the appointment ends.
 const MAGIC_LINK_GRACE_MS = 24 * 60 * 60 * 1000;
+
+export function hashToken(token: string): string {
+  return createHash("sha256").update(token).digest("hex");
+}
 
 function requireText(value: string, field: string): string {
   const trimmed = typeof value === "string" ? value.trim() : "";
@@ -37,37 +29,44 @@ function requireText(value: string, field: string): string {
 }
 
 export interface CreateBookingInput {
-  /** One or more, in the order they run. A service may appear only once. */
   serviceIds: string[];
-  /** null = "any available" (no professional pinned to the row). */
+
   professionalId: string | null;
-  /** "YYYY-MM-DD" + "HH:mm", both read in the tenant's timezone. */
+  // R150: the branch
+  locationId?: string | null;
+
   date: string;
   time: string;
   userName: string;
   phoneNumber: string;
   email?: string | null;
   notes?: string | null;
-  /** TenantUser who created it; null only for a customer's own public booking. */
+
   createdByUserId: string | null;
-  /** R60: book despite named conflicts. */
+  // R60: book despite named conflicts
   override?: boolean;
+  // R70: staff bookings are tokenless and stay that way
+  issueMagicLink?: boolean;
+}
+
+export interface BookingResult {
+  appointment: PrismaAppointmentSummary;
+
+  magicLinkToken: string | null;
 }
 
 export interface UpdateBookingInput {
   appointmentId: string;
-  /** Both or neither — a time move needs its date. */
+
   date?: string;
   time?: string;
   professionalId?: string;
-  /** Replaces the whole service list; services already on it keep their price. */
+  // R150: omitted = stays at the branch it is already booked
+  locationId?: string;
+
   serviceIds?: string[];
   override?: boolean;
-  /**
-   * Set for `professional` logins: the only professional whose appointments
-   * they may touch (R20). RLS can't express this — it scopes rows to a tenant
-   * and knows nothing about roles within one — so it's applied here.
-   */
+
   professionalScope: string | null;
 }
 
@@ -79,12 +78,7 @@ export class BookingService {
     private readonly availability: AvailabilityService,
   ) {}
 
-  /**
-   * Creates a booking staff made on a customer's behalf: no magic-link token is
-   * issued and no notification is sent (R70) — these appointments are managed
-   * by staff only.
-   */
-  async create(input: CreateBookingInput): Promise<PrismaAppointmentSummary> {
+  async create(input: CreateBookingInput): Promise<BookingResult> {
     const { tenantId } = this.tenantContext.current;
     const userName = requireText(input.userName, "userName");
     const phoneNumber = requireText(input.phoneNumber, "phoneNumber");
@@ -96,7 +90,8 @@ export class BookingService {
       });
 
       const lines = await resolveServiceLines(tx, tenantId, input.serviceIds);
-      await this.assertPairing(tx, tenantId, lines, input.professionalId);
+      const professional = await this.assertPairing(tx, tenantId, lines, input.professionalId);
+      const locationId = await this.resolveLocation(tx, tenantId, input.locationId, professional);
       const startAt = this.resolveStartAt(input.date, input.time, timezone);
       const endAt = new Date(startAt.getTime() + totalDurationMinutes(lines) * 60_000);
 
@@ -107,50 +102,54 @@ export class BookingService {
         override: input.override ?? false,
       });
 
-      return tx.appointment.create({
+      const magicLink = input.issueMagicLink ? this.issueToken(endAt) : null;
+
+      const appointment = await tx.appointment.create({
         data: {
           tenantId,
           professionalId: input.professionalId,
+          // R150: recorded so the confirmation and the magic link can say where
+
+          locationId,
           userName,
           phoneNumber,
-          // Optional on the form (R30) but NOT NULL in the schema, which the
-          // public flow relies on to have somewhere to send the magic link.
           email: input.email?.trim() ?? "",
           startAt,
-          // R40: derived from the summed service durations, not accepted from
-          // the client.
+          // R40: derived from the summed service durations
+
           endAt,
-          // R40: snapshot — a later price change must not rewrite history.
+          // R40: snapshot — a later price change must not rewrite history
           price: totalPrice(lines),
           notes: input.notes?.trim() || null,
           createdByUserId: input.createdByUserId,
-          // R70: staff-created bookings carry no customer link, so there is
-          // nothing to expire either.
-          accessTokenHash: null,
-          accessTokenExpiresAt: null,
+          // R70: staff-created bookings carry no customer link
+
+          accessTokenHash: magicLink?.accessTokenHash ?? null,
+          accessTokenExpiresAt: magicLink?.accessTokenExpiresAt ?? null,
           services: { create: lines.map((line) => this.lineData(tenantId, line)) },
         },
         include: APPOINTMENT_SUMMARY_INCLUDE,
       });
+
+      return { appointment, magicLinkToken: magicLink?.token ?? null };
     });
   }
 
-  /**
-   * R80: move an appointment in time and/or to another professional, and change
-   * which services it covers.
-   *
-   * Changing the service list changes the appointment's length and its total,
-   * so all three edits go through one path — each of them shifts `end_at`, and
-   * every one of them therefore has to re-check the window and rotate the
-   * customer's magic link.
-   */
-  async update(input: UpdateBookingInput): Promise<PrismaAppointmentSummary> {
+  // R80: move an appointment in time and/or to another professional
+  async update(input: UpdateBookingInput): Promise<BookingResult> {
     const { tenantId } = this.tenantContext.current;
     if ((input.date === undefined) !== (input.time === undefined)) {
       throw new BadRequestException("date and time must be sent together");
     }
-    if (input.date === undefined && input.professionalId === undefined && input.serviceIds === undefined) {
-      throw new BadRequestException("an update must change the time, the professional, the services, or some of them");
+    if (
+      input.date === undefined &&
+      input.professionalId === undefined &&
+      input.serviceIds === undefined &&
+      input.locationId === undefined
+    ) {
+      throw new BadRequestException(
+        "an update must change the time, the professional, the location, the services, or some of them",
+      );
     }
 
     return this.prisma.forTenant(async (tx) => {
@@ -161,29 +160,26 @@ export class BookingService {
 
       const existing = await this.loadOwnAppointment(tx, tenantId, input.appointmentId, input.professionalScope);
       if (existing.status === "cancelled") {
-        // R90 keeps cancelled rows as history; reviving one is a status change
-        // the staff member makes deliberately first, not a side effect of a move.
         throw new BadRequestException("a cancelled appointment can't be updated");
       }
 
       const professionalId = input.professionalId ?? existing.professionalId;
-      // R120 governs *new* bookings only: an appointment that already exists must
-      // stay movable even if its service or its professional was deactivated
-      // since — otherwise deactivating a departing stylist would strand every
-      // appointment already on their calendar. Passing the current lines as
-      // `existing` is what grants that, and it is also what keeps their original
-      // prices (R40) when another service is added alongside them. A service
-      // being *added* now is a new booking and must be active.
+
       const lines = await resolveServiceLines(
         tx,
         tenantId,
         input.serviceIds ?? existing.services.map((line) => line.serviceId),
         existing.services,
       );
-      // R140 applies to the new pairing just as it does at creation. Moving to
-      // another professional still requires that professional to be active.
-      await this.assertPairing(tx, tenantId, lines, professionalId, {
+
+      const professional = await this.assertPairing(tx, tenantId, lines, professionalId, {
         allowInactiveProfessional: professionalId === existing.professionalId,
+      });
+
+      const locationId = await this.resolveLocation(tx, tenantId, input.locationId ?? existing.locationId, professional, {
+        currentLocationId: existing.locationId,
+        existing: true,
+        professionalUnchanged: professionalId === existing.professionalId,
       });
 
       const startAt =
@@ -201,34 +197,60 @@ export class BookingService {
       });
 
       if (input.serviceIds !== undefined) {
-        // Replaced wholesale rather than diffed: `@@unique(appointmentId, position)`
-        // is a plain index, so reordering in place collides with itself
-        // mid-statement. The snapshots that must survive were already carried
-        // over by resolveServiceLines above.
         await tx.appointmentService.deleteMany({ where: { tenantId, appointmentId: existing.id } });
         await tx.appointmentService.createMany({
           data: lines.map((line) => ({ appointmentId: existing.id, ...this.lineData(tenantId, line) })),
         });
       }
 
-      return tx.appointment.update({
+      // R110: rotated whenever the appointment moves
+
+      const rotated = this.rotatedToken(existing.accessTokenHash, endAt);
+
+      const appointment = await tx.appointment.update({
         where: { id: existing.id, tenantId },
         data: {
           professionalId,
+          locationId,
           startAt,
           endAt,
-          // Re-summed from the lines, which is a no-op unless the service list
-          // changed: an unchanged service keeps the price it was booked at, so
-          // moving an appointment still never re-quotes it (R40).
           price: totalPrice(lines),
-          ...this.rotatedToken(existing.accessTokenHash, endAt),
+          ...(rotated
+            ? { accessTokenHash: rotated.accessTokenHash, accessTokenExpiresAt: rotated.accessTokenExpiresAt }
+            : {}),
         },
         include: APPOINTMENT_SUMMARY_INCLUDE,
       });
+
+      return { appointment, magicLinkToken: rotated?.token ?? null };
     });
   }
 
-  /** The columns a line is written with; `position` comes from request order. */
+  // R70: a staff-created booking never had a link to reissue
+  async reissueToken(appointmentId: string): Promise<Pick<BookingResult, "magicLinkToken">> {
+    const { tenantId } = this.tenantContext.current;
+
+    return this.prisma.forTenant(async (tx) => {
+      const existing = await tx.appointment.findFirst({
+        where: { id: appointmentId, tenantId },
+        select: { accessTokenHash: true, endAt: true },
+      });
+      if (!existing?.accessTokenHash) {
+        return { magicLinkToken: null };
+      }
+
+      const issued = this.issueToken(existing.endAt);
+      await tx.appointment.update({
+        where: { id: appointmentId, tenantId },
+        data: {
+          accessTokenHash: issued.accessTokenHash,
+          accessTokenExpiresAt: issued.accessTokenExpiresAt,
+        },
+      });
+      return { magicLinkToken: issued.token };
+    });
+  }
+
   private lineData(tenantId: string, line: ResolvedServiceLine) {
     return {
       tenantId,
@@ -239,37 +261,27 @@ export class BookingService {
     };
   }
 
-  /**
-   * R110: a customer-created booking's magic link is invalidated whenever the
-   * appointment moves, whichever path moved it — so the CMS can't hand a
-   * customer a link that points at a stale time.
-   *
-   * The replacement token is generated and stored hashed, and its plaintext is
-   * dropped on the floor: nothing in this codebase delivers email yet (customer
-   * notifications are out of scope platform-wide), so there is no recipient to
-   * hand it to. The customer recovers the new link through the existing
-   * resend-by-phone-number flow. Returning no fields at all leaves a
-   * staff-created booking exactly as it was — tokenless.
-   */
-  private rotatedToken(
-    currentHash: string | null,
-    endAt: Date,
-  ): Pick<Prisma.AppointmentUncheckedUpdateInput, "accessTokenHash" | "accessTokenExpiresAt"> {
+  // R110: a customer-created booking's magic link is invalidated whenever
+  private rotatedToken(currentHash: string | null, endAt: Date): ReturnType<BookingService["issueToken"]> | null {
     if (currentHash === null) {
-      return {};
+      return null;
     }
+    return this.issueToken(endAt);
+  }
+
+  private issueToken(endAt: Date): {
+    token: string;
+    accessTokenHash: string;
+    accessTokenExpiresAt: Date;
+  } {
     const token = randomBytes(32).toString("hex");
     return {
-      accessTokenHash: createHash("sha256").update(token).digest("hex"),
+      token,
+      accessTokenHash: hashToken(token),
       accessTokenExpiresAt: new Date(endAt.getTime() + MAGIC_LINK_GRACE_MS),
     };
   }
 
-  /**
-   * The appointment, restricted to the caller's own when `professionalScope` is
-   * set. "Not yours" and "doesn't exist" answer identically on purpose — a
-   * professional shouldn't be able to probe for a colleague's appointment ids.
-   */
   async loadOwnAppointment(
     tx: Prisma.TransactionClient,
     tenantId: string,
@@ -278,8 +290,6 @@ export class BookingService {
   ) {
     const appointment = await tx.appointment.findFirst({
       where: { id: appointmentId, tenantId, ...(professionalScope ? { professionalId: professionalScope } : {}) },
-      // The lines come along because an update needs their snapshots to decide
-      // what the appointment still costs and how long it still runs.
       include: { services: { orderBy: { position: "asc" } } },
     });
     if (!appointment) {
@@ -288,7 +298,7 @@ export class BookingService {
     return appointment;
   }
 
-  /** R130: wall-clock date + time resolved against the tenant's own timezone. */
+  // R130: wall-clock date + time resolved against the tenant's own timezone
   private resolveStartAt(date: string, time: string, timezone: string): Date {
     let startAt: Date;
     try {
@@ -302,26 +312,16 @@ export class BookingService {
     return startAt;
   }
 
-  /**
-   * R120: a deactivated professional can't take a new booking. R140: they must
-   * be paired via ServiceProfessional with *every* service on the appointment,
-   * matching `AvailabilityService.resolveCandidates` — a slot is only offered
-   * for someone who can do the whole block, so a booking must hold to the same
-   * rule or the CMS could submit a pairing the picker never showed.
-   *
-   * `allowInactiveProfessional` exists for the update path, where the booking
-   * already exists: a deactivation since then is a reason not to take *new*
-   * bookings, not a reason to freeze the ones on the books.
-   */
+  // R120: a deactivated professional can't take a new booking
   private async assertPairing(
     tx: Prisma.TransactionClient,
     tenantId: string,
     lines: readonly ResolvedServiceLine[],
     professionalId: string | null,
     options: { allowInactiveProfessional?: boolean } = {},
-  ): Promise<void> {
+  ): Promise<{ name: string; locationId: string | null } | null> {
     if (professionalId === null) {
-      return;
+      return null;
     }
     const professional = await tx.professional.findFirst({ where: { id: professionalId, tenantId } });
     if (!professional) {
@@ -336,21 +336,79 @@ export class BookingService {
       select: { serviceId: true },
     });
     const performed = new Set(assignments.map((assignment) => assignment.serviceId));
-    // Named rather than counted: "Levan doesn't perform Colour" is something a
-    // staff member can act on, "one of these isn't allowed" isn't.
+
     const missing = lines.find((line) => !performed.has(line.serviceId));
     if (missing) {
       throw new BadRequestException(`${professional.name} doesn't perform "${missing.name}"`);
     }
+
+    return { name: professional.name, locationId: professional.locationId };
   }
 
-  /**
-   * R60: a conflict is a warning, not a wall — but the caller has to have seen
-   * it. Unconfirmed, the 409 body names every collision so the CMS can render
-   * "Levan already has an appointment at 14:00" and offer to proceed; confirmed
-   * (`override`), the overlapping row is created for real. Anything reading
-   * appointments must therefore tolerate overlaps.
-   */
+  // R150: resolves which branch an appointment is booked at
+  private async resolveLocation(
+    tx: Prisma.TransactionClient,
+    tenantId: string,
+    requested: string | null | undefined,
+    professional: { name: string; locationId: string | null } | null,
+    options: { currentLocationId?: string | null; existing?: boolean; professionalUnchanged?: boolean } = {},
+  ): Promise<string | null> {
+    const locations = await tx.location.findMany({
+      where: { tenantId },
+      select: { id: true, name: true, isActive: true },
+    });
+    const bookable = locations.filter((location) => location.isActive);
+
+    if (bookable.length === 0) {
+      if (requested) {
+        throw new BadRequestException("this business has no locations to book at");
+      }
+      return null;
+    }
+
+    if (!requested) {
+      // An appointment booked before the tenant had any location carries null,
+      // and must stay reschedulable: requiring one here would strand every row
+      // that predates the first location the moment it is created. Moving such
+      // an appointment to a branch is still possible — it just has to be asked
+      // for, rather than demanded on an unrelated time change.
+      if (options.existing && options.currentLocationId == null) {
+        return null;
+      }
+      throw new BadRequestException("locationId is required — this business books by location");
+    }
+
+    const location = locations.find((candidate) => candidate.id === requested);
+    if (!location) {
+      throw new NotFoundException("Location not found");
+    }
+
+    if (!location.isActive && options.currentLocationId !== location.id) {
+      throw new BadRequestException(`${location.name} is closed and can't take new bookings`);
+    }
+
+    // Skipped only when neither side of the pairing is being changed: the
+    // appointment is already there, and reassigning a stylist to another branch
+    // must not freeze the bookings still on their calendar. Moving an
+    // appointment *to* a professional who works elsewhere is still refused.
+    // Same allowance `allowInactiveProfessional` makes for deactivation.
+    const pairingUnchanged =
+      options.existing === true &&
+      options.professionalUnchanged === true &&
+      options.currentLocationId === location.id;
+    if (
+      !pairingUnchanged &&
+      professional &&
+      professional.locationId !== null &&
+      professional.locationId !== location.id
+    ) {
+      throw new BadRequestException(`${professional.name} doesn't work at ${location.name}`);
+    }
+
+    return location.id;
+  }
+
+  // R60: a conflict is a warning
   private async assertBookable(
     tx: Prisma.TransactionClient,
     input: { professionalId: string | null; startAt: Date; endAt: Date; override: boolean; excludeAppointmentId?: string },

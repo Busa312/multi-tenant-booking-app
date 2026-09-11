@@ -21,23 +21,13 @@ interface EditBookingModalProps {
   services: ServiceSummary[];
   professionals: ProfessionalSummary[];
   timezone: string;
-  /** Non-null for a `professional` login: they can't hand the slot to a colleague (R20). */
+
   lockedProfessionalId: string | null;
   onClose: () => void;
   onSaved: (date: string) => void;
 }
 
-/**
- * R80: change an existing booking's time, professional and/or services — with
- * the same open-slot guidance and the same override-with-warning behaviour as
- * creating one.
- *
- * Adding or removing a service changes what the appointment costs and how long
- * it runs, which is why this isn't only a reschedule any more. Services already
- * on it keep the price they were booked at; only newly added ones are quoted at
- * today's (R40), and the API is what enforces that — the totals shown here are
- * just what the staff member is about to commit to.
- */
+// R80: change an existing booking's time
 export function EditBookingModal({
   appointment,
   services,
@@ -58,20 +48,23 @@ export function EditBookingModal({
   const [saving, setSaving] = useState(false);
 
   const chosenServiceIds = serviceIds.filter(Boolean);
-  // R140: only professionals who perform *every* service on the booking can
-  // take it. The one it's already with stays listed even if deactivated —
-  // otherwise the form would silently offer to hand a departing stylist's
-  // booking to someone else as the only way to move its time.
+  // R140: only professionals who perform *every* service on the booking
+
   const selectableProfessionals = professionals.filter(
     (p) =>
       (p.isActive || p.id === appointment.professionalId) &&
-      chosenServiceIds.every((id) => p.serviceIds.includes(id)),
+      chosenServiceIds.every((id) => p.serviceIds.includes(id)) &&
+      // R180: the appointment stays at its branch when it is re-timed
+
+      (appointment.locationId === null ||
+        p.id === appointment.professionalId ||
+        p.locationId === null ||
+        p.locationId === appointment.locationId),
   );
   const lockedProfessional = professionals.find((p) => p.id === lockedProfessionalId);
   const noProfessionalForAll =
     chosenServiceIds.length > 0 && !lockedProfessionalId && selectableProfessionals.length === 0;
-  // Only send serviceIds when they actually changed, so an ordinary reschedule
-  // doesn't rewrite the appointment's lines for nothing.
+
   const servicesChanged =
     chosenServiceIds.length !== bookedServiceIds.length ||
     chosenServiceIds.some((id, index) => id !== bookedServiceIds[index]);
@@ -148,8 +141,6 @@ export function EditBookingModal({
           services={services}
           value={serviceIds}
           professionalId={professionalId}
-          // A service already booked stays offered even if deactivated since,
-          // matching what the API will accept for an existing appointment.
           keepSelectable={bookedServiceIds}
           onChange={handleServicesChange}
         />
@@ -186,14 +177,13 @@ export function EditBookingModal({
           date={date}
           timezone={timezone}
           value={time}
-          // R80: without this the appointment blocks its own slots, and the
-          // times it already covers would be missing from the list.
+          // R80: without this the appointment blocks its own slots
+
           appointmentId={appointment.id}
           onChange={reset(setTime)}
         />
 
-        {/* R110: this is the one visible consequence of changing a booking the
-            customer made themselves — their existing link stops working. */}
+        {/* R110: this is the one visible consequence of changing a booking */}
         {appointment.hasMagicLink && <Alert variant="warning">{t("bookings.magicLinkWarning")}</Alert>}
 
         {conflicts && <BookingConflictNotice conflicts={conflicts} timezone={timezone} />}

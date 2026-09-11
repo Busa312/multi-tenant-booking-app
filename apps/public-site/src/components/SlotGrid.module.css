@@ -1,0 +1,29 @@
+.grid {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--space-2);
+  grid-template-columns: repeat(auto-fill, minmax(5.25rem, 1fr));
+}
+
+.slot {
+  width: 100%;
+  padding: var(--space-3) var(--space-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-raised);
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+
+.slot:hover {
+  border-color: var(--border-strong);
+}
+
+.slot[aria-checked="true"] {
+  border-color: var(--color-primary);
+  background: var(--color-primary);
+  color: var(--color-background);
+  font-weight: 600;
+}

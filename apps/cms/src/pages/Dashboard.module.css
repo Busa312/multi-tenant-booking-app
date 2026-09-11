@@ -32,3 +32,8 @@
     grid-column: 1;
   }
 }
+
+/* Spans both columns: the tabs filter every card below, not one of them. */
+.locationTabs {
+  grid-column: 1 / -1;
+}

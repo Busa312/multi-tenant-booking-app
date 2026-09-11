@@ -1,0 +1,129 @@
+{
+  "common": {
+    "back": "Back",
+    "next": "Continue",
+    "loading": "Loading…",
+    "retry": "Try again",
+    "somethingWrong": "Something went wrong. Please try again.",
+    "required": "Required"
+  },
+  "nav": {
+    "language": "Language",
+    "book": "Book an appointment"
+  },
+  "home": {
+    "servicesTitle": "Services",
+    "servicesEmpty": "This business hasn't published any services yet.",
+    "locationsTitle": "Where to find us",
+    "minutes": "{count} min",
+    "book": "Book an appointment",
+    "selectAndBook": "Book {count} selected",
+    "defaultTitle": "Book an appointment at {name}",
+    "defaultDescription": "See what's available and book online at {name}.",
+    "bookAt": "Book at {name}"
+  },
+  "booking": {
+    "title": "Book an appointment",
+    "stepOf": "Step {current} of {total}",
+    "steps": {
+      "services": "Services",
+      "location": "Location",
+      "professional": "Who with",
+      "time": "Date & time",
+      "details": "Your details",
+      "verify": "Confirm"
+    },
+    "services": {
+      "heading": "What would you like booked?",
+      "hint": "Pick one or more. They'll run back to back in one appointment.",
+      "empty": "Nothing is bookable online right now.",
+      "totalDuration": "{count} min total",
+      "totalPrice": "{price} ₾ total"
+    },
+    "location": {
+      "heading": "Which location?",
+      "hint": "Pick where you'd like to be seen."
+    },
+    "professional": {
+      "heading": "Who would you like to see?",
+      "any": "Any available",
+      "anyHint": "We'll assign whoever is free.",
+      "empty": "Nobody at this location performs everything you've chosen. Try another location or fewer services."
+    },
+    "time": {
+      "heading": "Pick a time",
+      "noSlots": "Nothing open on this day. Try another date.",
+      "loading": "Checking what's open…",
+      "previousDay": "Previous day",
+      "nextDay": "Next day",
+      "today": "Today"
+    },
+    "details": {
+      "heading": "Your details",
+      "name": "Name",
+      "phone": "Phone number",
+      "email": "Email",
+      "emailHint": "Add one and we'll email you a link to change or cancel this booking. Without it, the link on the next screen is your only copy.",
+      "submit": "Continue",
+      "submitting": "Booking…",
+      "slotTaken": "That time was taken while you were filling this in. Please pick another.",
+      "emailOptional": "Email (optional)"
+    },
+    "summary": {
+      "heading": "Your booking",
+      "services": "Services",
+      "location": "Location",
+      "professional": "With",
+      "when": "When",
+      "total": "Total"
+    },
+    "confirmed": {
+      "heading": "You're booked",
+      "body": "We've emailed {email} a link you can use to change or cancel this appointment.",
+      "manageNow": "Manage this booking",
+      "noEmailYet": "Keep this link — it's how you get back to this booking.",
+      "bodyNoEmail": "Keep the link below — without an email address, it's the only way back to this booking."
+    },
+    "unavailableHeading": "Online booking is unavailable",
+    "unavailableBody": "This business's booking settings need attention, so appointments can't be taken online right now. Please contact them directly.",
+    "verify": {
+      "heading": "Confirm your number",
+      "hint": "We've sent a 6-digit code to {phoneNumber}.",
+      "devCode": "SMS isn't connected yet, so here's your code:",
+      "codeLabel": "Verification code",
+      "submit": "Verify & book",
+      "verifying": "Verifying…",
+      "resend": "Send again",
+      "sending": "Sending…",
+      "wrongCode": "That code isn't right, or it has expired. Try again or send a new one.",
+      "sendFailed": "We couldn't send a code just now. Please try again."
+    }
+  },
+  "manage": {
+    "heading": "Your appointment",
+    "invalid": "This link is no longer valid. It may have expired, or the appointment may have been cancelled.",
+    "status": {
+      "booked": "Booked",
+      "cancelled": "Cancelled",
+      "completed": "Completed",
+      "no_show": "Missed"
+    },
+    "reschedule": "Change the time",
+    "rescheduleHeading": "Pick a new time",
+    "rescheduleNote": "Changing the time replaces this link with a new one, which we'll email you.",
+    "cancel": "Cancel this appointment",
+    "cancelHeading": "Cancel this appointment?",
+    "cancelConfirm": "Yes, cancel it",
+    "cancelKeep": "Keep it",
+    "cancelled": "This appointment has been cancelled.",
+    "lostLink": "Lost your link?",
+    "resend": {
+      "heading": "Resend your booking link",
+      "hint": "Enter the phone number you booked with and we'll email the link again.",
+      "phone": "Phone number",
+      "submit": "Send the link",
+      "submitting": "Sending…",
+      "done": "If that number has an upcoming booking with us, we've just emailed the link."
+    }
+  }
+}

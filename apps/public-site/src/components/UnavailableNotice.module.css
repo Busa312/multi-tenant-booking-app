@@ -1,0 +1,19 @@
+.notice {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-5);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.heading {
+  font-size: clamp(1.25rem, 4vw, 1.5rem);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.body {
+  color: var(--muted);
+}

@@ -1,5 +1,16 @@
 import { randomBytes, createHash } from "crypto";
-import { Body, ConflictException, Controller, Delete, Get, Param, Patch, Post, UseGuards } from "@nestjs/common";
+import {
+  Body,
+  ConflictException,
+  Controller,
+  Delete,
+  Get,
+  NotFoundException,
+  Param,
+  Patch,
+  Post,
+  UseGuards,
+} from "@nestjs/common";
 import { ApiBearerAuth, ApiBody, ApiOkResponse, ApiParam, ApiTags } from "@nestjs/swagger";
 import * as bcrypt from "bcryptjs";
 import type {
@@ -18,6 +29,7 @@ import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard.js";
 import { RolesGuard } from "../auth/guards/roles.guard.js";
 import { Roles } from "../auth/decorators/roles.decorator.js";
 import { serializeProfessional } from "../common/serializers.js";
+import { enabledLocalesOf, validateLocalizedText } from "../common/i18n-validation.js";
 import {
   CreateProfessionalRequestDto,
   InviteProfessionalRequestDto,
@@ -75,24 +87,29 @@ export class ProfessionalsController {
   @ApiOkResponse({ type: ProfessionalSummaryDto })
   async create(@Body() body: CreateProfessionalRequest): Promise<ProfessionalSummary> {
     const { tenantId } = this.tenantContext.current;
-    const professional = await this.prisma.forTenant((tx) =>
-      tx.professional.create({
+    const professional = await this.prisma.forTenant(async (tx) => {
+      await this.assertLocation(tx, tenantId, body.locationId);
+      const locales = await this.enabledLocales(tx, tenantId);
+      return tx.professional.create({
         data: {
           tenantId,
           name: body.name,
+          nameI18n: validateLocalizedText(body.nameI18n, "nameI18n", locales),
+          // R180: null (the default) means they work at every location
+
+          locationId: body.locationId ?? null,
           serviceProfessionals: {
             create: (body.serviceIds ?? []).map((serviceId) => ({ tenantId, serviceId })),
           },
         },
         include: PROFESSIONAL_SUMMARY_INCLUDE,
-      }),
-    );
+      });
+    });
     return toSummary(professional);
   }
 
   // R40: serviceIds (when provided) fully replaces this professional's
-  // ServiceProfessional rows — a diff-free delete-then-recreate within the
-  // same transaction as the professional update, no separate approval step.
+
   @Patch(":id")
   @Roles("owner")
   @ApiParam({ name: "id" })
@@ -100,9 +117,16 @@ export class ProfessionalsController {
   @ApiOkResponse({ type: ProfessionalSummaryDto })
   async update(@Param("id") id: string, @Body() body: UpdateProfessionalRequest): Promise<ProfessionalSummary> {
     const { tenantId } = this.tenantContext.current;
-    const { serviceIds, ...rest } = body;
+    const { serviceIds, locationId, nameI18n, ...rest } = body;
 
     const professional = await this.prisma.forTenant(async (tx) => {
+      const translations =
+        nameI18n === undefined
+          ? {}
+          : { nameI18n: validateLocalizedText(nameI18n, "nameI18n", await this.enabledLocales(tx, tenantId)) };
+      if (locationId !== undefined) {
+        await this.assertLocation(tx, tenantId, locationId);
+      }
       if (serviceIds !== undefined) {
         await tx.serviceProfessional.deleteMany({ where: { tenantId, professionalId: id } });
         if (serviceIds.length > 0) {
@@ -113,7 +137,9 @@ export class ProfessionalsController {
       }
       return tx.professional.update({
         where: { id, tenantId },
-        data: rest,
+        // R180: back to working
+
+        data: { ...rest, ...translations, ...(locationId !== undefined ? { locationId } : {}) },
         include: PROFESSIONAL_SUMMARY_INCLUDE,
       });
     });
@@ -121,10 +147,29 @@ export class ProfessionalsController {
     return toSummary(professional);
   }
 
+  // R150: checked here rather than left to the foreign key
+  // R160: the tenant's content locales, first entry being the default one.
+  private async enabledLocales(tx: Prisma.TransactionClient, tenantId: string): Promise<string[]> {
+    const tenant = await tx.tenant.findUniqueOrThrow({ where: { id: tenantId }, select: { configJson: true } });
+    return enabledLocalesOf(tenant.configJson);
+  }
+
+  private async assertLocation(
+    tx: Prisma.TransactionClient,
+    tenantId: string,
+    locationId: string | null | undefined,
+  ): Promise<void> {
+    if (!locationId) {
+      return;
+    }
+    const location = await tx.location.findFirst({ where: { id: locationId, tenantId }, select: { id: true } });
+    if (!location) {
+      throw new NotFoundException("Location not found");
+    }
+  }
+
   // R80: hard delete only when this professional has never had any
-  // appointment (past or future) — anyone with history can only be
-  // deactivated via PATCH { isActive: false }, so booking history stays
-  // intact and queryable.
+
   @Delete(":id")
   @Roles("owner")
   @ApiParam({ name: "id" })
@@ -142,8 +187,7 @@ export class ProfessionalsController {
   }
 
   // R70: lets the CMS show "N upcoming appointments" in the deactivation
-  // confirmation *before* the owner confirms — server-computed so it isn't
-  // client-side date/timezone math against a bulk appointment fetch.
+
   @Get(":id/upcoming-count")
   @Roles("owner")
   @ApiParam({ name: "id" })
@@ -158,13 +202,8 @@ export class ProfessionalsController {
     return { count };
   }
 
-  // R50: creates the TenantUser (role "professional") with a hashed,
-  // expiring invite token and an unusable random placeholder password —
-  // login stays impossible via the normal email+password path until
-  // /cms/auth/set-password consumes the token. Email delivery isn't wired up
-  // (no provider integrated anywhere in this codebase yet); the raw token is
-  // returned here so the owner can copy the set-password link and send it
-  // manually, same as the customer magic-link flow is stubbed elsewhere.
+  // R50: creates the TenantUser (role "professional") with a hashed
+
   @Post(":id/invite")
   @Roles("owner")
   @ApiParam({ name: "id" })

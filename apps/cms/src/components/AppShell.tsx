@@ -21,25 +21,25 @@ interface AppShellProps {
   children: ReactNode;
 }
 
-// Nav only lists routes that actually exist — no placeholder links to
-// not-yet-built pages.
 export function AppShell({ title, subtitle, tenantSubdomain, children }: AppShellProps) {
   const { role, logout } = useAuth();
   const { t } = useI18n();
   const location = useLocation();
-  // Off-canvas drawer state — only meaningful below the shell breakpoint; on
-  // wide screens the sidebar is always visible and this flag is inert.
+
   const [navOpen, setNavOpen] = useState(false);
 
   const navItems: NavItem[] = [
     { to: "/", icon: "space_dashboard", labelKey: "nav.dashboard" },
-    // Bookings is the one management page both roles get (R10/R20).
     { to: "/bookings", icon: "event_available", labelKey: "nav.bookings" },
     ...(role === "owner"
       ? [
           { to: "/services", icon: "design_services", labelKey: "nav.services" },
           { to: "/professionals", icon: "diversity_3", labelKey: "nav.professionals" },
+          // R150: sits next to the roster
+
+          { to: "/locations", icon: "storefront", labelKey: "nav.locations" },
           { to: "/settings/colors", icon: "palette", labelKey: "nav.colors" },
+          { to: "/settings/public-site", icon: "edit_note", labelKey: "nav.publicSite" },
         ]
       : []),
   ];

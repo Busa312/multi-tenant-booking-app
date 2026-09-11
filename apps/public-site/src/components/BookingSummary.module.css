@@ -1,0 +1,44 @@
+.summary {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin: 0;
+  padding: var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.row {
+  display: flex;
+  gap: var(--space-4);
+  align-items: baseline;
+}
+
+.term {
+  flex: none;
+  width: 6.5rem;
+  font-size: 0.8125rem;
+  color: var(--muted);
+}
+
+.value,
+.total {
+  margin: 0;
+  min-width: 0;
+}
+
+.total {
+  font-weight: 700;
+}
+
+@media (max-width: 26rem) {
+  .row {
+    flex-direction: column;
+    gap: var(--space-1);
+  }
+
+  .term {
+    width: auto;
+  }
+}

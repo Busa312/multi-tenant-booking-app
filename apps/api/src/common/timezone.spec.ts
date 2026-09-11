@@ -1,6 +1,7 @@
 import {
   addDaysToDateString,
   dayOfWeekForDateString,
+  isValidTimezone,
   parseDateOnly,
   parseTimeOfDay,
   zonedDateString,
@@ -8,9 +9,6 @@ import {
   zonedTimeToUtc,
 } from "./timezone.js";
 
-// Asia/Tbilisi is the tenant timezone this platform was built for: UTC+4 with
-// no DST, so it isolates the plain conversion. America/New_York carries the DST
-// cases; Kathmandu covers a non-whole-hour offset (UTC+5:45).
 const TBILISI = "Asia/Tbilisi";
 const NEW_YORK = "America/New_York";
 const KATHMANDU = "Asia/Kathmandu";
@@ -67,37 +65,28 @@ describe("zonedTimeToUtc", () => {
   });
 
   it("handles a zone whose offset is not a whole number of hours", () => {
-    // Kathmandu is UTC+05:45, so 09:00 local is 03:15Z.
     expect(zonedTimeToUtc("2026-08-05", 9 * 60, KATHMANDU).toISOString()).toBe("2026-08-05T03:15:00.000Z");
   });
 
   it("uses the offset in effect before a spring-forward transition", () => {
-    // 2026-03-08 01:30 EST (transition is at 02:00 local).
     expect(zonedTimeToUtc("2026-03-08", 90, NEW_YORK).toISOString()).toBe("2026-03-08T06:30:00.000Z");
   });
 
   it("uses the offset in effect after a spring-forward transition", () => {
-    // 03:30 EDT the same morning — the single-pass conversion this function
-    // deliberately avoids would land an hour off here.
     expect(zonedTimeToUtc("2026-03-08", 210, NEW_YORK).toISOString()).toBe("2026-03-08T07:30:00.000Z");
   });
 
   it("resolves a clock reading that DST skips onto a real instant", () => {
-    // 02:30 on a spring-forward day never happens locally. The two-pass
-    // resolution settles on 06:30Z, which reads back as 01:30 EST.
     const resolved = zonedTimeToUtc("2026-03-08", 150, NEW_YORK);
     expect(resolved.toISOString()).toBe("2026-03-08T06:30:00.000Z");
     expect(zonedParts(resolved, NEW_YORK)).toMatchObject({ day: 8, hour: 1, minute: 30 });
   });
 
   it("picks the first occurrence of a clock reading DST repeats", () => {
-    // 2026-11-01 01:30 happens twice (EDT then EST); the earlier one wins.
     expect(zonedTimeToUtc("2026-11-01", 90, NEW_YORK).toISOString()).toBe("2026-11-01T05:30:00.000Z");
   });
 
   it("round-trips every whole hour of a spring-forward day back to the same date", () => {
-    // Availability generates slots across a whole day; none of them may leak
-    // into the neighbouring calendar date, transition or not.
     for (let hour = 0; hour < 24; hour += 1) {
       const instant = zonedTimeToUtc("2026-03-08", hour * 60, NEW_YORK);
       expect(zonedDateString(instant, NEW_YORK)).toBe("2026-03-08");
@@ -111,7 +100,6 @@ describe("zonedTimeToUtc", () => {
 
 describe("zonedDateString", () => {
   it("returns the tenant-local calendar date, not the UTC one", () => {
-    // 20:00Z is already the next day in Tbilisi.
     expect(zonedDateString(new Date("2026-08-05T20:00:00Z"), TBILISI)).toBe("2026-08-06");
     expect(zonedDateString(new Date("2026-08-05T20:00:00Z"), NEW_YORK)).toBe("2026-08-05");
   });
@@ -141,8 +129,29 @@ describe("addDaysToDateString", () => {
 
 describe("dayOfWeekForDateString", () => {
   it("uses BusinessHours' numbering, 0 = Sunday", () => {
-    expect(dayOfWeekForDateString("2026-08-02")).toBe(0); // Sunday
-    expect(dayOfWeekForDateString("2026-08-05")).toBe(3); // Wednesday
-    expect(dayOfWeekForDateString("2026-08-08")).toBe(6); // Saturday
+    expect(dayOfWeekForDateString("2026-08-02")).toBe(0);
+    expect(dayOfWeekForDateString("2026-08-05")).toBe(3);
+    expect(dayOfWeekForDateString("2026-08-08")).toBe(6);
+  });
+});
+
+describe("isValidTimezone", () => {
+  it("accepts IANA zones, including legacy aliases", () => {
+    expect(isValidTimezone("Asia/Tbilisi")).toBe(true);
+    expect(isValidTimezone("UTC")).toBe(true);
+
+    expect(isValidTimezone("Asia/Calcutta")).toBe(true);
+  });
+
+  it("rejects a reversed zone — the typo that motivated this guard", () => {
+    expect(isValidTimezone("tbilisi/asia")).toBe(false);
+  });
+
+  it("rejects blanks and non-strings without throwing", () => {
+    expect(isValidTimezone("")).toBe(false);
+    expect(isValidTimezone("   ")).toBe(false);
+    expect(isValidTimezone(undefined)).toBe(false);
+    expect(isValidTimezone(null)).toBe(false);
+    expect(isValidTimezone(42)).toBe(false);
   });
 });

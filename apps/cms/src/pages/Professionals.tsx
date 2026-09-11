@@ -1,11 +1,18 @@
 import { useEffect, useState, type FormEvent } from "react";
-import type { InviteProfessionalResponse, ProfessionalSummary, Service } from "@booking/shared-types";
+import type {
+  InviteProfessionalResponse,
+  LocalizedText,
+  LocationSummary,
+  ProfessionalSummary,
+  Service,
+} from "@booking/shared-types";
 import { ApiError } from "@booking/api-client";
 import { cachedApi } from "../lib/cache.js";
 import { useI18n } from "../i18n/I18nContext.js";
 import { AppShell } from "../components/AppShell.js";
 import { Modal } from "../components/Modal.js";
 import { CardSkeleton } from "../components/CardSkeleton.js";
+import { LocalizedField } from "../components/LocalizedField.js";
 import {
   ActionMenu,
   type ActionMenuItem,
@@ -21,13 +28,13 @@ import {
   TableHead,
   TableRow,
   TableEmpty,
+  Select,
   TextInput,
 } from "../components/ui/index.js";
 import styles from "./Professionals.module.css";
 
 const COLUMNS = "1.3fr 1.6fr 130px 110px 60px";
 
-/** A TableRow with an ActionMenu in it. Sized for the loading placeholder. */
 const TABLE_ROW = "46px";
 
 const LOGIN_STATUS_KEY: Record<ProfessionalSummary["cmsLoginStatus"], string> = {
@@ -45,6 +52,8 @@ export function ProfessionalsPage() {
   const { t } = useI18n();
   const [professionals, setProfessionals] = useState<ProfessionalSummary[] | null>(null);
   const [services, setServices] = useState<Service[] | null>(null);
+  const [locations, setLocations] = useState<LocationSummary[] | null>(null);
+  const [locales, setLocales] = useState<string[]>([]);
   const [listError, setListError] = useState<string | null>(null);
 
   const [editTarget, setEditTarget] = useState<ProfessionalSummary | "new" | null>(null);
@@ -55,15 +64,23 @@ export function ProfessionalsPage() {
   const [deactivateLoading, setDeactivateLoading] = useState(false);
 
   function load() {
-    Promise.all([cachedApi.listProfessionals(), cachedApi.listServices()])
-      .then(([p, s]) => {
+    Promise.all([
+      cachedApi.listProfessionals(),
+      cachedApi.listServices(),
+      cachedApi.listLocations(),
+      cachedApi.getTenant(),
+    ])
+      .then(([p, s, l, tenant]) => {
         setProfessionals(p);
         setServices(s);
+        setLocales(tenant.configJson.enabledLocales ?? []);
+        // R150: only open branches can be newly assigned
+
+        setLocations(l.filter((location) => location.isActive));
       })
       .catch(() => setListError(t("professionals.errLoad")));
   }
 
-  // Fetch once on mount; a language switch shouldn't trigger a refetch.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(load, []);
 
@@ -123,7 +140,6 @@ export function ProfessionalsPage() {
   function rowActions(p: ProfessionalSummary): ActionMenuItem[] {
     return [
       { label: t("professionals.edit"), icon: "edit", onSelect: () => setEditTarget(p) },
-      // Stays a real link (not a handler) so it can still be opened in a new tab.
       { label: t("professionals.hours"), icon: "schedule", to: `/hours?professionalId=${p.id}` },
       ...(p.cmsLoginStatus === "none"
         ? [{ label: t("professionals.invite"), icon: "mail", onSelect: () => setInviteTarget(p) }]
@@ -131,7 +147,7 @@ export function ProfessionalsPage() {
       p.isActive
         ? { label: t("professionals.deactivate"), icon: "visibility_off", onSelect: () => handleDeactivateClick(p) }
         : { label: t("professionals.reactivate"), icon: "visibility", onSelect: () => handleReactivate(p) },
-      // R80: delete is only offered for someone who was never booked.
+      // R80: delete is only offered for someone who was never booked
       ...(p.hasAppointmentHistory
         ? []
         : [{ label: t("professionals.delete"), icon: "delete", danger: true, onSelect: () => handleDelete(p) }]),
@@ -190,6 +206,8 @@ export function ProfessionalsPage() {
         <EditProfessionalModal
           target={editTarget}
           services={services ?? []}
+          locales={locales}
+          locations={locations ?? []}
           onClose={() => setEditTarget(null)}
           onSaved={() => {
             setEditTarget(null);
@@ -236,17 +254,26 @@ export function ProfessionalsPage() {
 function EditProfessionalModal({
   target,
   services,
+  locales,
+  locations,
   onClose,
   onSaved,
 }: {
   target: ProfessionalSummary | "new";
   services: Service[];
+  /** Tenant content locales, first entry = default. */
+  locales: string[];
+
+  locations: LocationSummary[];
   onClose: () => void;
   onSaved: () => void;
 }) {
   const { t } = useI18n();
   const isNew = target === "new";
   const [name, setName] = useState(isNew ? "" : target.name);
+  const [nameI18n, setNameI18n] = useState<LocalizedText>(isNew ? {} : (target.nameI18n ?? {}));
+  // R180: "" means every location
+  const [locationId, setLocationId] = useState(isNew ? "" : (target.locationId ?? ""));
   const [serviceIds, setServiceIds] = useState<string[]>(isNew ? [] : target.serviceIds);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -260,10 +287,11 @@ function EditProfessionalModal({
     setError(null);
     setSaving(true);
     try {
+      const payload = { name, nameI18n, locationId: locationId || null, serviceIds };
       if (isNew) {
-        await cachedApi.createProfessional({ name, serviceIds });
+        await cachedApi.createProfessional(payload);
       } else {
-        await cachedApi.updateProfessional(target.id, { name, serviceIds });
+        await cachedApi.updateProfessional(target.id, payload);
       }
       onSaved();
     } catch {
@@ -289,15 +317,33 @@ function EditProfessionalModal({
       }
     >
       <form id="professional-form" onSubmit={handleSubmit}>
-        <Field label={t("professionals.nameLabel")} htmlFor="prof-name">
-          <TextInput
-            id="prof-name"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder={t("professionals.namePlaceholder")}
-            required
-          />
-        </Field>
+        <LocalizedField
+          id="prof-name"
+          label={t("professionals.nameLabel")}
+          locales={locales}
+          value={name}
+          onChange={setName}
+          i18n={nameI18n}
+          onI18nChange={setNameI18n}
+          placeholder={t("professionals.namePlaceholder")}
+          required
+        />
+
+        {locations.length > 0 && (
+          <Field label={t("professionals.locationLabel")} htmlFor="prof-location">
+            <Select
+              id="prof-location"
+              value={locationId}
+              onChange={setLocationId}
+              options={[
+                // R180: the empty value is a real choice ("everywhere")
+
+                { value: "", label: t("professionals.locationAny") },
+                ...locations.map((location) => ({ value: location.id, label: location.name })),
+              ]}
+            />
+          </Field>
+        )}
 
         <Eyebrow>{t("professionals.servicesPerformed")}</Eyebrow>
         {services.length === 0 && <p className={styles.noServices}>{t("professionals.noServicesCreated")}</p>}

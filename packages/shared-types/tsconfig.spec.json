@@ -1,0 +1,13 @@
+{
+  // ts-jest compiles to CommonJS; the package's own tsconfig targets ESNext
+  // modules with Bundler resolution, which Jest's runtime can't load directly.
+  // Everything else (strict, noUncheckedIndexedAccess) is inherited unchanged,
+  // so the specs compile under exactly the rules the sources do.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "module": "CommonJS",
+    "moduleResolution": "Node",
+    "types": ["jest", "node"]
+  },
+  "include": ["src"]
+}

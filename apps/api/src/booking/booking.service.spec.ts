@@ -1,4 +1,4 @@
-import { ConflictException, NotFoundException } from "@nestjs/common";
+import { BadRequestException, ConflictException, NotFoundException } from "@nestjs/common";
 import { Prisma } from "../../generated/prisma/index.js";
 import { BookingService } from "./booking.service.js";
 import type { AvailabilityService } from "./availability.service.js";
@@ -6,16 +6,18 @@ import type { PrismaService } from "../prisma/prisma.service.js";
 import type { TenantContextService } from "../tenant/tenant-context.service.js";
 
 const TENANT_ID = "11111111-1111-1111-1111-111111111111";
-const TZ = "Asia/Tbilisi"; // UTC+4, no DST: local 10:00 is 06:00Z.
+const TZ = "Asia/Tbilisi";
 
 type ServiceRow = { id: string; name: string; durationMinutes: number; price: Prisma.Decimal; isActive: boolean };
-type ProfessionalRow = { id: string; name: string; isActive: boolean };
-/** A line already stored on the appointment, with its booked-at snapshots. */
+type ProfessionalRow = { id: string; name: string; isActive: boolean; locationId?: string | null };
+type LocationRow = { id: string; name: string; isActive: boolean };
+
 type LineRow = { serviceId: string; position: number; durationMinutes: number; price: Prisma.Decimal };
 type AppointmentRow = {
   id: string;
   tenantId: string;
   professionalId: string | null;
+  locationId: string | null;
   startAt: Date;
   endAt: Date;
   status: string;
@@ -23,14 +25,10 @@ type AppointmentRow = {
   services: LineRow[];
 };
 
-/**
- * The `data` payload a Prisma write received. Every field is declared present
- * so assertions can read them without narrowing; the tests that care about a
- * field being *absent* assert that at runtime with `not.toHaveProperty`.
- */
 interface AppointmentWriteData {
   tenantId: string;
   professionalId: string | null;
+  locationId: string | null;
   userName: string;
   phoneNumber: string;
   email: string;
@@ -49,8 +47,10 @@ type WriteArgs = { data: AppointmentWriteData; include?: unknown };
 interface Overrides {
   services?: ServiceRow[];
   professionals?: ProfessionalRow[];
-  /** Which (professionalId, serviceId) pairings exist; defaults to p1 doing s1. */
+
   assignments?: { professionalId: string; serviceId: string }[];
+  // R150: defaults to none
+  locations?: LocationRow[];
   appointment?: Partial<AppointmentRow>;
   conflicts?: unknown[];
 }
@@ -77,10 +77,12 @@ const setup = (overrides: Overrides = {}) => {
   const assignments =
     overrides.assignments ??
     professionals.flatMap((p) => services.map((s) => ({ professionalId: p.id, serviceId: s.id })));
+  const locations = overrides.locations ?? [];
   const existing: AppointmentRow = {
     id: "a1",
     tenantId: TENANT_ID,
     professionalId: "p1",
+    locationId: null,
     startAt: new Date("2026-08-05T06:00:00.000Z"),
     endAt: new Date("2026-08-05T06:30:00.000Z"),
     status: "booked",
@@ -97,9 +99,14 @@ const setup = (overrides: Overrides = {}) => {
       ),
     },
     professional: {
-      findFirst: jest.fn(({ where }: { where: { id: string } }) =>
-        Promise.resolve(professionals.find((row) => row.id === where.id) ?? null),
-      ),
+      findFirst: jest.fn(({ where }: { where: { id: string } }) => {
+        const row = professionals.find((candidate) => candidate.id === where.id);
+
+        return Promise.resolve(row ? { locationId: null, ...row } : null);
+      }),
+    },
+    location: {
+      findMany: jest.fn().mockResolvedValue(locations),
     },
     serviceProfessional: {
       findMany: jest.fn(({ where }: { where: { professionalId: string; serviceId: { in: string[] } } }) =>
@@ -162,7 +169,6 @@ const updatedData = (tx: TxStub): AppointmentWriteData => {
   return call[0].data;
 };
 
-/** The lines an update rewrote, as handed to createMany. */
 const rewrittenLines = (tx: TxStub): LineRow[] => {
   const call = tx.appointmentService.createMany.mock.calls[0];
   if (!call) throw new Error("expected appointmentService.createMany to have been called");
@@ -170,8 +176,6 @@ const rewrittenLines = (tx: TxStub): LineRow[] => {
 };
 
 beforeEach(() => {
-  // 04:00 local — before the 10:00 bookings below, so nothing is "in the past"
-  // unless a test moves the clock.
   jest.useFakeTimers().setSystemTime(new Date("2026-08-05T00:00:00.000Z"));
 });
 
@@ -207,7 +211,7 @@ describe("BookingService.create", () => {
     expect(createdData(tx).startAt.toISOString()).toBe("2026-08-05T13:45:00.000Z");
   });
 
-  // R70: staff-created bookings carry no customer link.
+  // R70: staff-created bookings carry no customer link
   it("issues no magic-link token", async () => {
     const { service, tx } = setup();
 
@@ -242,7 +246,6 @@ describe("BookingService.create", () => {
 
       await service.create(createInput({ serviceIds: ["s1", "s2"] }));
 
-      // 10:00 local (06:00Z) + 30 + 15 minutes.
       expect(createdData(tx).endAt.toISOString()).toBe("2026-08-05T06:45:00.000Z");
     });
 
@@ -256,7 +259,6 @@ describe("BookingService.create", () => {
 
       await service.create(createInput({ serviceIds: ["s1", "s2"] }));
 
-      // 10.10 + 20.20 is 30.299999999999997 in binary floating point.
       expect(createdData(tx).price.toString()).toBe("30.3");
     });
 
@@ -307,7 +309,7 @@ describe("BookingService.create", () => {
       await expect(service.create(createInput(patch))).rejects.toThrow(`${field} is required`);
     });
 
-    // R30: email is optional on the form but NOT NULL in the schema.
+    // R30: email is optional on the form but NOT NULL in the schema
     it("stores an empty string when no email is given", async () => {
       const { service, tx } = setup();
 
@@ -354,9 +356,8 @@ describe("BookingService.create", () => {
       );
     });
 
-    // R130
     it("refuses a booking in the past", async () => {
-      jest.setSystemTime(new Date("2026-08-05T09:00:00.000Z")); // 13:00 local
+      jest.setSystemTime(new Date("2026-08-05T09:00:00.000Z"));
       const { service } = setup();
 
       await expect(service.create(createInput())).rejects.toThrow("a booking can't be created in the past");
@@ -377,7 +378,6 @@ describe("BookingService.create", () => {
       await expect(service.create(createInput())).rejects.toThrow(NotFoundException);
     });
 
-    // R120
     it("refuses a deactivated service", async () => {
       const { service } = setup({ services: [{ ...defaultService, isActive: false }] });
 
@@ -392,7 +392,6 @@ describe("BookingService.create", () => {
       await expect(service.create(createInput())).rejects.toThrow(NotFoundException);
     });
 
-    // R120
     it("refuses a deactivated professional", async () => {
       const { service } = setup({ professionals: [{ id: "p1", name: "Levan", isActive: false }] });
 
@@ -401,15 +400,12 @@ describe("BookingService.create", () => {
       );
     });
 
-    // R140
     it("refuses a professional who doesn't perform the service", async () => {
       const { service } = setup({ assignments: [] });
 
       await expect(service.create(createInput())).rejects.toThrow('Levan doesn\'t perform "Haircut"');
     });
 
-    // R140 across the whole block: a slot is only ever offered for someone who
-    // can do all of it, so a booking must hold to the same rule.
     it("names the one service a professional doesn't perform", async () => {
       const { service } = setup({
         services: [defaultService, beardTrim],
@@ -432,7 +428,7 @@ describe("BookingService.create", () => {
   });
 
   describe("conflicts", () => {
-    // R60: a conflict is a warning the caller must have seen, not a wall.
+    // R60: a conflict is a warning the caller must have seen
     it("409s with every named conflict when the window isn't clear", async () => {
       const conflicts = [
         { type: "appointment", professionalName: "Levan", startAt: "x", endAt: "y", detail: "ნინო" },
@@ -470,6 +466,88 @@ describe("BookingService.create", () => {
       });
     });
   });
+
+  // R180: the rule is that a booking can never end up at a branch
+
+  describe("locations", () => {
+    const VAKE = { id: "loc-a", name: "Vake", isActive: true };
+    const SABURTALO = { id: "loc-b", name: "Saburtalo", isActive: true };
+
+    it("records null and asks for nothing when the tenant has no locations", async () => {
+      const { service, tx } = setup();
+
+      await service.create(createInput());
+
+      expect(createdData(tx).locationId).toBeNull();
+    });
+
+    it("rejects a location from a tenant that has none", async () => {
+      const { service } = setup();
+
+      await expect(service.create(createInput({ locationId: "loc-a" }))).rejects.toThrow(
+        "this business has no locations to book at",
+      );
+    });
+
+    it("requires a location once the tenant has one, even with only one to pick", async () => {
+      const { service, tx } = setup({ locations: [VAKE] });
+
+      await expect(service.create(createInput())).rejects.toThrow(BadRequestException);
+      expect(tx.appointment.create).not.toHaveBeenCalled();
+    });
+
+    it("records the chosen branch", async () => {
+      const { service, tx } = setup({ locations: [VAKE, SABURTALO] });
+
+      await service.create(createInput({ locationId: "loc-b" }));
+
+      expect(createdData(tx).locationId).toBe("loc-b");
+    });
+
+    it("404s on a location id that isn't this tenant's", async () => {
+      const { service } = setup({ locations: [VAKE] });
+
+      await expect(service.create(createInput({ locationId: "loc-zzz" }))).rejects.toThrow(NotFoundException);
+    });
+
+    it("refuses a new booking at a closed branch", async () => {
+      const { service } = setup({ locations: [{ ...SABURTALO, isActive: false }, VAKE] });
+
+      await expect(service.create(createInput({ locationId: "loc-b" }))).rejects.toThrow(
+        "Saburtalo is closed and can't take new bookings",
+      );
+    });
+
+    it("refuses a professional who works at another branch, naming both", async () => {
+      const { service } = setup({
+        locations: [VAKE, SABURTALO],
+        professionals: [{ id: "p1", name: "Levan", isActive: true, locationId: "loc-a" }],
+      });
+
+      await expect(service.create(createInput({ locationId: "loc-b" }))).rejects.toThrow(
+        "Levan doesn't work at Saburtalo",
+      );
+    });
+
+    it("accepts a professional based at every location, at any branch (R180)", async () => {
+      const { service, tx } = setup({
+        locations: [VAKE, SABURTALO],
+        professionals: [{ id: "p1", name: "Levan", isActive: true, locationId: null }],
+      });
+
+      await service.create(createInput({ locationId: "loc-b" }));
+
+      expect(createdData(tx).locationId).toBe("loc-b");
+    });
+
+    it("accepts 'any available' at a branch — there is no professional to contradict it", async () => {
+      const { service, tx } = setup({ locations: [VAKE] });
+
+      await service.create(createInput({ professionalId: null, locationId: "loc-a" }));
+
+      expect(createdData(tx).locationId).toBe("loc-a");
+    });
+  });
 });
 
 describe("BookingService.update", () => {
@@ -495,7 +573,7 @@ describe("BookingService.update", () => {
       const { service } = setup();
 
       await expect(service.update(updateInput())).rejects.toThrow(
-        "an update must change the time, the professional, the services, or some of them",
+        "an update must change the time, the professional, the location, the services, or some of them",
       );
     });
 
@@ -517,7 +595,7 @@ describe("BookingService.update", () => {
   });
 
   describe("scoping", () => {
-    // R20: a professional may only touch their own appointments.
+    // R20: a professional may only touch their own appointments
     it("restricts the lookup to the caller's own appointments", async () => {
       const { service, tx } = setup();
 
@@ -560,9 +638,6 @@ describe("BookingService.update", () => {
       expect(updatedData(tx).endAt.toISOString()).toBe("2026-08-06T08:00:00.000Z");
     });
 
-    // The counterpart of the price rule below: a duration edit must not
-    // retroactively re-length an appointment already on the books, or the slot
-    // the picker offered and the block that gets written stop agreeing.
     it("does not re-length an appointment whose service duration changed since booking", async () => {
       const { service, tx } = setup({
         services: [{ ...defaultService, durationMinutes: 90 }],
@@ -573,11 +648,10 @@ describe("BookingService.update", () => {
 
       await service.update(updateInput({ date: "2026-08-06", time: "11:00" }));
 
-      // 30 minutes, as booked — not the service's current 90.
       expect(updatedData(tx).endAt.toISOString()).toBe("2026-08-06T07:30:00.000Z");
     });
 
-    // R40: the price was snapshotted at creation; moving doesn't re-quote it.
+    // R40: the price was snapshotted at creation
     it("does not re-quote a moved appointment whose service price changed since booking", async () => {
       const { service, tx } = setup({
         services: [{ ...defaultService, price: new Prisma.Decimal("99.00") }],
@@ -611,7 +685,6 @@ describe("BookingService.update", () => {
       expect(updatedData(tx).startAt.toISOString()).toBe("2026-08-05T06:00:00.000Z");
     });
 
-    // R80
     it("does not let the appointment conflict with itself", async () => {
       const { service, availability } = setup();
 
@@ -643,8 +716,6 @@ describe("BookingService.update", () => {
   });
 
   describe("deactivation", () => {
-    // Deactivating a departing stylist must not strand the appointments
-    // already on their calendar.
     it("still moves an appointment whose service was deactivated", async () => {
       const { service, tx } = setup({ services: [{ ...defaultService, isActive: false }] });
 
@@ -674,7 +745,6 @@ describe("BookingService.update", () => {
       );
     });
 
-    // R140 still applies to the new pairing.
     it("refuses to move an appointment onto a professional who doesn't perform the service", async () => {
       const { service } = setup({
         professionals: [
@@ -689,7 +759,6 @@ describe("BookingService.update", () => {
       );
     });
 
-    // R120 governs new bookings, and adding a service to an appointment is one.
     it("refuses to add a deactivated service to an existing appointment", async () => {
       const { service } = setup({ services: [defaultService, { ...beardTrim, isActive: false }] });
 
@@ -705,8 +774,6 @@ describe("BookingService.update", () => {
 
       await service.update(updateInput({ serviceIds: ["s2", "s1"] }));
 
-      // `@@unique(appointmentId, position)` is a plain index, so an in-place
-      // swap would collide with itself mid-statement.
       expect(tx.appointmentService.deleteMany).toHaveBeenCalledWith({
         where: { tenantId: TENANT_ID, appointmentId: "a1" },
       });
@@ -716,8 +783,6 @@ describe("BookingService.update", () => {
       ]);
     });
 
-    // R40 again, from the other direction: adding a service must not re-quote
-    // the ones the customer was already told the price of.
     it("keeps an existing line's booked price while quoting the new one at today's", async () => {
       const { service, tx } = setup({
         services: [{ ...defaultService, price: new Prisma.Decimal("99.00") }, beardTrim],
@@ -736,7 +801,6 @@ describe("BookingService.update", () => {
 
       await service.update(updateInput({ serviceIds: ["s1", "s2"] }));
 
-      // 30 as booked + 15 for the newly added trim, not 90 + 15.
       expect(rewrittenLines(tx).map((line) => line.durationMinutes)).toEqual([30, 15]);
       expect(updatedData(tx).endAt.toISOString()).toBe("2026-08-05T06:45:00.000Z");
     });
@@ -783,7 +847,7 @@ describe("BookingService.update", () => {
   });
 
   describe("magic-link rotation", () => {
-    // R110: a customer's link must never point at a stale time.
+    // R110: a customer's link must never point at a stale time
     it("rotates a customer booking's token and re-dates its expiry", async () => {
       const oldHash = "a".repeat(64);
       const { service, tx } = setup({ appointment: { accessTokenHash: oldHash } });
@@ -793,7 +857,7 @@ describe("BookingService.update", () => {
       const data = updatedData(tx);
       expect(data.accessTokenHash).toMatch(/^[0-9a-f]{64}$/);
       expect(data.accessTokenHash).not.toBe(oldHash);
-      // 24 hours past the new end_at (07:30Z on the 6th).
+
       expect(data.accessTokenExpiresAt?.toISOString()).toBe("2026-08-07T07:30:00.000Z");
     });
 
@@ -807,7 +871,7 @@ describe("BookingService.update", () => {
       expect(updatedData(first.tx).accessTokenHash).not.toBe(updatedData(second.tx).accessTokenHash);
     });
 
-    // R70: a staff-created booking is tokenless and stays that way.
+    // R70: a staff-created booking is tokenless and stays that way
     it("leaves a staff-created booking without a token", async () => {
       const { service, tx } = setup();
 
@@ -815,6 +879,106 @@ describe("BookingService.update", () => {
 
       expect(updatedData(tx)).not.toHaveProperty("accessTokenHash");
       expect(updatedData(tx)).not.toHaveProperty("accessTokenExpiresAt");
+    });
+  });
+
+  describe("locations", () => {
+    const VAKE = { id: "loc-a", name: "Vake", isActive: true };
+    const SABURTALO = { id: "loc-b", name: "Saburtalo", isActive: true };
+
+    it("keeps the branch it is already at when the update doesn't mention one", async () => {
+      const { service, tx } = setup({
+        locations: [VAKE, SABURTALO],
+        appointment: { locationId: "loc-b" },
+      });
+
+      await service.update(updateInput({ date: "2026-08-06", time: "11:00" }));
+
+      expect(updatedData(tx).locationId).toBe("loc-b");
+    });
+
+    it("moves the appointment to another branch", async () => {
+      const { service, tx } = setup({
+        locations: [VAKE, SABURTALO],
+        appointment: { locationId: "loc-a" },
+      });
+
+      await service.update(updateInput({ locationId: "loc-b" }));
+
+      expect(updatedData(tx).locationId).toBe("loc-b");
+    });
+
+    it("refuses a professional change that strands the appointment at its branch", async () => {
+      const { service } = setup({
+        locations: [VAKE, SABURTALO],
+        professionals: [
+          { id: "p1", name: "Levan", isActive: true, locationId: "loc-a" },
+          { id: "p2", name: "Nino", isActive: true, locationId: "loc-b" },
+        ],
+        appointment: { locationId: "loc-a" },
+      });
+
+      await expect(service.update(updateInput({ professionalId: "p2" }))).rejects.toThrow(
+        "Nino doesn't work at Vake",
+      );
+    });
+
+    it("still lets an appointment already at a closed branch be moved in time", async () => {
+      const { service, tx } = setup({
+        locations: [{ ...VAKE, isActive: false }, SABURTALO],
+        appointment: { locationId: "loc-a" },
+      });
+
+      await service.update(updateInput({ date: "2026-08-06", time: "11:00" }));
+
+      expect(updatedData(tx).locationId).toBe("loc-a");
+    });
+
+    it("keeps an appointment booked before the tenant had locations reschedulable", async () => {
+      // Its location_id is null and the update says nothing about a branch;
+      // demanding one here would strand every row predating the first location.
+      const { service, tx } = setup({
+        locations: [VAKE, SABURTALO],
+        appointment: { locationId: null },
+      });
+
+      await service.update(updateInput({ date: "2026-08-06", time: "11:00" }));
+
+      expect(updatedData(tx).locationId).toBeNull();
+    });
+
+    it("still lets such an appointment be moved to a branch deliberately", async () => {
+      const { service, tx } = setup({
+        locations: [VAKE, SABURTALO],
+        appointment: { locationId: null },
+      });
+
+      await service.update(updateInput({ locationId: "loc-a" }));
+
+      expect(updatedData(tx).locationId).toBe("loc-a");
+    });
+
+    it("lets a re-time through after the stylist was reassigned to another branch", async () => {
+      // Neither side of the pairing is changing, so the appointment on their
+      // old branch's books must not be frozen by the reassignment.
+      const { service, tx } = setup({
+        locations: [VAKE, SABURTALO],
+        professionals: [{ id: "p1", name: "Levan", isActive: true, locationId: "loc-b" }],
+        appointment: { locationId: "loc-a" },
+      });
+
+      await service.update(updateInput({ date: "2026-08-06", time: "11:00" }));
+
+      expect(updatedData(tx).locationId).toBe("loc-a");
+    });
+
+    it("refuses moving an appointment *to* a closed branch", async () => {
+      const { service } = setup({
+        locations: [VAKE, { ...SABURTALO, isActive: false }],
+        appointment: { locationId: "loc-a" },
+      });
+
+      await expect(service.update(updateInput({ locationId: "loc-b" }))).rejects.toThrow(BadRequestException);
     });
   });
 });

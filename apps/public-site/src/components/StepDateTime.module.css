@@ -1,0 +1,81 @@
+.step {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.heading {
+  font-size: 1.25rem;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+
+.days {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.day {
+  font-weight: 600;
+}
+
+.dayNav {
+  width: 2.5rem;
+  height: 2.5rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-raised);
+  font-size: 1.125rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.dayNav:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.status {
+  color: var(--muted);
+  font-size: 0.9375rem;
+  padding: var(--space-5) 0;
+  text-align: center;
+}
+
+.footer {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.next {
+  margin-left: auto;
+  padding: var(--space-3) var(--space-5);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: var(--color-primary);
+  color: var(--color-background);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.next:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.back {
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}

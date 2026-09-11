@@ -1,0 +1,30 @@
+.toolbar {
+  display: flex;
+  align-items: center;
+  margin-bottom: 18px;
+}
+
+.tableScroll {
+  overflow-x: auto;
+}
+.table {
+  min-width: 720px;
+}
+.count {
+  color: var(--ink-soft);
+  font-size: 13px;
+}
+.add {
+  margin-left: auto;
+}
+.name {
+  font-weight: 600;
+}
+.cell {
+  font-size: 13.5px;
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+}

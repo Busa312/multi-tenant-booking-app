@@ -1,125 +1,174 @@
-// Request/response DTO shapes shared between apps/api and its two clients.
 
-import type { AppointmentStatus } from "./entities";
+
+import type { Appointment, AppointmentStatus } from "./entities";
 import type { TenantColors } from "./colors";
+import type { LocalizedText } from "./i18n";
 
 export interface UpdateTenantColorsRequest {
   colors: TenantColors;
 }
 
+/**
+ * R160: which languages the public site publishes in.
+ *
+ * The first entry is the tenant's default locale — the one the plain `name`
+ * columns hold — so it cannot be removed here. Changing *which* language is
+ * default would mean moving every stored string between columns, which is a
+ * migration, not a checkbox.
+ */
+export interface UpdateTenantLocalesRequest {
+  enabledLocales: string[];
+}
+
+export interface UpdateTenantCopyRequest {
+  title?: string;
+  titleI18n?: LocalizedText;
+  description?: string;
+  descriptionI18n?: LocalizedText;
+}
+
+/**
+ * Phone verification, the step before a public booking is taken. SMS delivery
+ * is mocked today, so `devCode` carries the code back instead — see
+ * StartVerificationResponse.
+ */
+export interface StartVerificationRequest {
+  phoneNumber: string;
+}
+
+export interface StartVerificationResponse {
+  expiresAt: string;
+  /**
+   * The code itself, present ONLY while no SMS provider is configured. It
+   * disappears once delivery is real, and nothing should depend on it beyond
+   * showing it during development.
+   */
+  devCode: string | null;
+}
+
+export interface VerifyPhoneRequest {
+  phoneNumber: string;
+  code: string;
+}
+
+export interface VerifyPhoneResponse {
+  /** Single-use, short-lived, and bound to the number it was issued against. */
+  verificationToken: string;
+}
+
 export interface CreateAppointmentRequest {
   serviceIds: string[];
-  professionalId?: string; // omitted = "any available"
-  startAt: string;
+  professionalId?: string;
+  // R150: required when the tenant has locations
+  locationId?: string;
+
+  date: string;
+  time: string;
   userName: string;
   phoneNumber: string;
-  email: string;
+  // R30: optional, as it is for a staff-taken booking. Without one the link
+  // can't be emailed or re-sent, so `manageUrl` is the customer's only copy.
+  email?: string;
+  /** From VerifyPhoneResponse — proves this phone number was verified. */
+  verificationToken: string;
 }
 
 export interface CreateAppointmentResponse {
   appointmentId: string;
   startAt: string;
   endAt: string;
+
+  manageUrl: string;
+}
+
+/**
+ * R110: rescheduling rotates the token, so the link the customer followed to
+ * get here is dead by the time they read this. The replacement rides back on
+ * the response — it is the same customer, already proven by the old token, and
+ * without it they would be locked out of their own booking until they used the
+ * resend-by-phone flow.
+ */
+export interface RescheduleAppointmentResponse {
+  appointment: Appointment;
+  manageUrl: string;
 }
 
 export interface RescheduleAppointmentRequest {
-  startAt: string;
+  date: string;
+  time: string;
 }
 
 export interface AvailabilityQuery {
   serviceIds: string[];
   professionalId?: string;
-  date: string; // "YYYY-MM-DD", in tenant timezone
+  // R150: narrows candidates to that branch's professionals (plus those at every branch)
+  locationId?: string;
+  date: string;
 }
 
-// ---------------------------------------------------------------------------
-// CMS-side booking management (staff acting on a customer's behalf).
-//
-// Wall-clock date + time are sent separately rather than as one instant: the
-// tenant's timezone is the authority on what "14:00" means, and the staff
-// browser may well be somewhere else. The API resolves them against
-// Tenant.timezone, the same way availability's `date` is resolved.
-// ---------------------------------------------------------------------------
-
 export interface CmsAvailabilityQuery {
-  /** One or more; their durations are booked as one contiguous block. */
   serviceIds: string[];
-  /** Forced to the caller's own professional for `professional` logins (R20). */
+
   professionalId?: string;
-  date: string; // "YYYY-MM-DD", in tenant timezone
-  /**
-   * Set when picking a new time for an existing appointment. It excludes that
-   * appointment from the occupancy check so it doesn't block itself (R80), and
-   * makes services already on it keep their snapshotted duration — so the slots
-   * offered here are the ones the reschedule call will actually accept.
-   */
+  // R150: narrows candidates to that branch's professionals
+  locationId?: string;
+  date: string;
+
   appointmentId?: string;
 }
 
 export interface CmsAppointmentListQuery {
-  from?: string; // "YYYY-MM-DD", inclusive, in tenant timezone
-  to?: string; // "YYYY-MM-DD", inclusive, in tenant timezone
+  from?: string;
+  to?: string;
 }
 
 export interface CreateCmsAppointmentRequest {
-  /** One or more, in the order they should run. A service may appear only once. */
   serviceIds: string[];
-  /** Required for `owner`; ignored for `professional` logins, which are pinned
-   *  to their own professional record (R20/R30). */
+
   professionalId?: string;
-  date: string; // "YYYY-MM-DD", in tenant timezone
-  time: string; // "HH:mm", in tenant timezone
+  // R150: required when the tenant has locations
+  locationId?: string;
+  date: string;
+  time: string;
   userName: string;
   phoneNumber: string;
   email?: string;
   notes?: string;
-  /** R60: acknowledge the conflicts a 409 named and book anyway. */
+  // R60: acknowledge the conflicts a 409 named and book anyway
   override?: boolean;
 }
 
-/**
- * Every in-place edit of an existing appointment: its time, its professional,
- * its services, or any combination. Send at least one of them.
- *
- * Not named "reschedule" any more because changing the service list also changes
- * the appointment's duration and price, which a reschedule never did.
- */
 export interface UpdateCmsAppointmentRequest {
-  /** date and time move together — send both or neither. */
   date?: string;
   time?: string;
   professionalId?: string;
-  /**
-   * Replaces the whole list. Services already on the appointment keep the price
-   * and duration they were booked at; only newly added ones are quoted at
-   * today's values (R40).
-   */
+  // R150: moving an appointment to another branch
+  locationId?: string;
+
   serviceIds?: string[];
   override?: boolean;
 }
 
-// R100: no automatic transition ever happens, so `cancelled` is deliberately
-// not settable here — that has its own endpoint, and coming *back* to `booked`
-// is how a mis-marked appointment is fixed.
+// R100: no automatic transition ever happens
+
 export interface UpdateAppointmentStatusRequest {
   status: Exclude<AppointmentStatus, "cancelled">;
 }
 
 export type BookingConflictType = "appointment" | "outside_business_hours" | "time_off";
 
-// R60: staff may book over any of these, but only after confirming a warning
-// that names the conflict. Structured rather than prose so the CMS localizes it.
+// R60: staff may book over any of these
+
 export interface BookingConflict {
   type: BookingConflictType;
   professionalName: string | null;
-  /** The conflicting appointment's / time-off block's own window, when there is one. */
+
   startAt: string | null;
   endAt: string | null;
-  /** Conflicting appointment's customer name, or a time-off block's reason. */
+
   detail: string | null;
 }
 
-/** Body of the 409 returned by create/reschedule when `override` isn't set. */
 export interface BookingConflictResponse {
   code: "booking_conflict";
   conflicts: BookingConflict[];
@@ -139,9 +188,13 @@ export interface LoginResponse {
   accessToken: string;
 }
 
+// R160: every `*I18n` map below carries the NON-default locales
+
 export interface CreateServiceRequest {
   name: string;
+  nameI18n?: LocalizedText;
   description?: string | null;
+  descriptionI18n?: LocalizedText;
   durationMinutes: number;
   price: string;
   professionalIds: string[];
@@ -149,24 +202,59 @@ export interface CreateServiceRequest {
 
 export interface UpdateServiceRequest {
   name?: string;
+  nameI18n?: LocalizedText;
   description?: string | null;
+  descriptionI18n?: LocalizedText;
   durationMinutes?: number;
   price?: string;
-  // When provided, fully replaces the service's ServiceProfessional rows.
+
   professionalIds?: string[];
-  // R60: deactivation (and reactivation) — never a hard delete.
+  // R60: deactivation (and reactivation)
   isActive?: boolean;
 }
 
 export interface CreateProfessionalRequest {
   name: string;
+  nameI18n?: LocalizedText;
+  // R180: omitted or null = works at every location
+  locationId?: string | null;
   serviceIds?: string[];
 }
 
 export interface UpdateProfessionalRequest {
   name?: string;
+  nameI18n?: LocalizedText;
+  locationId?: string | null;
   isActive?: boolean;
   serviceIds?: string[];
+}
+
+export interface CreateLocationRequest {
+  name: string;
+  nameI18n?: LocalizedText;
+  addressLine: string;
+  addressLineI18n?: LocalizedText;
+  city?: string | null;
+  phone?: string | null;
+
+  latitude?: string | null;
+  longitude?: string | null;
+
+  position?: number;
+}
+
+export interface UpdateLocationRequest {
+  name?: string;
+  nameI18n?: LocalizedText;
+  addressLine?: string;
+  addressLineI18n?: LocalizedText;
+  city?: string | null;
+  phone?: string | null;
+  latitude?: string | null;
+  longitude?: string | null;
+  position?: number;
+  // R190: deactivation (and reactivation)
+  isActive?: boolean;
 }
 
 export interface UpcomingAppointmentCountResponse {
@@ -177,9 +265,6 @@ export interface InviteProfessionalRequest {
   email: string;
 }
 
-// Email delivery is stubbed (no provider integrated yet) — the API returns
-// the raw token/expiry so the CMS can display a copyable set-password link
-// instead of it actually being emailed.
 export interface InviteProfessionalResponse {
   tenantId: string;
   tenantUserId: string;
@@ -188,10 +273,6 @@ export interface InviteProfessionalResponse {
   expiresAt: string;
 }
 
-// tenantId travels alongside the token because tenant_user is RLS-protected
-// (fails closed with no tenant context) — the token can't be looked up
-// without first scoping to a tenant, the same reason /cms/auth/login takes a
-// subdomain. tenantId isn't a secret; the token is the actual credential.
 export interface SetPasswordRequest {
   tenantId: string;
   token: string;
@@ -199,22 +280,19 @@ export interface SetPasswordRequest {
 }
 
 export interface CreateTimeOffRequest {
-  professionalId?: string; // omitted = whole business closed
+  professionalId?: string;
   startAt: string;
   endAt: string;
   reason?: string;
 }
 
 export interface UpsertBusinessHoursRequest {
-  professionalId?: string; // omitted = tenant-wide
+  professionalId?: string;
   dayOfWeek: number;
   startTime: string;
   endTime: string;
 }
 
-// Staff-only tenant onboarding (system_design.md §9 step 2) — not called by
-// either frontend app. Formalizes the internal script that used to create
-// Tenant + owner TenantUser by hand into a guarded API endpoint.
 export interface OnboardTenantRequest {
   name: string;
   timezone: string;

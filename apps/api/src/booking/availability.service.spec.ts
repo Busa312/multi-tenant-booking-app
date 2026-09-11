@@ -5,18 +5,16 @@ import type { PrismaService } from "../prisma/prisma.service.js";
 import type { TenantContextService } from "../tenant/tenant-context.service.js";
 
 const TENANT_ID = "11111111-1111-1111-1111-111111111111";
-// Asia/Tbilisi is UTC+4 year-round, so local 09:00 is always 05:00Z and the
-// arithmetic below stays readable. DST behaviour is exercised separately.
+
 const TZ = "Asia/Tbilisi";
 const WEDNESDAY = "2026-08-05";
 
-/** `@db.Time` comes back from Prisma as a Date on the epoch day, in UTC. */
 const timeOfDay = (hhmm: string) => new Date(`1970-01-01T${hhmm}:00.000Z`);
 
 interface Overrides {
   timezone?: string;
   services?: { id: string; durationMinutes: number; isActive?: boolean }[];
-  /** Lines already stored on the appointment being re-timed, with their snapshots. */
+
   existingLines?: { serviceId: string; durationMinutes: number; price: Prisma.Decimal }[];
   assignments?: { professionalId: string; serviceId: string }[];
   professionals?: { id: string; name: string }[];
@@ -29,8 +27,6 @@ const setup = (overrides: Overrides = {}) => {
   const tx = {
     tenant: { findUniqueOrThrow: jest.fn().mockResolvedValue({ timezone: overrides.timezone ?? TZ }) },
     service: {
-      // Name/price/isActive are filled in here so the many tests that only care
-      // about duration can keep declaring `{ id, durationMinutes }`.
       findMany: jest.fn().mockResolvedValue(
         (overrides.services ?? [{ id: "s1", durationMinutes: 30 }]).map((s) => ({
           name: s.id,
@@ -75,8 +71,6 @@ const startTimes = (slots: { startAt: string }[]) => slots.map((slot) => slot.st
 
 describe("AvailabilityService.computeSlots", () => {
   beforeEach(() => {
-    // Well before the 05:00Z first slot, so nothing is filtered as past unless
-    // a test says so.
     jest.useFakeTimers().setSystemTime(new Date("2026-08-05T00:00:00.000Z"));
   });
 
@@ -102,8 +96,8 @@ describe("AvailabilityService.computeSlots", () => {
       );
     });
 
-    // R120: a deactivated or unknown service yields no availability at all,
-    // rather than slots the booking call would then reject.
+    // R120: a deactivated or unknown service yields no availability at all
+
     it("rejects an unknown service", async () => {
       const { service } = setup({ services: [{ id: "s1", durationMinutes: 30 }] });
 
@@ -129,9 +123,6 @@ describe("AvailabilityService.computeSlots", () => {
       );
     });
 
-    // Booking the same service twice isn't offered yet. Rejecting it also
-    // closes a hole: `IN` collapses a repeated id to one row, so a deduplicated
-    // sum would quote 30 minutes for two 30-minute haircuts.
     it("rejects the same service listed twice", async () => {
       const { service } = setup();
 
@@ -147,7 +138,6 @@ describe("AvailabilityService.computeSlots", () => {
 
       const slots = await service.computeSlots({ serviceIds: ["s1"], date: WEDNESDAY });
 
-      // 09:00–12:00 local (05:00–08:00Z) fits eleven 30-minute starts.
       expect(startTimes(slots)).toEqual([
         "2026-08-05T05:00:00.000Z",
         "2026-08-05T05:15:00.000Z",
@@ -195,8 +185,8 @@ describe("AvailabilityService.computeSlots", () => {
       const slots = await service.computeSlots({ serviceIds: ["s1", "s2"], date: WEDNESDAY });
 
       expect(slots.at(-1)).toMatchObject({
-        startAt: "2026-08-05T06:45:00.000Z", // 10:45 local
-        endAt: "2026-08-05T08:00:00.000Z", // 12:00 local
+        startAt: "2026-08-05T06:45:00.000Z",
+        endAt: "2026-08-05T08:00:00.000Z",
       });
     });
 
@@ -246,9 +236,9 @@ describe("AvailabilityService.computeSlots", () => {
       );
     });
 
-    // R130: nothing in the past is ever offered.
+    // R130: nothing in the past is ever offered
     it("drops slots that have already started", async () => {
-      jest.setSystemTime(new Date("2026-08-05T06:00:00.000Z")); // 10:00 local
+      jest.setSystemTime(new Date("2026-08-05T06:00:00.000Z"));
       const { service } = setup();
 
       const slots = await service.computeSlots({ serviceIds: ["s1"], date: WEDNESDAY });
@@ -273,7 +263,7 @@ describe("AvailabilityService.computeSlots", () => {
   });
 
   describe("candidate resolution", () => {
-    // R140: an explicitly requested professional must actually perform the service.
+    // R140: an explicitly requested professional must actually perform the service
     it("offers nothing for a professional who doesn't perform the service", async () => {
       const { service, tx } = setup({ assignments: [] });
 
@@ -295,7 +285,7 @@ describe("AvailabilityService.computeSlots", () => {
       ).toEqual([]);
     });
 
-    // R120: a deactivated professional has no calendar to offer.
+    // R120: a deactivated professional has no calendar to offer
     it("offers nothing when every qualified professional is deactivated", async () => {
       const { service } = setup({ professionals: [] });
 
@@ -344,6 +334,49 @@ describe("AvailabilityService.computeSlots", () => {
     });
   });
 
+  // R180: the rule these pin is that picking a branch changes
+
+  describe("location scoping", () => {
+    it("narrows candidates to the branch, keeping professionals based at every location", async () => {
+      const { service, tx } = setup();
+
+      await service.computeSlots({ serviceIds: ["s1"], locationId: "loc-a", date: WEDNESDAY });
+
+      expect(tx.professional.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            OR: [{ locationId: "loc-a" }, { locationId: null }],
+          }),
+        }),
+      );
+    });
+
+    it("applies no location filter when the customer hasn't picked a branch", async () => {
+      const { service, tx } = setup();
+
+      await service.computeSlots({ serviceIds: ["s1"], date: WEDNESDAY });
+
+      const where = tx.professional.findMany.mock.calls[0]?.[0]?.where as Record<string, unknown>;
+
+      expect(where).not.toHaveProperty("OR");
+    });
+
+    it("offers nothing when nobody at the chosen branch performs the services", async () => {
+      const { service } = setup({ professionals: [] });
+
+      expect(await service.computeSlots({ serviceIds: ["s1"], locationId: "loc-b", date: WEDNESDAY })).toEqual([]);
+    });
+
+    it("still offers the tenant-wide calendar at a branch when nobody is assigned at all", async () => {
+      const { service } = setup({ assignments: [] });
+
+      const slots = await service.computeSlots({ serviceIds: ["s1"], locationId: "loc-a", date: WEDNESDAY });
+
+      expect(slots).toHaveLength(11);
+      expect(slots.every((slot) => slot.professionalId === null)).toBe(true);
+    });
+  });
+
   describe("business hours precedence", () => {
     it("uses a professional's own hours instead of the tenant-wide ones", async () => {
       const { service } = setup({
@@ -355,7 +388,6 @@ describe("AvailabilityService.computeSlots", () => {
 
       const slots = await service.computeSlots({ serviceIds: ["s1"], date: WEDNESDAY });
 
-      // Own hours replace the tenant default; they don't extend it.
       expect(startTimes(slots)).toEqual([
         "2026-08-05T05:00:00.000Z",
         "2026-08-05T05:15:00.000Z",
@@ -393,7 +425,7 @@ describe("AvailabilityService.computeSlots", () => {
         timeOff: [
           {
             professionalId: "p1",
-            startAt: new Date("2026-08-05T06:00:00.000Z"), // 10:00–11:00 local
+            startAt: new Date("2026-08-05T06:00:00.000Z"),
             endAt: new Date("2026-08-05T07:00:00.000Z"),
             reason: "dentist",
           },
@@ -402,8 +434,6 @@ describe("AvailabilityService.computeSlots", () => {
 
       const slots = await service.computeSlots({ serviceIds: ["s1"], date: WEDNESDAY });
 
-      // 05:45 is dropped too — a 30-minute service started then would run into
-      // the block.
       expect(startTimes(slots)).toEqual([
         "2026-08-05T05:00:00.000Z",
         "2026-08-05T05:15:00.000Z",
@@ -492,7 +522,7 @@ describe("AvailabilityService.computeSlots", () => {
       expect(await service.computeSlots({ serviceIds: ["s1"], date: WEDNESDAY })).toHaveLength(11);
     });
 
-    // R90: cancelling frees the slot again.
+    // R90: cancelling frees the slot again
     it("excludes cancelled appointments from the occupancy query", async () => {
       const { service, tx } = setup();
       await service.computeSlots({ serviceIds: ["s1"], date: WEDNESDAY });
@@ -502,9 +532,8 @@ describe("AvailabilityService.computeSlots", () => {
       );
     });
 
-    // R80: the reschedule picker must offer the times the appointment being
-    // moved already covers — otherwise moving a 10:00 booking to 10:15 is
-    // impossible, because it is standing in its own way.
+    // R80: the reschedule picker must offer the times the appointment
+
     it("excludes the appointment being moved from the occupancy set", async () => {
       const { service, tx } = setup();
 
@@ -523,8 +552,6 @@ describe("AvailabilityService.computeSlots", () => {
       expect(tx.appointment.findMany.mock.calls[0]?.[0]?.where).not.toHaveProperty("id");
     });
 
-    // The picker and the write path have to measure the same block, or the CMS
-    // offers a slot that the reschedule call then rejects as a conflict.
     it("measures a re-timed appointment by its booked duration, not the service's current one", async () => {
       const { service } = setup({
         services: [{ id: "s1", durationMinutes: 90 }],
@@ -537,13 +564,10 @@ describe("AvailabilityService.computeSlots", () => {
         excludeAppointmentId: "a1",
       });
 
-      // 30-minute slots across 09:00–12:00, not the 90 minutes the service now takes.
       expect(slots).toHaveLength(11);
       expect(slots[0]?.endAt).toBe("2026-08-05T05:30:00.000Z");
     });
 
-    // Otherwise deactivating a service would make every appointment already
-    // holding it unmovable: the picker would 400 and show no slots at all.
     it("still offers slots for a re-timed appointment whose service was deactivated", async () => {
       const { service } = setup({
         services: [{ id: "s1", durationMinutes: 30, isActive: false }],
@@ -564,7 +588,7 @@ describe("AvailabilityService.computeSlots", () => {
       await service.computeSlots({ serviceIds: ["s1"], date: WEDNESDAY });
 
       const where = tx.appointment.findMany.mock.calls[0]?.[0]?.where;
-      // The tenant-local day, not the UTC one: 00:00–24:00 in Tbilisi.
+
       expect(where.startAt.lt.toISOString()).toBe("2026-08-05T20:00:00.000Z");
       expect(where.endAt.gt.toISOString()).toBe("2026-08-04T20:00:00.000Z");
     });
@@ -572,9 +596,6 @@ describe("AvailabilityService.computeSlots", () => {
 
   describe("daylight saving", () => {
     it("keeps a window at its local wall-clock time across a spring-forward day", async () => {
-      // 2026-03-08 is a Sunday in New York; the clocks jump at 02:00 local, so
-      // 09:00 local that day is 13:00Z rather than the 14:00Z it would be the
-      // day before.
       jest.setSystemTime(new Date("2026-03-08T00:00:00.000Z"));
       const { service } = setup({
         timezone: "America/New_York",
@@ -603,7 +624,6 @@ describe("AvailabilityService.findConflictsIn", () => {
     return { service, tx: tx as unknown as Prisma.TransactionClient & typeof tx };
   };
 
-  // 10:00–11:00 local on the Wednesday.
   const startAt = new Date("2026-08-05T06:00:00.000Z");
   const endAt = new Date("2026-08-05T07:00:00.000Z");
 
@@ -755,7 +775,7 @@ describe("AvailabilityService.findConflictsIn", () => {
     ]);
   });
 
-  // R80: an appointment never conflicts with itself.
+  // R80: an appointment never conflicts with itself
   it("excludes the appointment being moved", async () => {
     const { service, tx } = conflictSetup();
 
@@ -790,8 +810,8 @@ describe("AvailabilityService.findConflictsIn", () => {
 
     await service.findConflictsIn(tx, {
       professionalId: "p1",
-      startAt: new Date("2026-08-05T19:00:00.000Z"), // 23:00 Wed local
-      endAt: new Date("2026-08-05T21:00:00.000Z"), // 01:00 Thu local
+      startAt: new Date("2026-08-05T19:00:00.000Z"),
+      endAt: new Date("2026-08-05T21:00:00.000Z"),
     });
 
     expect(tx.businessHours.findMany).toHaveBeenCalledWith(
@@ -804,8 +824,8 @@ describe("AvailabilityService.findConflictsIn", () => {
 
     await service.findConflictsIn(tx, {
       professionalId: "p1",
-      startAt: new Date("2026-08-05T19:00:00.000Z"), // 23:00 Wed local
-      endAt: new Date("2026-08-05T20:00:00.000Z"), // 00:00 Thu local, exclusive
+      startAt: new Date("2026-08-05T19:00:00.000Z"),
+      endAt: new Date("2026-08-05T20:00:00.000Z"),
     });
 
     expect(tx.businessHours.findMany).toHaveBeenCalledWith(

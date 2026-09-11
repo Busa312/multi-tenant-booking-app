@@ -1,12 +1,11 @@
-// Entity shapes mirroring the Prisma schema in apps/api/prisma/schema.prisma.
-// Kept as plain interfaces (not generated from Prisma) so cms/public-site
-// don't need a Prisma client dependency just to get types.
+
 
 export type TenantUserRole = "owner" | "professional";
 
 export type AppointmentStatus = "booked" | "cancelled" | "completed" | "no_show";
 
 import type { TenantColors } from "./colors";
+import type { LocalizedText } from "./i18n";
 
 export interface Tenant {
   id: string;
@@ -22,21 +21,49 @@ export interface Tenant {
 export interface TenantConfig {
   logoUrl?: string;
   colors?: TenantColors;
+  // R170: the public site's own heading and blurb
   copy?: {
-    tagline?: string;
-    aboutText?: string;
+    title?: string;
+    titleI18n?: LocalizedText;
+    description?: string;
+    descriptionI18n?: LocalizedText;
   };
-  // R80: the tenant's public-facing content locales, first entry being the
-  // default one that the plain `name`/`description` columns hold. Absent or
-  // single-entry = monolingual, which is every tenant today; the CMS only
-  // renders per-locale tabs once this lists more than one. Actual per-locale
-  // *storage* (JSONB per field) is owned by the Translations feature.
+  // R80: the tenant's public-facing content locales
+
   enabledLocales?: string[];
+}
+
+export interface Location {
+  id: string;
+  tenantId: string;
+  name: string;
+  nameI18n: LocalizedText | null;
+  addressLine: string;
+  addressLineI18n: LocalizedText | null;
+  city: string | null;
+  phone: string | null;
+
+  latitude: string | null;
+  longitude: string | null;
+  position: number;
+  isActive: boolean;
+  createdAt: string;
+}
+
+export interface LocationSummary extends Location {
+  professionalIds: string[];
+  // R190: any appointment ever (not just upcoming)
+
+  hasAppointmentHistory: boolean;
 }
 
 export interface Professional {
   id: string;
   tenantId: string;
+  nameI18n: LocalizedText | null;
+  // R180: null = works at every location
+
+  locationId: string | null;
   name: string;
   isActive: boolean;
   createdAt: string;
@@ -44,16 +71,13 @@ export interface Professional {
 
 export type CmsLoginStatus = "none" | "invited" | "active";
 
-// Returned by GET /cms/professionals only — the public professional listing
-// stays the plain Professional shape above.
 export interface ProfessionalSummary extends Professional {
   serviceIds: string[];
   cmsLoginStatus: CmsLoginStatus;
-  // TenantUser.isActive — independent of Professional.isActive (R60); null
-  // when cmsLoginStatus is "none" (no TenantUser row to toggle).
+
   cmsLoginActive: boolean | null;
-  // R80: any appointment ever (not just upcoming) — when true, delete is
-  // unavailable client-side (not just rejected server-side), only deactivate.
+  // R80: any appointment ever (not just upcoming)
+
   hasAppointmentHistory: boolean;
 }
 
@@ -72,19 +96,19 @@ export interface Service {
   id: string;
   tenantId: string;
   name: string;
-  description: string | null; // optional long text, shown on the public site
+  nameI18n: LocalizedText | null;
+  description: string | null;
+  descriptionI18n: LocalizedText | null;
   durationMinutes: number;
-  price: string; // numeric transported as string to avoid float precision loss
+  price: string;
   isActive: boolean;
   createdAt: string;
 }
 
-// Returned by GET /cms/services only — the public service listing stays the
-// plain Service shape above.
 export interface ServiceSummary extends Service {
   professionalIds: string[];
-  // R70: any appointment ever (not just upcoming) — when true, delete is
-  // unavailable client-side (not just rejected server-side), only deactivate.
+  // R70: any appointment ever (not just upcoming)
+
   hasAppointmentHistory: boolean;
 }
 
@@ -97,44 +121,36 @@ export interface ServiceProfessional {
 export interface BusinessHours {
   id: string;
   tenantId: string;
-  professionalId: string | null; // null = applies tenant-wide
-  dayOfWeek: number; // 0-6
-  startTime: string; // "HH:mm"
-  endTime: string; // "HH:mm"
+  professionalId: string | null;
+  dayOfWeek: number;
+  startTime: string;
+  endTime: string;
 }
 
 export interface TimeOff {
   id: string;
   tenantId: string;
-  professionalId: string | null; // null = whole business closed
+  professionalId: string | null;
   startAt: string;
   endAt: string;
   reason: string | null;
 }
 
-/**
- * One service on an appointment. `durationMinutes` and `price` are the values
- * snapshotted when the service was added, not the service's current ones — a
- * later price or duration edit must not rewrite what a customer was quoted
- * (R40). `name` is deliberately live: a rename is normally a correction.
- */
 export interface AppointmentServiceLine {
   serviceId: string;
   name: string;
   durationMinutes: number;
-  price: string; // numeric transported as string, like Service.price
+  price: string;
 }
 
 export interface Appointment {
   id: string;
   tenantId: string;
-  /**
-   * One or more, in the order they were chosen. They run as one contiguous
-   * block: endAt is startAt plus the sum of their durations, and `price` below
-   * is the sum of their prices.
-   */
+
   services: AppointmentServiceLine[];
-  professionalId: string | null; // null = "any available" was chosen
+  professionalId: string | null;
+  // R150: the branch booked
+  locationId: string | null;
   userName: string;
   phoneNumber: string;
   email: string;
@@ -144,31 +160,16 @@ export interface Appointment {
   status: AppointmentStatus;
   createdAt: string;
   updatedAt: string;
-  // access_token_hash is never sent to clients
+
 }
 
-/**
- * Returned by the CMS appointment endpoints only — the public/magic-link shape
- * stays the plain Appointment above.
- *
- * Everything added here is staff-facing, which is the reason for the split: the
- * magic link hands a *customer* an Appointment, and internal notes ("difficult
- * client") plus the id of the staff member who took the call are not theirs to
- * read. The joined names ride along too, so a calendar row renders without a
- * second round trip per appointment.
- */
 export interface AppointmentSummary extends Appointment {
-  // null = the customer booked it on the public site; set = staff created it
-  // from the CMS (TenantUser.id), which is also why it carries no magic link.
   createdByUserId: string | null;
   notes: string | null;
   professionalName: string | null;
-  // Whether a customer magic link exists at all for this appointment — derived
-  // from access_token_hash, which itself is never sent to clients. True only for
-  // public-site bookings, and the flag the CMS uses to warn that rescheduling
-  // will invalidate the customer's existing link (R110). Expiry isn't
-  // considered: a stale link the customer may still be holding is exactly the
-  // one worth warning about.
+
+  locationName: string | null;
+
   hasMagicLink: boolean;
 }
 

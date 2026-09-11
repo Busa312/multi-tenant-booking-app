@@ -6,25 +6,12 @@ export interface TenantContext {
   tenantId?: string;
   role?: TenantUserRole;
   professionalId?: string;
+
+  host?: string;
+
+  protocol?: "http" | "https";
 }
 
-/**
- * Request-scoped tenant identity, backed by AsyncLocalStorage rather than Nest's
- * REQUEST-scoped DI (which would force every consumer down the chain into
- * request scope too).
- *
- * RequestContextMiddleware opens exactly one `als.run({}, next)` per request,
- * globally, before anything else runs — everything downstream (HostTenantMiddleware
- * for public routes, JwtAuthGuard for CMS routes) just mutates fields on that
- * *same* store object via `update()`. Guards in Nest execute through an
- * internal RxJS pipeline, and re-entering AsyncLocalStorage mid-pipeline via
- * `enterWith` was observed to silently not propagate into the eventual
- * controller call — mutating an already-open store sidesteps that entirely.
- *
- * This is the *only* place tenant_id enters the request pipeline; everything
- * downstream (PrismaService.forTenant) reads it from here rather than being
- * passed tenant_id explicitly, so it's impossible to "forget" to scope a query.
- */
 @Injectable()
 export class TenantContextService {
   private readonly als = new AsyncLocalStorage<TenantContext>();

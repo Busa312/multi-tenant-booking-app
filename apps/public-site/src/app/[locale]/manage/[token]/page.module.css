@@ -1,0 +1,20 @@
+.invalid {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  align-items: flex-start;
+}
+
+.heading {
+  font-size: clamp(1.375rem, 4.5vw, 1.75rem);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.message {
+  color: var(--muted);
+}
+
+.link {
+  color: var(--color-primary);
+}

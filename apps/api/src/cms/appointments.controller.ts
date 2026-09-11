@@ -49,15 +49,6 @@ import {
 import { AvailabilityService } from "../booking/availability.service.js";
 import { BookingService } from "../booking/booking.service.js";
 
-/**
- * Staff-side appointment management: phone bookings, walk-ins, and every change
- * that happens off the public site.
- *
- * R20's scoping is enforced here, not by RLS: RLS scopes rows to a tenant and
- * has no concept of "this professional's own rows", so a `professional` login's
- * own-appointments-only restriction is an application-layer filter on every
- * route below. `owner` acts on any appointment in the tenant (R10).
- */
 @ApiTags("cms-appointments")
 @ApiBearerAuth()
 @Controller("cms/appointments")
@@ -83,8 +74,7 @@ export class AppointmentsController {
         where: { id: tenantId },
         select: { timezone: true },
       });
-      // `from`/`to` are tenant-local calendar days, resolved to instants here so
-      // a staff browser in another timezone still gets the salon's own day.
+
       const range = this.resolveRange(query, timezone);
 
       return tx.appointment.findMany({
@@ -94,21 +84,17 @@ export class AppointmentsController {
           ...(range ? { startAt: range } : {}),
         },
         include: APPOINTMENT_SUMMARY_INCLUDE,
-        // Cancelled rows stay in the list (R90) — history, not deletions.
         orderBy: { startAt: "asc" },
       });
     });
     return appointments.map(serializeAppointmentSummary);
   }
 
-  /**
-   * R50: the professional's genuinely open slots, computed by the same service
-   * the public site uses. The CMS shows these as the default path but doesn't
-   * enforce them — see R60 and BookingService.
-   */
+  // R50: the professional's genuinely open slots
   @Get("availability")
   @ApiQuery({ name: "serviceIds", description: "Comma-separated; durations are summed into one block" })
   @ApiQuery({ name: "professionalId", required: false })
+  @ApiQuery({ name: "locationId", required: false, description: "R150: narrows to that branch's professionals" })
   @ApiQuery({ name: "date", description: "YYYY-MM-DD, tenant timezone" })
   @ApiQuery({
     name: "appointmentId",
@@ -124,8 +110,9 @@ export class AppointmentsController {
     const professionalScope = this.professionalScope();
     return this.availability.computeSlots({
       serviceIds,
-      // R20: a professional login can only ever ask about their own calendar.
+      // R20: a professional login can only ever ask about their own calendar
       professionalId: professionalScope ?? query.professionalId ?? null,
+      locationId: query.locationId ?? null,
       date: query.date,
       excludeAppointmentId: query.appointmentId,
     });
@@ -140,9 +127,8 @@ export class AppointmentsController {
     @CurrentUser() user: JwtClaims,
   ): Promise<AppointmentSummary> {
     const professionalScope = this.professionalScope();
-    // R20/R30: the selector is locked client-side and enforced here. A payload
-    // naming someone else is refused rather than quietly rewritten — same answer
-    // the reschedule route gives.
+    // R30: the selector is locked client-side and enforced here
+
     if (professionalScope && body.professionalId && body.professionalId !== professionalScope) {
       throw new ForbiddenException("professional logins may only book into their own calendar");
     }
@@ -151,27 +137,22 @@ export class AppointmentsController {
       throw new BadRequestException("professionalId is required");
     }
 
-    const appointment = await this.booking.create({
+    const { appointment } = await this.booking.create({
       serviceIds: body.serviceIds ?? [],
       professionalId,
+      locationId: body.locationId,
       date: body.date,
       time: body.time,
       userName: body.userName,
       phoneNumber: body.phoneNumber,
       email: body.email,
       notes: body.notes,
-      // The audit trail for who took the phone call, and what tells this row
-      // apart from a customer's own booking.
       createdByUserId: user.sub,
       override: body.override,
     });
     return serializeAppointmentSummary(appointment);
   }
 
-  /**
-   * The route keeps its `/reschedule` name for compatibility, but it now edits
-   * the service list too — see UpdateCmsAppointmentRequest.
-   */
   @Patch(":id/reschedule")
   @ApiParam({ name: "id" })
   @ApiBody({ type: UpdateCmsAppointmentRequestDto })
@@ -183,11 +164,12 @@ export class AppointmentsController {
       throw new ForbiddenException("professional logins may only book into their own calendar");
     }
 
-    const appointment = await this.booking.update({
+    const { appointment } = await this.booking.update({
       appointmentId: id,
       date: body.date,
       time: body.time,
       professionalId: body.professionalId,
+      locationId: body.locationId,
       serviceIds: body.serviceIds,
       override: body.override,
       professionalScope,
@@ -195,11 +177,7 @@ export class AppointmentsController {
     return serializeAppointmentSummary(appointment);
   }
 
-  /**
-   * R100: completed / no_show are set by a person and only by a person. Nothing
-   * transitions on its own when an appointment's end time passes — only a staff
-   * member can tell a no-show from a late arrival or an unrecorded walk-in.
-   */
+  // R100: completed / no_show are set by a person and only by a person
   @Patch(":id/status")
   @ApiParam({ name: "id" })
   @ApiBody({ type: UpdateAppointmentStatusRequestDto })
@@ -225,10 +203,7 @@ export class AppointmentsController {
     return serializeAppointmentSummary(appointment);
   }
 
-  /**
-   * R90: cancelling only flips the status. The row stays, stays visible in
-   * history, and is never deleted — it also stops blocking availability.
-   */
+  // R90: cancelling only flips the status
   @Post(":id/cancel")
   @ApiParam({ name: "id" })
   @ApiOkResponse({ type: AppointmentSummaryDto })
@@ -247,12 +222,6 @@ export class AppointmentsController {
     return serializeAppointmentSummary(appointment);
   }
 
-  /**
-   * The professional a `professional` login is confined to (R20), or null for an
-   * owner, who sees the whole tenant. A professional whose TenantUser carries no
-   * professional_id has no calendar of their own to be confined to, and is
-   * rejected rather than silently granted the owner's unscoped view.
-   */
   private professionalScope(): string | null {
     const { role, professionalId } = this.tenantContext.current;
     if (role !== "professional") {
@@ -264,11 +233,6 @@ export class AppointmentsController {
     return professionalId;
   }
 
-  /**
-   * The instant window for an inclusive span of tenant-local days. Either bound
-   * may be omitted, which leaves that side open — `from` alone means "this day
-   * onwards", which is what a caller asking for it means.
-   */
   private resolveRange(query: CmsAppointmentListQuery, timezone: string): Prisma.DateTimeFilter | null {
     const { from, to } = query;
     if (!from && !to) {
@@ -277,8 +241,6 @@ export class AppointmentsController {
     try {
       return {
         ...(from ? { gte: zonedTimeToUtc(from, 0, timezone) } : {}),
-        // `to` is an inclusive day, so the exclusive upper bound is the next
-        // local midnight.
         ...(to ? { lt: zonedTimeToUtc(addDaysToDateString(to, 1), 0, timezone) } : {}),
       };
     } catch {

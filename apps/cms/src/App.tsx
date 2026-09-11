@@ -5,17 +5,6 @@ import { LoginPage } from "./pages/Login.js";
 import { RouteFallback } from "./components/RouteFallback.js";
 import { ErrorBoundary } from "./components/ErrorBoundary.js";
 
-/**
- * Route chunks, split out of the entry bundle.
- *
- * Before this the CMS shipped as one file: reaching the login form meant
- * downloading the bookings calendar, the weekly schedule editor and every
- * page-specific modal first. Vite emits one chunk per `import()` below.
- *
- * `LoginPage` is deliberately *not* in here. It is the guaranteed cold-start
- * route for any new session, so splitting it would buy nothing on the load that
- * matters most and cost an extra round trip before the password field paints.
- */
 const chunks = {
   setPassword: () => import("./pages/SetPassword.js"),
   dashboard: () => import("./pages/Dashboard.js"),
@@ -23,36 +12,31 @@ const chunks = {
   branding: () => import("./pages/BrandingSettings.js"),
   professionals: () => import("./pages/Professionals.js"),
   services: () => import("./pages/Services.js"),
+  locations: () => import("./pages/Locations.js"),
+  publicSite: () => import("./pages/PublicSiteSettings.js"),
   hours: () => import("./pages/Hours.js"),
 };
 
-// `lazy` resolves a module's default export; CMS components are named exports
-// (repo convention), so each import is mapped across.
 const SetPasswordPage = lazy(() => chunks.setPassword().then((m) => ({ default: m.SetPasswordPage })));
 const DashboardPage = lazy(() => chunks.dashboard().then((m) => ({ default: m.DashboardPage })));
 const BookingsPage = lazy(() => chunks.bookings().then((m) => ({ default: m.BookingsPage })));
 const BrandingSettingsPage = lazy(() => chunks.branding().then((m) => ({ default: m.BrandingSettingsPage })));
 const ProfessionalsPage = lazy(() => chunks.professionals().then((m) => ({ default: m.ProfessionalsPage })));
 const ServicesPage = lazy(() => chunks.services().then((m) => ({ default: m.ServicesPage })));
+const LocationsPage = lazy(() => chunks.locations().then((m) => ({ default: m.LocationsPage })));
+const PublicSiteSettingsPage = lazy(() =>
+  chunks.publicSite().then((m) => ({ default: m.PublicSiteSettingsPage })),
+);
 const HoursPage = lazy(() => chunks.hours().then((m) => ({ default: m.HoursPage })));
 
-/**
- * Everything reachable from the sidebar, warmed in the background once someone
- * is signed in.
- *
- * Without this, splitting would trade a smaller first load for a blank screen
- * on every *first* visit to a route — each page renders its own `AppShell`, so
- * the sidebar unmounts into the fallback while the chunk downloads. Fetching
- * them up front means the chunk is almost always already in memory by the time
- * anyone clicks, which keeps the win and drops the cost. `set-password` is
- * excluded: it is reachable only from an invite link, never from the nav.
- */
 const NAV_CHUNKS = [
   chunks.dashboard,
   chunks.bookings,
   chunks.branding,
   chunks.professionals,
   chunks.services,
+  chunks.locations,
+  chunks.publicSite,
   chunks.hours,
 ];
 
@@ -61,8 +45,6 @@ function RequireAuth({ children }: { children: React.ReactElement }) {
   return token ? children : <Navigate to="/login" replace />;
 }
 
-// UI-only gate (R10/R20 acceptance criterion: option "not available/visible"
-// to professionals) — actual enforcement is RolesGuard on the API side.
 function RequireOwner({ children }: { children: React.ReactElement }) {
   const { role } = useAuth();
   return role === "owner" ? children : <Navigate to="/" replace />;
@@ -75,14 +57,9 @@ export function App() {
     if (!token) return;
 
     const warm = () => {
-      // A prefetch that fails is not worth surfacing: navigating to the route
-      // retries the import, and the Suspense boundary covers it from there.
-      // Swallowing it here only stops an unhandled rejection.
       for (const load of NAV_CHUNKS) void load().catch(() => undefined);
     };
 
-    // Idle time where it exists, so warming never competes with the landing
-    // route's own data fetches. Safari still ships no requestIdleCallback.
     if (typeof requestIdleCallback === "function") {
       const handle = requestIdleCallback(warm);
       return () => cancelIdleCallback(handle);
@@ -92,8 +69,6 @@ export function App() {
   }, [token]);
 
   return (
-    // Outside Suspense, so a chunk that never arrives is caught rather than
-    // suspending forever behind the fallback.
     <ErrorBoundary>
       <Suspense fallback={<RouteFallback />}>
         <Routes>
@@ -107,8 +82,6 @@ export function App() {
               </RequireAuth>
             }
           />
-          {/* Owner and professional both manage bookings (R10/R20) — the API scopes
-              a professional's view to their own appointments, so no owner gate. */}
           <Route
             path="/bookings"
             element={
@@ -143,6 +116,28 @@ export function App() {
               <RequireAuth>
                 <RequireOwner>
                   <ServicesPage />
+                </RequireOwner>
+              </RequireAuth>
+            }
+          />
+          {/* R150: branches are business structure */}
+          <Route
+            path="/locations"
+            element={
+              <RequireAuth>
+                <RequireOwner>
+                  <LocationsPage />
+                </RequireOwner>
+              </RequireAuth>
+            }
+          />
+          {/* R170: the public site's title and description */}
+          <Route
+            path="/settings/public-site"
+            element={
+              <RequireAuth>
+                <RequireOwner>
+                  <PublicSiteSettingsPage />
                 </RequireOwner>
               </RequireAuth>
             }

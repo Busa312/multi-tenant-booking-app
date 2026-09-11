@@ -1,23 +1,21 @@
-import { ConflictException, Injectable } from "@nestjs/common";
+import { BadRequestException, ConflictException, Injectable } from "@nestjs/common";
 import * as bcrypt from "bcryptjs";
 import { Prisma } from "../../generated/prisma/index.js";
 import type { OnboardTenantRequest, OnboardTenantResponse } from "@booking/shared-types";
 import { PrismaService } from "../prisma/prisma.service.js";
+import { isValidTimezone } from "../common/timezone.js";
 
-/**
- * Formalizes system_design.md §9 step 2: create the Tenant row + initial
- * owner TenantUser in one transaction, assigning a subdomain. Runs outside
- * PrismaService.forTenant on purpose — no tenant_id exists yet for
- * TenantContextService to hold, since this call is what creates the tenant.
- * `Tenant` itself carries no RLS (see prisma/migrations/*_enable_rls), so it's
- * inserted directly; `tenant_user` does have RLS, so app.tenant_id is set
- * inside the same transaction right after the tenant row is created.
- */
 @Injectable()
 export class OnboardingService {
   constructor(private readonly prisma: PrismaService) {}
 
   async onboardTenant(input: OnboardTenantRequest): Promise<OnboardTenantResponse> {
+    if (!isValidTimezone(input.timezone)) {
+      throw new BadRequestException(
+        `timezone must be a valid IANA zone, e.g. "Asia/Tbilisi" — received "${input.timezone}"`,
+      );
+    }
+
     const passwordHash = await bcrypt.hash(input.ownerPassword, 10);
 
     try {

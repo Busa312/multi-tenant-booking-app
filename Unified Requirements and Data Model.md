@@ -8,8 +8,17 @@ This document is a source of truth for both client and tenant side apps. System 
 - **User** can choose one or more services
 - **User** can see open appointment time slots, filtered by chosen service(s) and duration
 - **User** can choose a specific **Professional** to book with, or "any available"
+- **User** can choose which **Location** to book at, when the tenant has more than one (R150)
 - **User** can view, reschedule, or cancel an existing appointment via a magic link (see below) — no account/login required
+- **User** can read the site in any of the tenant's enabled locales, chosen with a switcher (R160)
 - **Tenant** can edit colors and logo for the client side page (via `config_json`)
+- **Tenant** can set a public-site title and description, per enabled locale (R170)
+
+**Scope of the public site.** It exists to take a booking. Its whole content inventory is: the
+tenant's title/description and logo, the service list, the location list, the booking flow, and
+the magic-link management pages. Gallery, about-us, team biographies, testimonials and blog are
+deliberately *not* part of it — a tenant wanting those has a marketing site elsewhere and links
+to this one. This is a product decision, not a deferral.
 
 ### Tenant side (CMS)
 
@@ -19,7 +28,26 @@ This document is a source of truth for both client and tenant side apps. System 
 - **Tenant** can block off time (vacation, breaks, holidays) per professional or business-wide
 - **Tenant** can book, reschedule, or cancel appointments on a customer's behalf
 - **Tenant** can monitor booked appointments (calendar/list view)
+- **Tenant** can edit the list of locations (branches) and assign each professional to one (R150)
+- **Tenant** can write the public-site title and description, and translate service and location names, per enabled locale (R160/R170)
 - **Professional** can log into the CMS with a restricted role: view/reschedule/cancel their own appointments and manage their own availability (hours, time-off) — cannot edit services, pricing, other professionals, or branding
+
+## Requirement Ids
+
+Code that implements a requirement is tagged with an `// Rxx:` comment naming it, and the test
+that pins that behaviour carries the same tag. The ids are stable; they are never renumbered.
+
+`R10`–`R140` were assigned as the CMS and booking engine were built and currently exist **only**
+as those code comments — they are not written down here yet, and back-filling them from
+`grep -rn "R[0-9]*:" apps packages` is worth doing. The ids this feature introduces:
+
+| id | requirement |
+|---|---|
+| R150 | A customer picks which location to book at when the tenant has more than one; the choice filters the professionals offered and is recorded on the appointment. |
+| R160 | The public site renders in any of the tenant's enabled locales. The visitor chooses with a switcher; the choice is remembered in a cookie and the URL does not change. |
+| R170 | A tenant authors a public-site title and description, per enabled locale. |
+| R180 | A professional with no location works at every location. |
+| R190 | A location with appointment history is deactivated, never deleted. |
 
 ## Booking Access — Magic Link
 
@@ -59,7 +87,7 @@ JWT claims: `sub` (user id), `tenant_id`, `role`, `professional_id` (present onl
 
 - In-app booking payment collection (see note below)
 - Customer accounts / login
-- Client-side template/layout customization by tenant (colors/logo only, via `config_json`)
+- Client-side template/layout customization by tenant. The tenant controls colors, logo, title and description (all via `config_json`) — the layout itself is fixed.
 - Magic-link SMS delivery (email only, until SMS capture exists)
 
 **Note on payment (confirmed)**: the website is reservation-only. The customer pays in person at the salon after the appointment; no online checkout happens during booking, and `Appointment` carries no payment-status or payment-session fields. Online payment (gateway integration, adapters, etc.) is out of scope for now — not designed here, revisit if/when that work is scheduled.
@@ -85,13 +113,74 @@ All tables include `tenant_id uuid` + RLS policy scoping to the current tenant, 
 | `config_json` | jsonb | theme/presentation config (colors, logo, copy) |
 | `created_at` | timestamptz | |
 
+### Localized content (convention)
+
+Tenant-authored text that customers read is stored twice: the **plain column holds the default
+locale** (`config_json.enabled_locales[0]`) and stays a normal, queryable, indexable column; a
+sibling `*_i18n jsonb` column holds only the *other* locales, as `{"ka": "…"}`. A locale absent
+from the map falls back to the plain column.
+
+This is the one narrow exception to "everything queryable is normalized columns, not JSON blobs"
+(`system_design.md` §5), and it is bounded: only presentation text is ever stored this way. Nothing
+is filtered, sorted or joined on a translation.
+
+Resolution is done by the *frontends*, never by the API — `apps/api` returns both the plain value
+and the map and stays locale-agnostic, so there is exactly one copy of the fallback rule
+(`packages/shared-types/src/i18n.ts`) rather than a hand-maintained second copy inside the API.
+
+Columns following this convention: `service.name`, `service.description`, `professional.name`,
+`location.name`, `location.address_line`, and `config_json.copy.title` / `.description`.
+
+**Which locales a tenant publishes in** is `config_json.enabled_locales`, editable by the owner
+(R160). Both platform locales are on by default. The *first* entry is the tenant's default
+locale — the one the plain columns hold — and it cannot be switched off, because every missing
+translation falls back to those columns: dropping it would serve text labelled as a language it
+isn't written in. Changing which language is default is a data migration, not a setting.
+
+### Location
+
+A tenant's physical branch. A tenant may have none (the common case — a single salon with no
+address worth modelling), one, or several.
+
+| column | type | notes |
+|---|---|---|
+| `id` | uuid, PK | |
+| `tenant_id` | uuid, FK | |
+| `name` | text | e.g. "Vake", "Saburtalo" |
+| `name_i18n` | jsonb, nullable | non-default locales, per the convention above |
+| `address_line` | text | street address as one line |
+| `address_line_i18n` | jsonb, nullable | |
+| `city` | text, nullable | |
+| `phone` | text, nullable | branch phone, shown on the public site |
+| `latitude` | numeric(9,6), nullable | for the map link; both coords set or neither |
+| `longitude` | numeric(9,6), nullable | |
+| `position` | smallint | display order on the public site |
+| `is_active` | boolean, default true | R190: deactivated, never deleted, once it has history |
+| `created_at` | timestamptz | |
+
+**Locations are a bookable dimension, not decoration.** The location a customer picks filters
+which professionals they can book (below), and is recorded on the `Appointment` so the
+confirmation and the magic link can say where to turn up.
+
+**Per-location business hours are deliberately absent.** A professional belongs to one location
+and already carries their own `BusinessHours` rows, so hours are location-scoped by consequence.
+The case this cannot express is one person working mornings at one branch and afternoons at
+another; supporting it means making `Professional.location_id` a join table and scoping
+`BusinessHours` to (professional, location). Deferred until a real tenant needs it.
+
 ### Professional
 | column | type | notes |
 |---|---|---|
 | `id` | uuid, PK | |
 | `tenant_id` | uuid, FK | |
+| `location_id` | uuid, FK, nullable | R180: null = works at every location |
 | `name` | text | |
+| `name_i18n` | jsonb, nullable | non-default locales, per the convention above |
 | `created_at` | timestamptz | |
+
+`location_id` is nullable in the same sense `professional_id` is nullable on `BusinessHours` and
+`TimeOff`: null means "applies everywhere" rather than "unknown". A tenant with no locations has
+every professional at null, which is why adding locations does not disturb existing tenants.
 
 ### TenantUser
 | column | type | notes |
@@ -112,8 +201,12 @@ All tables include `tenant_id uuid` + RLS policy scoping to the current tenant, 
 | `id` | uuid, PK | |
 | `tenant_id` | uuid, FK | |
 | `name` | text | |
+| `name_i18n` | jsonb, nullable | non-default locales, per the Localized content convention |
+| `description` | text, nullable | optional long text, shown on the public site |
+| `description_i18n` | jsonb, nullable | |
 | `duration_minutes` | int | |
 | `price` | numeric | current price; appointments snapshot this at booking time |
+| `is_active` | boolean, default true | R60/R70: deactivated, never deleted, once it has history |
 | `created_at` | timestamptz | |
 
 ### ServiceProfessional (join table)
@@ -151,6 +244,7 @@ Composite PK on (`service_id`, `professional_id`).
 | `id`                      | uuid, PK               |                                                                                         |
 | `tenant_id`               | uuid, FK               |                                                                                         |
 | `professional_id`         | uuid, FK, nullable     | null = "any available" was chosen                                                       |
+| `location_id`             | uuid, FK, nullable     | R150: the branch booked. null = the tenant has no locations. **Restrict** on delete — deleting a branch must not erase where past appointments happened, which is why locations deactivate instead (R190) |
 | `user_name`               | text                   |                                                                                         |
 | `phone_number`            | text                   |                                                                                         |
 | `email`                   | text                   |                                                                                         |
@@ -187,6 +281,7 @@ trigger. That invariant is the booking service's to keep.
 
 ```mermaid
 erDiagram
+    TENANT ||--o{ LOCATION : has
     TENANT ||--o{ PROFESSIONAL : has
     TENANT ||--o{ TENANT_USER : has
     TENANT ||--o{ SERVICE : has
@@ -194,6 +289,9 @@ erDiagram
     TENANT ||--o{ TIME_OFF : has
     TENANT ||--o{ APPOINTMENT : has
     TENANT ||--o{ APPOINTMENT_SERVICE : has
+
+    LOCATION ||--o{ PROFESSIONAL : "based at (optional)"
+    LOCATION ||--o{ APPOINTMENT : "booked at (optional)"
 
     PROFESSIONAL ||--o| TENANT_USER : "logs in as (optional)"
     PROFESSIONAL ||--o{ SERVICE_PROFESSIONAL : performs
@@ -216,10 +314,28 @@ erDiagram
         timestamptz created_at
     }
 
-    PROFESSIONAL {
+    LOCATION {
         uuid id PK
         uuid tenant_id FK
         text name
+        jsonb name_i18n
+        text address_line
+        jsonb address_line_i18n
+        text city
+        text phone
+        numeric latitude
+        numeric longitude
+        smallint position
+        boolean is_active
+        timestamptz created_at
+    }
+
+    PROFESSIONAL {
+        uuid id PK
+        uuid tenant_id FK
+        uuid location_id FK
+        text name
+        jsonb name_i18n
         timestamptz created_at
     }
 
@@ -239,8 +355,12 @@ erDiagram
         uuid id PK
         uuid tenant_id FK
         text name
+        jsonb name_i18n
+        text description
+        jsonb description_i18n
         int duration_minutes
         numeric price
+        boolean is_active
         timestamptz created_at
     }
 
@@ -272,6 +392,7 @@ erDiagram
         uuid id PK
         uuid tenant_id FK
         uuid professional_id FK
+        uuid location_id FK
         text user_name
         text phone_number
         text email
@@ -296,7 +417,7 @@ erDiagram
     }
 ```
 
-Notes: `PROFESSIONAL ||--o| TENANT_USER` is optional in both directions — a `Professional` may have no login, and a `TENANT_USER` with role `owner` has no `professional_id`. Nullable `professional_id` on `BUSINESS_HOURS`, `TIME_OFF`, and `APPOINTMENT` means "applies tenant-wide" / "any available," per the notes in the tables above.
+Notes: `PROFESSIONAL ||--o| TENANT_USER` is optional in both directions — a `Professional` may have no login, and a `TENANT_USER` with role `owner` has no `professional_id`. Nullable `professional_id` on `BUSINESS_HOURS`, `TIME_OFF`, and `APPOINTMENT` means "applies tenant-wide" / "any available," per the notes in the tables above. Nullable `location_id` reads the same way: on `PROFESSIONAL` it means "works at every location" (R180), and on `APPOINTMENT` it means the tenant has no locations to pick from.
 
 ## Read/Write Pattern
 
@@ -346,3 +467,12 @@ Still open:
 - **Same service twice on one appointment.** Rejected with a 400 for now rather than
   modelled as a quantity; the surrogate PK means allowing it later is a validation
   change, not a migration.
+- **One professional split across branches.** `Professional.location_id` is singular, so a
+  stylist working mornings in Vake and afternoons in Saburtalo can't be modelled — today they
+  are either at one branch or (with a null) at all of them, with one set of hours either way.
+  The fix is a `ProfessionalLocation` join table plus a `location_id` on `BusinessHours`, which
+  is additive: nothing about the singular column has to be unpicked first.
+- **Locale-specific URLs.** Language is a cookie, not a path segment, so a tenant's Georgian and
+  English content share one URL and search engines only ever see the default locale. Moving to
+  `/ka/…` later is a routing change on the public site plus `hreflang` tags; nothing in the data
+  model assumes either shape.

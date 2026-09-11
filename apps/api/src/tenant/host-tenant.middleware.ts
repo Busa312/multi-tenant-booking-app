@@ -3,7 +3,25 @@ import type { FastifyRequest, FastifyReply } from "fastify";
 import { TenantContextService } from "./tenant-context.service.js";
 import { TenantResolverService } from "./tenant-resolver.service.js";
 
-/** Applied to /public/* routes only — CMS routes get tenant identity from the JWT instead (see JwtAuthGuard). */
+export function protocolFor(headers: Record<string, unknown>, host: string): "http" | "https" {
+  const forwarded = String(headers["x-forwarded-proto"] ?? "")
+    .split(",")[0]
+    ?.trim()
+    .toLowerCase();
+  if (forwarded === "http" || forwarded === "https") {
+    return forwarded;
+  }
+
+  const hostname = host.split(":")[0]?.toLowerCase() ?? "";
+  const isLoopback =
+    hostname === "localhost" ||
+    hostname.endsWith(".localhost") ||
+    hostname === "127.0.0.1" ||
+    hostname === "[::1]" ||
+    hostname === "::1";
+  return isLoopback ? "http" : "https";
+}
+
 @Injectable()
 export class HostTenantMiddleware implements NestMiddleware {
   constructor(
@@ -13,16 +31,13 @@ export class HostTenantMiddleware implements NestMiddleware {
 
   async use(req: FastifyRequest["raw"], _res: FastifyReply["raw"], next: (error?: unknown) => void) {
     try {
-      // apps/public-site's server-side fetches forward the browser's original
-      // hostname as x-forwarded-host, since their own outgoing request's Host
-      // header would otherwise be the API's, not the tenant's (see api-client's
-      // ApiClientOptions.getExtraHeaders). Direct browser requests use `host`.
       const host = (req.headers["x-forwarded-host"] as string | undefined) ?? req.headers.host;
       if (!host) {
         throw new Error("Request missing Host header");
       }
       const tenantId = await this.tenantResolver.resolveTenantIdByHost(host);
-      this.tenantContext.update({ tenantId });
+
+      this.tenantContext.update({ tenantId, host, protocol: protocolFor(req.headers, host) });
       next();
     } catch (err) {
       next(err);

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import type { LocalizedText } from "@booking/shared-types";
 import { useI18n } from "../i18n/I18nContext.js";
 import { Field, TextInput, Textarea } from "./ui/index.js";
 import { cx } from "../lib/cx.js";
@@ -7,25 +8,28 @@ import styles from "./LocalizedField.module.css";
 interface LocalizedFieldProps {
   label: string;
   id: string;
-  /**
-   * The tenant's enabled content locales, first entry being the default one.
-   * One entry (or none) renders a plain input — which is every tenant today.
-   */
+
   locales: string[];
-  /** The default-locale value; the one the Service row's plain column holds. */
+
   value: string;
   onChange: (value: string) => void;
+
+  i18n: LocalizedText;
+  onI18nChange: (i18n: LocalizedText) => void;
   multiline?: boolean;
   placeholder?: string;
   required?: boolean;
 }
 
+// R160: one field
 export function LocalizedField({
   label,
   id,
   locales,
   value,
   onChange,
+  i18n,
+  onI18nChange,
   multiline,
   placeholder,
   required,
@@ -35,22 +39,37 @@ export function LocalizedField({
   const [activeLocale, setActiveLocale] = useState(defaultLocale);
   const isDefault = activeLocale === defaultLocale;
 
+  const current = isDefault ? value : (i18n[activeLocale] ?? "");
+
+  const handleChange = (next: string) => {
+    if (isDefault) {
+      onChange(next);
+      return;
+    }
+
+    const updated = { ...i18n };
+    if (next === "") {
+      delete updated[activeLocale];
+    } else {
+      updated[activeLocale] = next;
+    }
+    onI18nChange(updated);
+  };
+
   const control = multiline ? (
     <Textarea
       id={id}
-      value={isDefault ? value : ""}
-      onChange={(e) => onChange(e.target.value)}
+      value={current}
+      onChange={(e) => handleChange(e.target.value)}
       placeholder={isDefault ? placeholder : ""}
-      readOnly={!isDefault}
       rows={3}
     />
   ) : (
     <TextInput
       id={id}
-      value={isDefault ? value : ""}
-      onChange={(e) => onChange(e.target.value)}
+      value={current}
+      onChange={(e) => handleChange(e.target.value)}
       placeholder={isDefault ? placeholder : ""}
-      readOnly={!isDefault}
       required={required && isDefault}
     />
   );
@@ -76,11 +95,12 @@ export function LocalizedField({
             onClick={() => setActiveLocale(locale)}
           >
             {locale}
+            {locale !== defaultLocale && i18n[locale] && <span className={styles.filled} aria-hidden="true" />}
           </button>
         ))}
       </div>
       {control}
-      {!isDefault && <p className={styles.hint}>{t("services.translationPending", { locale: activeLocale })}</p>}
+      {!isDefault && !current && <p className={styles.hint}>{t("common.translationFallback", { locale: defaultLocale })}</p>}
     </Field>
   );
 }
