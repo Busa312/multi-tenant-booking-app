@@ -3,7 +3,9 @@ import type { ProfessionalSummary, ServiceSummary } from "@booking/shared-types"
 import { ApiError } from "@booking/api-client";
 import { cachedApi } from "../lib/cache.js";
 import { useI18n } from "../i18n/I18nContext.js";
+import { useLocalizedName } from "../lib/useLocalizedName.js";
 import { AppShell } from "../components/AppShell.js";
+import { PillList } from "../components/PillList.js";
 import { Modal } from "../components/Modal.js";
 import { EditServiceModal } from "../components/EditServiceModal.js";
 import { CardSkeleton } from "../components/CardSkeleton.js";
@@ -18,9 +20,12 @@ import {
   TableRow,
   TableEmpty,
 } from "../components/ui/index.js";
-import styles from "./Services.module.css";
 
 const COLUMNS = "1.3fr 90px 100px 1.4fr 100px 60px";
+
+// A service many people perform would otherwise grow its row a line per few
+// names; past this many the rest fold into a "+N" chip that lists them.
+const MAX_PROFESSIONAL_CHIPS = 2;
 
 /** A TableRow with an ActionMenu in it. Sized for the loading placeholder. */
 const TABLE_ROW = "46px";
@@ -37,6 +42,7 @@ interface PageData {
 
 export function ServicesPage() {
   const { t } = useI18n();
+  const nameOf = useLocalizedName();
   const [data, setData] = useState<PageData | null>(null);
   const [listError, setListError] = useState<string | null>(null);
   const [editTarget, setEditTarget] = useState<ServiceSummary | "new" | null>(null);
@@ -69,8 +75,9 @@ export function ServicesPage() {
   function professionalNames(s: ServiceSummary): string[] {
     if (!data) return [];
     return s.professionalIds
-      .map((id) => data.professionals.find((p) => p.id === id)?.name)
-      .filter((name): name is string => Boolean(name));
+      .map((id) => data.professionals.find((p) => p.id === id))
+      .filter((p): p is NonNullable<typeof p> => Boolean(p))
+      .map((p) => nameOf(p.name, p.nameI18n));
   }
 
   function handleSaved(saved: ServiceSummary) {
@@ -80,7 +87,7 @@ export function ServicesPage() {
     setUnbookableWarning(
       saved.professionalIds.length === 0
         ? t(data?.hasTenantWideHours ? "services.unbookableWarningTenantHours" : "services.unbookableWarning", {
-            name: saved.name,
+            name: nameOf(saved.name, saved.nameI18n),
           })
         : null,
     );
@@ -112,7 +119,7 @@ export function ServicesPage() {
   }
 
   async function handleDelete(s: ServiceSummary) {
-    if (!window.confirm(t("services.confirmDelete", { name: s.name }))) return;
+    if (!window.confirm(t("services.confirmDelete", { name: nameOf(s.name, s.nameI18n) }))) return;
     setListError(null);
     try {
       await cachedApi.deleteService(s.id);
@@ -137,14 +144,14 @@ export function ServicesPage() {
 
   return (
     <AppShell title={t("services.title")} subtitle={t("services.subtitle")}>
-      <div className="fade-up">
-        <div className={styles.toolbar}>
-          <div className={styles.count}>
+      <div className="animate-fade-up motion-reduce:animate-none">
+        <div className="mb-5 flex flex-wrap items-center gap-3">
+          <div className="text-[13px] text-base-content/60">
             {data ? t("services.count", { count: data.services.length }) : t("common.loading")}
           </div>
           {/* Disabled until the roster and locale list are in — the form can't
               be rendered without them. */}
-          <Button className={styles.add} icon="add" disabled={!data} onClick={() => setEditTarget("new")}>
+          <Button className="ml-auto" icon="add" disabled={!data} onClick={() => setEditTarget("new")}>
             {t("services.add")}
           </Button>
         </div>
@@ -153,8 +160,8 @@ export function ServicesPage() {
         {unbookableWarning && <Alert variant="warning">{unbookableWarning}</Alert>}
 
         {data && (
-          <div className={styles.tableScroll}>
-            <Table className={styles.table}>
+          <div className="overflow-x-auto">
+            <Table className="min-w-[800px]">
               <TableHead columns={COLUMNS}>
                 <div>{t("services.colName")}</div>
                 <div>{t("services.colDuration")}</div>
@@ -166,15 +173,17 @@ export function ServicesPage() {
               {data.services.map((s) => (
                 <TableRow key={s.id} columns={COLUMNS}>
                   <div>
-                    <div className={styles.name}>{s.name}</div>
-                    {s.description && <div className={styles.description}>{s.description}</div>}
+                    <div className="font-semibold">{nameOf(s.name, s.nameI18n)}</div>
+                    {s.description && (
+                      <div className="mt-0.5 line-clamp-2 text-xs text-base-content/60">
+                        {nameOf(s.description, s.descriptionI18n)}
+                      </div>
+                    )}
                   </div>
-                  <div className={styles.cell}>{t("services.minutes", { count: s.durationMinutes })}</div>
-                  <div className={styles.cell}>{t("services.priceValue", { price: s.price })}</div>
-                  <div className={styles.badges}>
-                    {professionalNames(s).map((name) => (
-                      <Pill key={name}>{name}</Pill>
-                    ))}
+                  <div className="text-[13.5px] tabular-nums">{t("services.minutes", { count: s.durationMinutes })}</div>
+                  <div className="text-[13.5px] font-medium tabular-nums">{t("services.priceValue", { price: s.price })}</div>
+                  <div className="flex flex-wrap gap-1">
+                    <PillList items={professionalNames(s)} max={MAX_PROFESSIONAL_CHIPS} />
                     {s.professionalIds.length === 0 && <Pill tone="warning">{t("services.noneAssigned")}</Pill>}
                   </div>
                   <div>
@@ -182,8 +191,8 @@ export function ServicesPage() {
                       {t(s.isActive ? "services.active" : "services.inactive")}
                     </Pill>
                   </div>
-                  <div className={styles.actions}>
-                    <ActionMenu ariaLabel={t("common.rowActions", { name: s.name })} items={rowActions(s)} />
+                  <div className="flex justify-end">
+                    <ActionMenu ariaLabel={t("common.rowActions", { name: nameOf(s.name, s.nameI18n) })} items={rowActions(s)} />
                   </div>
                 </TableRow>
               ))}
@@ -221,7 +230,7 @@ export function ServicesPage() {
         >
           {/* R60: existing appointments for this service are untouched — only
               the public listing and new bookings change. */}
-          <p className={styles.muted}>{t("services.deactivateBody", { name: deactivateTarget.name })}</p>
+          <p className="text-base-content/70">{t("services.deactivateBody", { name: nameOf(deactivateTarget.name, deactivateTarget.nameI18n) })}</p>
         </Modal>
       )}
     </AppShell>

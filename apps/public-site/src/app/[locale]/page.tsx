@@ -4,7 +4,6 @@ import { TenantIntro } from "@/components/TenantIntro";
 import { BookCta } from "@/components/BookCta";
 import { ServiceList } from "@/components/ServiceList";
 import { LocationList } from "@/components/LocationList";
-import styles from "./page.module.css";
 
 export const revalidate = 60;
 
@@ -16,10 +15,16 @@ export default async function HomePage({ params }: { params: { locale: string } 
   const { title, description } = resolveCopy(context);
 
   return (
-    <div className={styles.page}>
-      <div className={styles.hero}>
-        <TenantIntro title={title} description={description} />
-        <BookCta label={context.t("home.book")} />
+    <div className="flex flex-col gap-12">
+      <div className="relative overflow-hidden rounded-box border border-base-300 bg-linear-to-br from-primary/12 via-base-200 to-secondary/10 px-6 py-10 sm:px-10 sm:py-14">
+        <div
+          className="pointer-events-none absolute -top-20 -right-16 size-64 rounded-full bg-primary/15 blur-3xl"
+          aria-hidden="true"
+        />
+        <div className="relative flex flex-col items-start gap-7">
+          <TenantIntro title={title} description={description} />
+          <BookCta label={context.t("home.book")} />
+        </div>
       </div>
 
       <ServiceList
@@ -27,6 +32,7 @@ export default async function HomePage({ params }: { params: { locale: string } 
         heading={context.t("home.servicesTitle")}
         emptyLabel={context.t("home.servicesEmpty")}
         minutesLabel={(count) => context.t("home.minutes", { count })}
+        bookLabel={context.t("home.bookService")}
         text={context.text}
       />
 

@@ -4,10 +4,9 @@ import { dayOf, type DayHours, type WeekDraft } from "../lib/weekSchedule.js";
 import { ScheduleDayRow, type ScheduleScope } from "./ScheduleDayRow.js";
 import { ScheduleSaveBar } from "./ScheduleSaveBar.js";
 import { Card, Eyebrow } from "./ui/index.js";
-import styles from "./WeeklyScheduleEditor.module.css";
 // The week's column tracks are declared next to the row that fills them, so the
 // two can't drift apart — the rows subgrid onto whatever this defines.
-import rowStyles from "./ScheduleDayRow.module.css";
+import { WEEK_GRID } from "../lib/scheduleGridClasses.js";
 
 interface WeeklyScheduleEditorProps {
   scope: ScheduleScope;
@@ -59,15 +58,15 @@ export function WeeklyScheduleEditor({
     hours.find((row) => row.dayOfWeek === dayOfWeek && row.professionalId === null) ?? null;
 
   return (
-    <Card className={styles.card}>
+    <Card className="@container">
       <Eyebrow>{t("hours.weeklyTitle")}</Eyebrow>
-      <p className={styles.subtitle}>
+      <p className="mt-1 text-[13px] leading-relaxed text-base-content/60">
         {scope === "organisation"
           ? t("hours.weeklySubtitleOrg")
           : t("hours.weeklySubtitlePro", { name: professionalName ?? "" })}
       </p>
 
-      <div className={`${styles.days} ${rowStyles.grid}`}>
+      <div className={`mt-2.5 ${WEEK_GRID}`}>
         {WEEK_ORDER.map((dayOfWeek) => (
           <ScheduleDayRow
             key={dayOfWeek}

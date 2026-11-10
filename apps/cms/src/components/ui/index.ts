@@ -1,5 +1,5 @@
-// Reusable, style-owning UI primitives. Each component keeps its styles in a
-// co-located CSS Module so pages compose behavior, not CSS.
+// Reusable UI primitives built on daisyUI. Pages compose these instead of
+// repeating class strings, so a visual change lands in one place.
 export { Icon } from "./Icon.js";
 export { Button } from "./Button.js";
 export { ActionMenu, type ActionMenuItem } from "./ActionMenu.js";

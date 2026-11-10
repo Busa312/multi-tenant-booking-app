@@ -36,6 +36,10 @@ model Tenant {
   customDomain     String?   @unique @map("custom_domain")
   domainVerifiedAt DateTime? @map("domain_verified_at") @db.Timestamptz
   configJson       Json      @default("{}") @map("config_json")
+  // R220: longest idle gap (minutes, 0–60) between consecutive segments of a
+  // visit. A booking rule, so a column rather than presentation config_json.
+  // The 0–60 range is a CHECK constraint in the migration.
+  maxVisitGapMinutes Int     @default(0) @map("max_visit_gap_minutes") @db.SmallInt
   createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz
 
   locations       Location[]
@@ -47,6 +51,8 @@ model Tenant {
   timeOff         TimeOff[]
   appointments    Appointment[]
   appointmentServices AppointmentService[]
+  visits          Visit[]
+  slotHolds       SlotHold[]
 
   @@map("tenant")
 }
@@ -71,6 +77,7 @@ model Location {
   addressLine     String   @map("address_line")
   addressLineI18n Json?    @map("address_line_i18n")
   city            String?
+  cityI18n        Json?    @map("city_i18n")
   phone           String?
   // Both set or neither — a lone coordinate can't produce a map link. Decimal
   // rather than Float for the same reason price is: no binary rounding drift.
@@ -113,6 +120,7 @@ model Professional {
   businessHours        BusinessHours[]
   timeOff              TimeOff[]
   appointments         Appointment[]
+  slotHolds            SlotHold[]
 
   @@index([tenantId])
   @@map("professional")
@@ -211,6 +219,47 @@ model TimeOff {
   @@map("time_off")
 }
 
+/// R200: one customer booking from the public site. Groups the appointments —
+/// one per professional segment — that the customer sees as a single booking,
+/// and owns the magic link that manages all of them together (R230). Its status
+/// is derived from its appointments rather than stored.
+model Visit {
+  id                   String    @id @default(uuid()) @db.Uuid
+  tenantId             String    @map("tenant_id") @db.Uuid
+  accessTokenHash      String?   @unique @map("access_token_hash")
+  accessTokenExpiresAt DateTime? @map("access_token_expires_at") @db.Timestamptz
+  createdAt            DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt            DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+
+  tenant       Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  appointments Appointment[]
+
+  @@index([tenantId])
+  @@map("visit")
+}
+
+/// R250: a customer's 10-minute claim on one segment of the time they picked.
+/// The segments of one hold share `holdId`; expired rows are ignored, not
+/// relied on to be deleted.
+model SlotHold {
+  id             String   @id @default(uuid()) @db.Uuid
+  tenantId       String   @map("tenant_id") @db.Uuid
+  holdId         String   @map("hold_id") @db.Uuid
+  professionalId String   @map("professional_id") @db.Uuid
+  startAt        DateTime @map("start_at") @db.Timestamptz
+  endAt          DateTime @map("end_at") @db.Timestamptz
+  expiresAt      DateTime @map("expires_at") @db.Timestamptz
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  tenant       Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  professional Professional @relation(fields: [professionalId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([holdId])
+  @@index([professionalId, startAt])
+  @@map("slot_hold")
+}
+
 model Appointment {
   id                   String            @id @default(uuid()) @db.Uuid
   tenantId             String            @map("tenant_id") @db.Uuid
@@ -224,8 +273,10 @@ model Appointment {
   endAt                DateTime          @map("end_at") @db.Timestamptz
   price                Decimal           @db.Decimal(10, 2)
   status               AppointmentStatus @default(booked)
-  accessTokenHash      String?           @unique @map("access_token_hash")
-  accessTokenExpiresAt DateTime?         @map("access_token_expires_at") @db.Timestamptz
+  // R200: the customer visit this appointment is one segment of. Null for a
+  // staff-created booking, which never had a magic link (R70). The link itself
+  // lives on the visit, so every segment shares it (R230).
+  visitId              String?           @map("visit_id") @db.Uuid
   // null = the customer booked it themselves on the public site; set = a staff
   // member created it from the CMS. The only way to tell the two origins apart,
   // which is what explains a row having no magic-link token and who to ask
@@ -245,8 +296,12 @@ model Appointment {
   location      Location?            @relation(fields: [locationId], references: [id], onDelete: Restrict)
   createdByUser TenantUser?          @relation("AppointmentCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
   services      AppointmentService[]
+  // Restrict: a visit is the customer's booking record and is never deleted
+  // while it has segments — cancelling flips statuses, it doesn't remove rows.
+  visit         Visit?               @relation(fields: [visitId], references: [id], onDelete: Restrict)
 
   @@index([tenantId, startAt])
+  @@index([visitId])
   @@index([tenantId, professionalId, startAt])
   @@map("appointment")
 }

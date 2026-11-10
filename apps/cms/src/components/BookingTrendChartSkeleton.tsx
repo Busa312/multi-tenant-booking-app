@@ -1,8 +1,7 @@
 import { useI18n } from "../i18n/I18nContext.js";
 import { TREND_DAYS } from "../lib/dashboardStats.js";
+import { TREND_AXIS, TREND_BAR_SHAPE, TREND_COLUMN, TREND_FIGURE, TREND_RAIL } from "../lib/trendChartClasses.js";
 import { Card, Skeleton } from "./ui/index.js";
-import chart from "./BookingTrendChart.module.css";
-import styles from "./BookingTrendChartSkeleton.module.css";
 
 /**
  * Fixed bar heights, in percent of the rail. A repeating pattern rather than
@@ -13,38 +12,32 @@ import styles from "./BookingTrendChartSkeleton.module.css";
 const BAR_HEIGHTS = [38, 62, 45, 78, 30, 55, 71, 42, 66, 34];
 
 /**
- * The trend card's stand-in.
- *
- * Structural classes come from `BookingTrendChart.module.css` — the same
- * stylesheet the real chart uses — rather than being re-declared here. The rail
- * is 108px tall and 92px below 520px wide, and those numbers reserving the
- * right space is the entire job of this component; copying them would mean a
- * future tweak to the chart silently reintroduces the shift. Sharing the rule
- * is the one deviation from "every component owns its styles" that the CLS
- * guarantee actually depends on.
+ * The trend card's stand-in. Its layout classes come from trendChartClasses —
+ * the same source the real chart uses — because reserving exactly the chart's
+ * height is this component's whole job.
  */
 export function BookingTrendChartSkeleton() {
   const { t } = useI18n();
 
   return (
-    <Card className={chart.card} role="status" aria-busy="true" aria-label={t("common.loading")}>
+    <Card role="status" aria-busy="true" aria-label={t("common.loading")}>
       <Skeleton width="34%" height="11px" />
-      <Skeleton width="56%" height="13px" className={styles.subtitle} />
+      <Skeleton width="56%" height="22px" className="mt-1.5" />
 
-      <div className={chart.figure}>
-        <Skeleton width="48%" height="12.5px" className={styles.figcaption} />
+      <div className={TREND_FIGURE}>
+        <Skeleton width="48%" height="12.5px" className="mb-2.5" />
 
-        <div className={chart.rail}>
+        <div className={TREND_RAIL}>
           {Array.from({ length: TREND_DAYS }, (_, index) => (
-            <div key={index} className={chart.column}>
+            <div key={index} className={TREND_COLUMN}>
               {/* noUncheckedIndexedAccess: the modulo can't overflow, but the
                   index signature is still optional. */}
-              <Skeleton className={styles.bar} height={`${BAR_HEIGHTS[index % BAR_HEIGHTS.length] ?? 50}%`} />
+              <Skeleton className={TREND_BAR_SHAPE} height={`${BAR_HEIGHTS[index % BAR_HEIGHTS.length] ?? 50}%`} />
             </div>
           ))}
         </div>
 
-        <div className={chart.axis}>
+        <div className={TREND_AXIS}>
           <Skeleton width="52px" height="11.5px" />
           <Skeleton width="52px" height="11.5px" />
         </div>

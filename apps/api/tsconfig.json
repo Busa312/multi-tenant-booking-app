@@ -1,9 +1,12 @@
 {
   "extends": "@booking/config/tsconfig/nestjs.json",
   "compilerOptions": {
-    "baseUrl": "./",
+    "rootDir": "./src",
     "incremental": true,
-    "outDir": "dist"
+    "outDir": "dist",
+    // Kept inside dist/ so nest's deleteOutDir wipes it too. If it outlives dist/,
+    // incremental tsc thinks the build is current and emits nothing.
+    "tsBuildInfoFile": "dist/tsconfig.tsbuildinfo"
   },
   "exclude": ["node_modules", "dist", "generated", "prisma"]
 }

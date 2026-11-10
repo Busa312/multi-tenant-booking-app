@@ -1,7 +1,6 @@
 import type { TenantUserRole } from "@booking/shared-types";
 import { useI18n } from "../i18n/I18nContext.js";
 import { Button, ButtonLink, Card, Eyebrow } from "./ui/index.js";
-import styles from "./DashboardQuickActions.module.css";
 
 /** Why "New booking" can't be used yet — the brand-new-tenant states. */
 export type BookingBlocker = "no-services" | "no-professionals";
@@ -25,9 +24,9 @@ export function DashboardQuickActions({ role, onNewBooking, canBook, blocker }: 
   const { t } = useI18n();
 
   return (
-    <Card className={styles.card}>
+    <Card className="px-5 py-4">
       <Eyebrow>{t("dashboard.quickActions")}</Eyebrow>
-      <div className={styles.row}>
+      <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:flex-wrap [&>*]:pointer-coarse:min-h-11">
         <Button icon="add" disabled={!canBook} onClick={onNewBooking}>
           {t("dashboard.actionNewBooking")}
         </Button>
@@ -50,7 +49,7 @@ export function DashboardQuickActions({ role, onNewBooking, canBook, blocker }: 
       {/* One next step, not two: a tenant with neither services nor staff is
           pointed at the service first. */}
       {blocker && (
-        <p className={styles.hint}>
+        <p className="mt-3 text-xs text-base-content/60">
           {t(blocker === "no-services" ? "dashboard.noServicesYet" : "dashboard.noProfessionalsYet")}
         </p>
       )}

@@ -5,9 +5,11 @@
  * apps/cms and apps/public-site, so a regression here is a regression in two
  * apps at once, and neither app has a test runner yet.
  *
- * `.cjs` rather than `.js` because this package is `"type": "module"` — a plain
- * jest.config.js would be parsed as ESM and `module.exports` would be undefined.
- * ts-jest compiles the sources to CommonJS for the same reason apps/api's config
+ * `.cjs` pins this file to CommonJS explicitly, whatever the package's `"type"`.
+ * The package is deliberately *not* `"type": "module"`: apps/api resolves it with
+ * `moduleResolution: Node16` from CommonJS, and an ESM-typed package there breaks
+ * every `import type` (TS1541). Vite and Next ignore the field, so the frontends
+ * are unaffected. ts-jest compiles the sources to CommonJS, as apps/api's config
  * does; the package's own imports are extensionless, so nothing needs remapping.
  */
 

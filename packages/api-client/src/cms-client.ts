@@ -16,6 +16,7 @@ import type {
   LoginResponse,
   ProfessionalSummary,
   UpdateLocationRequest,
+  UpdateTenantBookingRulesRequest,
   UpdateTenantCopyRequest,
   UpdateTenantLocalesRequest,
   UpdateCmsAppointmentRequest,
@@ -67,6 +68,11 @@ export class CmsApiClient {
   // R170: the public site's title and description
   updateTenantCopy(payload: UpdateTenantCopyRequest) {
     return this.http.patch<Tenant>("/cms/tenant/copy", payload);
+  }
+
+  // R220: owner-only booking rules (the gap allowed between visit segments)
+  updateTenantBookingRules(payload: UpdateTenantBookingRulesRequest) {
+    return this.http.patch<Tenant>("/cms/tenant/booking-rules", payload);
   }
 
   // R160: which languages the public site publishes in.

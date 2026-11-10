@@ -2,7 +2,7 @@ import { randomBytes, randomInt } from "node:crypto";
 import { BadRequestException, Injectable, ServiceUnavailableException } from "@nestjs/common";
 import { RedisService } from "../redis/redis.service.js";
 import { TenantContextService } from "../tenant/tenant-context.service.js";
-import { hashToken } from "../booking/booking.service.js";
+import { hashToken } from "../booking/magic-link.js";
 
 /**
  * Phone verification for public bookings: a one-time code proves the customer

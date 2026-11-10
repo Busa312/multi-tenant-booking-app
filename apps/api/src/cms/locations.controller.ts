@@ -140,6 +140,7 @@ export class LocationsController {
           addressLine: requireText(body.addressLine, "addressLine"),
           addressLineI18n: validateLocalizedText(body.addressLineI18n, "addressLineI18n", locales),
           city: optionalText(body.city),
+          cityI18n: validateLocalizedText(body.cityI18n, "cityI18n", locales),
           phone: optionalText(body.phone),
           ...coordinates,
           position,
@@ -180,6 +181,9 @@ export class LocationsController {
       }
       if (body.city !== undefined) {
         data.city = optionalText(body.city);
+      }
+      if (body.cityI18n !== undefined) {
+        data.cityI18n = validateLocalizedText(body.cityI18n, "cityI18n", locales);
       }
       if (body.phone !== undefined) {
         data.phone = optionalText(body.phone);

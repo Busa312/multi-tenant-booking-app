@@ -19,6 +19,19 @@ export function localized(
   return typeof value === "string" && value.trim() !== "" ? value : plain;
 }
 
+/**
+ * A branch's address in one language: the address line, then the city if it
+ * has one. Both parts go through `pick` (a `localized` bound to a locale), so a
+ * translated street never ends in a default-language city.
+ */
+export function localizedAddress(
+  location: { addressLine: string; addressLineI18n: unknown; city: string | null; cityI18n: unknown },
+  pick: (plain: string, i18n: unknown) => string,
+): string {
+  const line = pick(location.addressLine, location.addressLineI18n);
+  return location.city ? `${line}, ${pick(location.city, location.cityI18n)}` : line;
+}
+
 export const DEFAULT_CONTENT_LOCALE = "en";
 
 /**

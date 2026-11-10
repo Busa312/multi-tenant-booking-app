@@ -3,7 +3,6 @@ import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
 import { Icon } from "./Icon.js";
 import { cx } from "../../lib/cx.js";
-import styles from "./ActionMenu.module.css";
 
 export interface ActionMenuItem {
   label: string;
@@ -48,7 +47,7 @@ export function ActionMenu({ items, ariaLabel, className }: ActionMenuProps) {
   const [open, setOpen] = useState(false);
   const [position, setPosition] = useState<MenuPosition | null>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
-  const menuRef = useRef<HTMLDivElement>(null);
+  const menuRef = useRef<HTMLUListElement>(null);
   const menuId = `${useId()}-menu`;
 
   const close = useCallback((refocus: boolean) => {
@@ -122,7 +121,7 @@ export function ActionMenu({ items, ariaLabel, className }: ActionMenuProps) {
     }
   }
 
-  function handleMenuKeyDown(e: KeyboardEvent<HTMLDivElement>) {
+  function handleMenuKeyDown(e: KeyboardEvent<HTMLUListElement>) {
     switch (e.key) {
       case "ArrowDown":
         e.preventDefault();
@@ -142,11 +141,11 @@ export function ActionMenu({ items, ariaLabel, className }: ActionMenuProps) {
   }
 
   return (
-    <div className={cx(styles.root, className)}>
+    <div className={cx("inline-flex", className)}>
       <button
         type="button"
         ref={triggerRef}
-        className={styles.trigger}
+        className="btn btn-square btn-ghost btn-sm text-base-content/60"
         aria-label={ariaLabel}
         aria-haspopup="menu"
         aria-expanded={open}
@@ -159,22 +158,22 @@ export function ActionMenu({ items, ariaLabel, className }: ActionMenuProps) {
 
       {open &&
         createPortal(
-          <div
+          <ul
             id={menuId}
             role="menu"
             ref={menuRef}
-            className={styles.menu}
+            className="menu fixed z-50 w-52 rounded-box border border-base-300 bg-base-100 p-1 shadow-lg pointer-coarse:w-60"
             style={{ ...position, visibility: position ? "visible" : "hidden" }}
             onKeyDown={handleMenuKeyDown}
           >
-            {items.map((item) =>
-              item.to !== undefined ? (
+            {items.map((item) => (
+              <li key={item.label} role="none">
+                {item.to !== undefined ? (
                 <Link
-                  key={item.label}
                   to={item.to}
                   data-item
                   role="menuitem"
-                  className={styles.item}
+                  className="gap-2.5 pointer-coarse:py-3"
                   onClick={() => close(false)}
                 >
                   {item.icon && <Icon name={item.icon} size={18} />}
@@ -182,11 +181,10 @@ export function ActionMenu({ items, ariaLabel, className }: ActionMenuProps) {
                 </Link>
               ) : (
                 <button
-                  key={item.label}
                   type="button"
                   data-item
                   role="menuitem"
-                  className={cx(styles.item, item.danger && styles.danger)}
+                  className={cx("gap-2.5 pointer-coarse:py-3", item.danger && "text-error")}
                   onClick={() => {
                     close(false);
                     item.onSelect?.();
@@ -195,9 +193,10 @@ export function ActionMenu({ items, ariaLabel, className }: ActionMenuProps) {
                   {item.icon && <Icon name={item.icon} size={18} />}
                   {item.label}
                 </button>
-              ),
-            )}
-          </div>,
+                )}
+              </li>
+            ))}
+          </ul>,
           document.body,
         )}
     </div>

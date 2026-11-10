@@ -6,7 +6,9 @@ import {
   serializeService,
   serializeTenant,
   serializeTimeOff,
+  serializeVisit,
   type PrismaAppointmentSummary,
+  type PrismaVisit,
 } from "./serializers.js";
 
 const TENANT_ID = "11111111-1111-1111-1111-111111111111";
@@ -19,6 +21,7 @@ const prismaTenant = (overrides: Partial<Parameters<typeof serializeTenant>[0]> 
   customDomain: null,
   domainVerifiedAt: null,
   configJson: { primaryColor: "#0f172a" } as Prisma.JsonValue,
+  maxVisitGapMinutes: 0,
   createdAt: new Date("2026-01-02T03:04:05.678Z"),
   ...overrides,
 });
@@ -31,7 +34,7 @@ const line = (overrides: Partial<Parameters<typeof serializeAppointment>[0]["ser
   position: 0,
   durationMinutes: 30,
   price: new Prisma.Decimal("45.50"),
-  service: { name: "Haircut" },
+  service: { name: "Haircut", nameI18n: null },
   ...overrides,
 });
 
@@ -48,8 +51,7 @@ const prismaAppointment = (overrides: Partial<Parameters<typeof serializeAppoint
   endAt: new Date("2026-08-05T05:30:00Z"),
   price: new Prisma.Decimal("45.50"),
   status: "booked" as const,
-  accessTokenHash: null,
-  accessTokenExpiresAt: null,
+  visitId: null,
   createdByUserId: null,
   notes: null,
   createdAt: new Date("2026-08-01T10:00:00Z"),
@@ -61,8 +63,9 @@ const prismaAppointmentSummary = (
   overrides: Partial<PrismaAppointmentSummary> = {},
 ): PrismaAppointmentSummary => ({
   ...prismaAppointment(),
-  professional: { name: "Levan" },
+  professional: { name: "Levan", nameI18n: { ka: "ლევანი" } },
   location: null,
+  visit: null,
   ...overrides,
 });
 
@@ -176,6 +179,7 @@ describe("serializeAppointment", () => {
         {
           serviceId: "ssssssss-ssss-ssss-ssss-ssssssssssss",
           name: "Haircut",
+          nameI18n: null,
           durationMinutes: 30,
           price: "45.5",
         },
@@ -194,8 +198,8 @@ describe("serializeAppointment", () => {
       const result = serializeAppointment(
         prismaAppointment({
           services: [
-            line({ serviceId: "s1", position: 0, service: { name: "Haircut" } }),
-            line({ serviceId: "s2", position: 1, service: { name: "Beard trim" } }),
+            line({ serviceId: "s1", position: 0, service: { name: "Haircut", nameI18n: null } }),
+            line({ serviceId: "s2", position: 1, service: { name: "Beard trim", nameI18n: null } }),
           ],
         }),
       );
@@ -218,17 +222,6 @@ describe("serializeAppointment", () => {
     });
   });
 
-  it("never exposes the magic-link token or its expiry", () => {
-    const result = serializeAppointment(
-      prismaAppointment({
-        accessTokenHash: "5e884898da28047151d0e56f8dc6292773603d0d6aabbdd62a11ef721d1542d8",
-        accessTokenExpiresAt: new Date("2026-08-06T05:30:00Z"),
-      }),
-    );
-
-    expect(result).not.toHaveProperty("accessTokenHash");
-    expect(result).not.toHaveProperty("accessTokenExpiresAt");
-  });
 });
 
 describe("serializeAppointmentSummary", () => {
@@ -236,6 +229,16 @@ describe("serializeAppointmentSummary", () => {
     const result = serializeAppointmentSummary(prismaAppointmentSummary());
 
     expect(result.professionalName).toBe("Levan");
+  });
+
+  // R160: the CMS picks the name for its own language from these
+  it("carries the professional's and the branch's name translations", () => {
+    const result = serializeAppointmentSummary(
+      prismaAppointmentSummary({ location: { name: "Vake", nameI18n: { ka: "ვაკე" } } }),
+    );
+
+    expect(result.professionalNameI18n).toEqual({ ka: "ლევანი" });
+    expect(result.locationNameI18n).toEqual({ ka: "ვაკე" });
   });
 
   it("reports an unassigned appointment's professional as null", () => {
@@ -246,16 +249,26 @@ describe("serializeAppointmentSummary", () => {
     expect(result.professionalName).toBeNull();
   });
 
-  it("reduces the magic link to a boolean and leaks no token hash", () => {
+  // R230: the link lives on the visit
+  it("reduces the visit's magic link to a boolean and leaks no token hash", () => {
     const withLink = serializeAppointmentSummary(
-      prismaAppointmentSummary({ ...prismaAppointment({ accessTokenHash: "deadbeef" }) }),
+      prismaAppointmentSummary({ ...prismaAppointment({ visitId: "v1" }), visit: { accessTokenHash: "deadbeef" } }),
     );
-    const withoutLink = serializeAppointmentSummary(prismaAppointmentSummary());
+    const cancelledVisit = serializeAppointmentSummary(
+      prismaAppointmentSummary({ ...prismaAppointment({ visitId: "v1" }), visit: { accessTokenHash: null } }),
+    );
+    const staffBooking = serializeAppointmentSummary(prismaAppointmentSummary());
 
     expect(withLink.hasMagicLink).toBe(true);
-    expect(withoutLink.hasMagicLink).toBe(false);
-    expect(withLink).not.toHaveProperty("accessTokenHash");
+    expect(cancelledVisit.hasMagicLink).toBe(false);
+    expect(staffBooking.hasMagicLink).toBe(false);
     expect(JSON.stringify(withLink)).not.toContain("deadbeef");
+  });
+
+  // R200: staff can see an appointment is one segment of a customer visit
+  it("carries the visit id, null for a staff booking", () => {
+    expect(serializeAppointmentSummary(prismaAppointmentSummary({ visitId: "v1" })).visitId).toBe("v1");
+    expect(serializeAppointmentSummary(prismaAppointmentSummary()).visitId).toBeNull();
   });
 
   it("carries the staff-only fields the plain appointment shape omits", () => {
@@ -267,5 +280,85 @@ describe("serializeAppointmentSummary", () => {
 
     expect(result.createdByUserId).toBe("uuuuuuuu-uuuu-uuuu-uuuu-uuuuuuuuuuuu");
     expect(result.notes).toBe("regular client");
+  });
+});
+
+// R230: what the customer's magic link shows
+describe("serializeVisit", () => {
+  const segment = (overrides: Partial<PrismaVisit["appointments"][number]> = {}) => ({
+    ...prismaAppointment({ visitId: "v1" }),
+    professional: { name: "Nina", nameI18n: null },
+    location: { name: "Vake", nameI18n: { ka: "ვაკე" } },
+    ...overrides,
+  });
+  const visit = (appointments: PrismaVisit["appointments"]): PrismaVisit => ({
+    id: "v1",
+    tenantId: TENANT_ID,
+    accessTokenHash: "deadbeef",
+    accessTokenExpiresAt: new Date("2026-08-06T05:30:00Z"),
+    createdAt: new Date("2026-08-01T10:00:00Z"),
+    updatedAt: new Date("2026-08-01T10:00:00Z"),
+    appointments,
+  });
+
+  const colour = segment({
+    id: "a1",
+    startAt: new Date("2026-08-05T05:00:00Z"),
+    endAt: new Date("2026-08-05T06:30:00Z"),
+    price: new Prisma.Decimal("120.00"),
+    professional: { name: "Dato", nameI18n: { ka: "დათო" } },
+  });
+  const cut = segment({
+    id: "a2",
+    startAt: new Date("2026-08-05T06:30:00Z"),
+    endAt: new Date("2026-08-05T07:15:00Z"),
+    price: new Prisma.Decimal("40.10"),
+  });
+
+  it("spans every segment, sums their prices exactly, and names who does each", () => {
+    const result = serializeVisit(visit([colour, cut]));
+
+    expect(result.startAt).toBe("2026-08-05T05:00:00.000Z");
+    expect(result.endAt).toBe("2026-08-05T07:15:00.000Z");
+    expect(result.price).toBe("160.1");
+    expect(result.locationName).toBe("Vake");
+    expect(result.segments.map((s) => [s.appointmentId, s.professionalName])).toEqual([
+      ["a1", "Dato"],
+      ["a2", "Nina"],
+    ]);
+  });
+
+  // R160: the public site picks the visitor's language from these
+  it("carries the translations of the branch, each professional and each service", () => {
+    const translated = segment({
+      ...colour,
+      services: [line({ service: { name: "Colour", nameI18n: { ka: "შეღებვა" } } })],
+    });
+    const result = serializeVisit(visit([translated, cut]));
+
+    expect(result.locationNameI18n).toEqual({ ka: "ვაკე" });
+    expect(result.segments.map((s) => s.professionalNameI18n)).toEqual([{ ka: "დათო" }, null]);
+    expect(result.segments[0]?.services[0]?.nameI18n).toEqual({ ka: "შეღებვა" });
+  });
+
+  it("leaves a staff-cancelled segment out of the times and price, but still lists it", () => {
+    const result = serializeVisit(visit([colour, { ...cut, status: "cancelled" }]));
+
+    expect(result.status).toBe("booked");
+    expect(result.endAt).toBe("2026-08-05T06:30:00.000Z");
+    expect(result.price).toBe("120");
+    expect(result.segments).toHaveLength(2);
+  });
+
+  it("is cancelled only when every segment is", () => {
+    expect(serializeVisit(visit([{ ...colour, status: "cancelled" }, cut])).status).toBe("booked");
+    const all = serializeVisit(visit([{ ...colour, status: "cancelled" }, { ...cut, status: "cancelled" }]));
+    expect(all.status).toBe("cancelled");
+    // With nothing live, it describes what was booked.
+    expect(all.price).toBe("160.1");
+  });
+
+  it("never exposes the token hash", () => {
+    expect(JSON.stringify(serializeVisit(visit([colour])))).not.toContain("deadbeef");
   });
 });

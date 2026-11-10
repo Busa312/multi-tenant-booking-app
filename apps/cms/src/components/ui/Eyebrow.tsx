@@ -1,6 +1,5 @@
 import type { ReactNode } from "react";
 import { cx } from "../../lib/cx.js";
-import styles from "./Eyebrow.module.css";
 
 interface EyebrowProps {
   children: ReactNode;
@@ -9,5 +8,7 @@ interface EyebrowProps {
 
 // Small uppercase section label.
 export function Eyebrow({ children, className }: EyebrowProps) {
-  return <div className={cx(styles.eyebrow, className)}>{children}</div>;
+  return (
+    <div className={cx("text-xs font-bold tracking-wider text-base-content/55 uppercase", className)}>{children}</div>
+  );
 }

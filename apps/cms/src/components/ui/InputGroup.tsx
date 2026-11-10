@@ -1,6 +1,5 @@
 import type { InputHTMLAttributes, ReactNode } from "react";
 import { cx } from "../../lib/cx.js";
-import styles from "./InputGroup.module.css";
 
 interface InputGroupProps extends InputHTMLAttributes<HTMLInputElement> {
   /** Static, non-interactive trailing content (e.g. a domain suffix). */
@@ -11,16 +10,21 @@ interface InputGroupProps extends InputHTMLAttributes<HTMLInputElement> {
 
 // An input fused with a trailing suffix/affix in a single bordered control.
 export function InputGroup({ suffix, action, className, ...inputProps }: InputGroupProps) {
-  return (
-    <div className={cx(styles.group, className)}>
-      <input {...inputProps} />
-      {action ? (
-        <button type="button" className={cx(styles.suffix, styles.action)} onClick={action.onClick}>
+  if (action) {
+    return (
+      <div className={cx("join w-full", className)}>
+        <input className="input join-item w-full min-w-0" {...inputProps} />
+        <button type="button" className="btn join-item border-base-300" onClick={action.onClick}>
           {action.label}
         </button>
-      ) : (
-        suffix != null && <span className={styles.suffix}>{suffix}</span>
-      )}
-    </div>
+      </div>
+    );
+  }
+
+  return (
+    <label className={cx("input w-full", className)}>
+      <input className="min-w-0 grow" {...inputProps} />
+      {suffix != null && <span className="text-base-content/55">{suffix}</span>}
+    </label>
   );
 }

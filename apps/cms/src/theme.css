@@ -1,123 +1,112 @@
-/* Global layer ONLY — design tokens, base reset, the icon-font utility, and the
-   shared entrance animation. Component and page styles live in co-located CSS
-   Modules (see components/ui/*.module.css and pages/*.module.css); nothing that
-   styles a specific component belongs here. */
+/* ==========================================================================
+   CMS brand — the ONE file that decides how the CMS looks.
 
-:root {
-  --bg: #f4f0ea;
-  --surface: #ffffff;
-  --surface-2: #faf7f2;
-  --ink: #2b2620;
-  --ink-soft: #7d746a;
-  --border: rgba(43, 38, 32, 0.11);
+   Components never hard-code a color, radius or font. They use daisyUI's
+   semantic names (`btn-primary`, `bg-base-100`, `text-base-content/60`,
+   `badge-success`, `rounded-box` …), which resolve to the variables below.
+   So restyling the whole CMS is an edit to this file and nothing else:
 
-  --accent: #b0654e;
-  --accent-soft: #f3e3dc;
-  --accent-ink: #ffffff;
+   - Tweak the palette:  change the values in the two theme blocks.
+   - Rename a theme:     change `name:` here AND the matching constant in
+                         src/lib/theme.ts (the light/dark toggle uses it).
+   - Use a stock theme:  delete both blocks, and in index.css change
+                         `themes: false` to e.g.
+                         `themes: corporate --default, business --prefersdark`
+                         then point src/lib/theme.ts at those names.
+                         Gallery: https://daisyui.com/docs/themes/
 
-  --font-ui: "Manrope", system-ui, sans-serif;
-  --font-display: "Newsreader", Georgia, serif;
+   Color roles, so new UI picks the right one:
+     base-100   cards, modals, inputs          base-200  page background
+     base-300   borders, dividers, hover fill  base-content  body text
+     primary    the one main action per view, active nav, links
+     secondary / accent   charts and decorative highlights only
+     neutral    dark surfaces (auth art panel, tooltips)
+     info / success / warning / error   status only — never decoration
+   ========================================================================== */
 
-  --danger: #a8483f;
-  --danger-bg: #f6e4e2;
-  --warning-fg: #8a6a2f;
-  --warning-bg: #f7efdc;
-  --warning-border: #e7d7b0;
+/* --radius-selector (2rem below) makes badges and toggles pill-shaped. It
+   would also make checkboxes round, which reads as single-choice radio, so
+   checkboxes add `rounded-[0.35rem]` where they're rendered. */
+@plugin "daisyui/theme" {
+  name: "salon";
+  default: true;
+  prefersdark: false;
+  color-scheme: light;
 
-  /* Loading placeholders. Derived from --ink like --border, so they sit a step
-     below it: a skeleton must read as absent content, not as a filled field. */
-  --skeleton-base: rgba(43, 38, 32, 0.07);
-  --skeleton-sheen: rgba(255, 255, 255, 0.6);
-}
+  --color-base-100: #ffffff;
+  --color-base-200: #f4f0ea;
+  --color-base-300: #e7dfd4;
+  --color-base-content: #2b2620;
 
-/* ---------- base reset ---------- */
+  --color-primary: #b0654e;
+  --color-primary-content: #ffffff;
+  --color-secondary: #6f8466;
+  --color-secondary-content: #ffffff;
+  --color-accent: #c8a15a;
+  --color-accent-content: #2b2620;
+  --color-neutral: #2b2620;
+  --color-neutral-content: #f4f0ea;
 
-* {
-  box-sizing: border-box;
-}
-html,
-body {
-  margin: 0;
-  padding: 0;
-}
-/* Full-height surfaces use `dvh` rather than `vh`: it tracks the viewport as
-   mobile browser chrome collapses, so they don't overflow behind the URL bar. */
-body {
-  min-height: 100dvh;
-  background: var(--bg);
-  color: var(--ink);
-  font-family: var(--font-ui);
-  font-size: 14px;
-  -webkit-font-smoothing: antialiased;
-}
-#root {
-  min-height: 100dvh;
-}
-input,
-select,
-textarea,
-button {
-  font-family: inherit;
-  color: inherit;
-}
-::placeholder {
-  color: var(--ink-soft);
-  opacity: 0.7;
-}
-input:focus-visible,
-select:focus-visible,
-textarea:focus-visible,
-button:focus-visible {
-  outline: 2px solid color-mix(in srgb, var(--accent) 45%, transparent);
-  outline-offset: 1px;
-}
-a {
-  color: var(--accent);
-  text-decoration: none;
-}
-a:hover {
-  text-decoration: underline;
+  --color-info: #4b7896;
+  --color-info-content: #ffffff;
+  --color-success: #4f7d57;
+  --color-success-content: #ffffff;
+  --color-warning: #c08a2e;
+  --color-warning-content: #2b2620;
+  --color-error: #a8483f;
+  --color-error-content: #ffffff;
+
+  --radius-selector: 2rem;
+  --radius-field: 0.625rem;
+  --radius-box: 1rem;
+  --size-selector: 0.25rem;
+  --size-field: 0.25rem;
+  --border: 1px;
+  --depth: 1;
+  --noise: 0;
 }
 
-/* ---------- Material Symbols icon font (used via the <Icon> primitive) ---------- */
+@plugin "daisyui/theme" {
+  name: "salon-dark";
+  default: false;
+  prefersdark: true;
+  color-scheme: dark;
 
-.ms {
-  font-family: "Material Symbols Outlined";
-  font-weight: normal;
-  font-style: normal;
-  font-size: 20px;
-  line-height: 1;
-  letter-spacing: normal;
-  text-transform: none;
-  white-space: nowrap;
-  word-wrap: normal;
-  direction: ltr;
-  -webkit-font-feature-settings: "liga";
-  font-feature-settings: "liga";
-  -webkit-font-smoothing: antialiased;
-  display: inline-block;
-  vertical-align: middle;
+  --color-base-100: #26211d;
+  --color-base-200: #1c1916;
+  --color-base-300: #3a332c;
+  --color-base-content: #ede6dd;
+
+  --color-primary: #d4846a;
+  --color-primary-content: #1c1916;
+  --color-secondary: #93a889;
+  --color-secondary-content: #1c1916;
+  --color-accent: #d9b673;
+  --color-accent-content: #1c1916;
+  --color-neutral: #120f0d;
+  --color-neutral-content: #ede6dd;
+
+  --color-info: #7fa9c6;
+  --color-info-content: #1c1916;
+  --color-success: #7fb087;
+  --color-success-content: #1c1916;
+  --color-warning: #dcae5c;
+  --color-warning-content: #1c1916;
+  --color-error: #e07b70;
+  --color-error-content: #1c1916;
+
+  --radius-selector: 2rem;
+  --radius-field: 0.625rem;
+  --radius-box: 1rem;
+  --size-selector: 0.25rem;
+  --size-field: 0.25rem;
+  --border: 1px;
+  --depth: 1;
+  --noise: 0;
 }
 
-/* ---------- shared entrance animation utility ---------- */
-
-@keyframes fadeUp {
-  from {
-    opacity: 0;
-    transform: translateY(10px);
-  }
-  to {
-    opacity: 1;
-    transform: none;
-  }
-}
-.fade-up {
-  animation: fadeUp 0.35s ease both;
-}
-/* Every page wraps its content in this, so it's the largest single source of
-   motion in the CMS — a whole dashboard of cards sliding up on each load. */
-@media (prefers-reduced-motion: reduce) {
-  .fade-up {
-    animation: none;
-  }
+/* Typography. The font files themselves are loaded in index.html. */
+@theme {
+  --font-sans: "Manrope", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Newsreader", ui-serif, Georgia, serif;
 }

@@ -1,15 +1,15 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import type { Appointment, AvailabilitySlot } from "@booking/shared-types";
+import { useEffect, useRef, useState } from "react";
+import type { Visit, VisitSlot } from "@booking/shared-types";
 import type { Translate } from "@/i18n/locales";
 import { fetchRescheduleAvailability } from "@/lib/actions";
-import { addDays, dateStringInTimezone, formatDay, todayInTimezone } from "@/lib/tenant-time";
+import { addDays, dateStringInTimezone, formatDay, todayInTimezone, wallClock } from "@/lib/tenant-time";
 import { SlotGrid } from "./SlotGrid";
-import styles from "./RescheduleDialog.module.css";
 
 interface RescheduleDialogProps {
-  appointment: Appointment;
+  /** R230: the whole visit moves; each segment keeps its professional. */
+  visit: Visit;
   /** The live token — rotated by an earlier reschedule, so not the URL's. */
   token: string;
   timezone: string;
@@ -19,20 +19,28 @@ interface RescheduleDialogProps {
   t: Translate;
 }
 
-export function RescheduleDialog({ appointment, token, timezone, locale, onConfirm, onClose, t }: RescheduleDialogProps) {
-  const [date, setDate] = useState(() => dateStringInTimezone(new Date(appointment.startAt), timezone));
-  const [slots, setSlots] = useState<AvailabilitySlot[] | null>(null);
+export function RescheduleDialog({ visit, token, timezone, locale, onConfirm, onClose, t }: RescheduleDialogProps) {
+  const [date, setDate] = useState(() => dateStringInTimezone(new Date(visit.startAt), timezone));
+  const [slots, setSlots] = useState<VisitSlot[] | null>(null);
   const [startAt, setStartAt] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   // Bumped to re-run the availability effect after a failed save, when the day
   // has not changed but its slots have.
   const [reloadKey, setReloadKey] = useState(0);
+  const ref = useRef<HTMLDialogElement>(null);
+
+  // Native <dialog> + showModal(), as in CancelDialog.
+  useEffect(() => {
+    const dialog = ref.current;
+    if (dialog && !dialog.open) dialog.showModal();
+    return () => dialog?.close();
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
     setSlots(null);
 
-    // R80: token-scoped, so this appointment does not block its own slots —
+    // R80: token-scoped, so this visit does not block its own slots —
     // without that, moving a 10:00 booking to 10:15 is impossible.
     void fetchRescheduleAvailability(token, date).then((result) => {
       if (cancelled) return;
@@ -47,12 +55,7 @@ export function RescheduleDialog({ appointment, token, timezone, locale, onConfi
   const save = async () => {
     if (!startAt) return;
     setIsSaving(true);
-    const time = new Intl.DateTimeFormat("en-GB", {
-      timeZone: timezone,
-      hour: "2-digit",
-      minute: "2-digit",
-      hour12: false,
-    }).format(new Date(startAt));
+    const time = wallClock(startAt, timezone);
     const moved = await onConfirm(date, time);
     if (!moved) {
       // The slot went while the dialog was open. `setDate(d => d)` would be a
@@ -67,26 +70,34 @@ export function RescheduleDialog({ appointment, token, timezone, locale, onConfi
   const today = todayInTimezone(timezone);
 
   return (
-    <div className={styles.backdrop} role="dialog" aria-modal="true" aria-label={t("manage.rescheduleHeading")}>
-      <div className={styles.dialog}>
-        <h2 className={styles.heading}>{t("manage.rescheduleHeading")}</h2>
+    <dialog
+      ref={ref}
+      className="modal modal-bottom sm:modal-middle"
+      aria-label={t("manage.rescheduleHeading")}
+      onCancel={(event) => {
+        event.preventDefault();
+        if (!isSaving) onClose();
+      }}
+    >
+      <div className="modal-box flex max-h-[90dvh] flex-col gap-4 sm:max-w-lg">
+        <h2 className="text-lg font-bold">{t("manage.rescheduleHeading")}</h2>
         {/* R110: the link they followed to get here dies the moment this saves */}
-        <p className={styles.note}>{t("manage.rescheduleNote")}</p>
+        <p className="-mt-2 text-sm text-base-content/65">{t("manage.rescheduleNote")}</p>
 
-        <div className={styles.days}>
+        <div className="flex items-center gap-2 rounded-box border border-base-300 bg-base-200/60 p-1.5">
           <button
             type="button"
-            className={styles.dayNav}
+            className={"btn btn-square btn-ghost text-xl"}
             onClick={() => setDate(addDays(date, -1))}
             disabled={date <= today}
             aria-label={t("booking.time.previousDay")}
           >
             ‹
           </button>
-          <p className={styles.day}>{formatDay(date, timezone, locale)}</p>
+          <p className="flex-1 text-center font-semibold" aria-live="polite">{formatDay(date, timezone, locale)}</p>
           <button
             type="button"
-            className={styles.dayNav}
+            className={"btn btn-square btn-ghost text-xl"}
             onClick={() => setDate(addDays(date, 1))}
             aria-label={t("booking.time.nextDay")}
           >
@@ -95,28 +106,32 @@ export function RescheduleDialog({ appointment, token, timezone, locale, onConfi
         </div>
 
         {slots === null ? (
-          <p className={styles.status}>{t("booking.time.loading")}</p>
+          <p className="flex items-center gap-2 py-6 text-base-content/65">
+            <span className="loading loading-spinner loading-sm" aria-hidden="true" />
+            {t("booking.time.loading")}
+          </p>
         ) : slots.length === 0 ? (
-          <p className={styles.status}>{t("booking.time.noSlots")}</p>
+          <p className="py-6 text-base-content/65">{t("booking.time.noSlots")}</p>
         ) : (
           <SlotGrid
             slots={slots}
             selectedStartAt={startAt}
             timezone={timezone}
             locale={locale}
-            onPick={(picked) => setStartAt(picked)}
+            onPick={(picked) => setStartAt(picked.startAt)}
           />
         )}
 
-        <div className={styles.footer}>
-          <button type="button" className={styles.secondary} onClick={onClose} disabled={isSaving}>
+        <div className="modal-action mt-0 flex-wrap">
+          <button type="button" className="btn btn-ghost" onClick={onClose} disabled={isSaving}>
             {t("common.back")}
           </button>
-          <button type="button" className={styles.primary} onClick={save} disabled={!startAt || isSaving}>
+          <button type="button" className="btn btn-primary" onClick={save} disabled={!startAt || isSaving}>
             {t("manage.reschedule")}
           </button>
         </div>
       </div>
-    </div>
+      <div className="modal-backdrop" aria-hidden="true" onClick={() => !isSaving && onClose()} />
+    </dialog>
   );
 }

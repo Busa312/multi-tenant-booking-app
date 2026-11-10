@@ -15,7 +15,6 @@ import { BookingTrendChartSkeleton } from "../components/BookingTrendChartSkelet
 import { TopServicesCard } from "../components/TopServicesCard.js";
 import { CardSkeleton } from "../components/CardSkeleton.js";
 import { Alert } from "../components/ui/index.js";
-import styles from "./Dashboard.module.css";
 
 const AGENDA_ROW = "58px";
 const TABLE_ROW = "34px";
@@ -142,16 +141,16 @@ export function DashboardPage() {
       subtitle={context?.tenantName}
       tenantSubdomain={context?.subdomain}
     >
-      <div className={`${styles.grid} fade-up`}>
-        {error && <Alert className={styles.errorFull}>{error}</Alert>}
+      <div className="grid animate-fade-up items-start gap-4 motion-reduce:animate-none xl:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)] xl:gap-5">
+        {error && <Alert flush className="xl:col-span-2">{error}</Alert>}
 
         {context && (
-          <div className={styles.locationTabs}>
+          <div className="xl:col-span-2">
             <LocationTabs locations={context.locations} selectedId={locationId} onSelect={setLocationId} />
           </div>
         )}
 
-        <div className={styles.actions}>
+        <div className="xl:col-span-2">
           <DashboardQuickActions
             role={role}
             onNewBooking={() => setCreateOpen(true)}
@@ -160,7 +159,7 @@ export function DashboardPage() {
           />
         </div>
 
-        <div className={styles.agenda}>
+        <div className="xl:col-span-2">
           {agenda && context ? (
             <TodayAgendaCard agenda={agenda} timezone={context.timezone} isOwnOnly={role === "professional"} />
           ) : (
@@ -168,9 +167,9 @@ export function DashboardPage() {
           )}
         </div>
 
-        <div className={styles.trend}>{trend ? <BookingTrendChart trend={trend} /> : <BookingTrendChartSkeleton />}</div>
+        <div>{trend ? <BookingTrendChart trend={trend} /> : <BookingTrendChartSkeleton />}</div>
 
-        <div className={styles.top}>
+        <div>
           {top ? (
             <TopServicesCard services={top} showValue={role === "owner"} />
           ) : (

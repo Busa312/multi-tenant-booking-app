@@ -2,7 +2,6 @@ import type { ServiceSummary } from "@booking/shared-types";
 import { useI18n } from "../i18n/I18nContext.js";
 import { BookingServiceRow } from "./BookingServiceRow.js";
 import { Button, Eyebrow } from "./ui/index.js";
-import styles from "./BookingServiceRows.module.css";
 
 interface BookingServiceRowsProps {
   /** Every service the tenant has; this component does the filtering. */
@@ -67,8 +66,8 @@ export function BookingServiceRows({
   const canAdd = value.every(Boolean) && selectableFor("").length > 0;
 
   return (
-    <div className={styles.root}>
-      <Eyebrow>{t("bookings.servicesLabel")}</Eyebrow>
+    <div className="mb-4">
+      <Eyebrow className="mb-2.5">{t("bookings.servicesLabel")}</Eyebrow>
 
       {value.map((serviceId, index) => (
         <BookingServiceRow
@@ -84,7 +83,7 @@ export function BookingServiceRows({
         />
       ))}
 
-      <div className={styles.footer}>
+      <div className="mt-2.5 flex flex-wrap items-center justify-between gap-3">
         <Button
           type="button"
           variant="secondary"
@@ -96,7 +95,7 @@ export function BookingServiceRows({
           {t("bookings.addService")}
         </Button>
         {picked.length > 1 && (
-          <span className={styles.summary}>
+          <span className="text-[13px] text-base-content/60 tabular-nums">
             {t("bookings.servicesSummary", {
               count: picked.length,
               minutes: totalMinutes,

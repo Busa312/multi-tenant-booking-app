@@ -1,85 +1,118 @@
-:root {
-  --color-primary: #2563eb;
-  --color-secondary: #7c3aed;
-  --color-background: #ffffff;
-  --color-text: #111827;
-  --surface: color-mix(in srgb, var(--color-text) 3%, var(--color-background));
-  --surface-raised: var(--color-background);
-  --border: color-mix(in srgb, var(--color-text) 14%, transparent);
-  --border-strong: color-mix(in srgb, var(--color-text) 28%, transparent);
-  --muted: color-mix(in srgb, var(--color-text) 62%, var(--color-background));
-  --danger: #b42318;
-  --success: #087443;
-  --space-1: 0.25rem;
-  --space-2: 0.5rem;
-  --space-3: 0.75rem;
-  --space-4: 1rem;
-  --space-5: 1.5rem;
-  --space-6: 2rem;
-  --space-7: 3rem;
-  --radius-sm: 6px;
-  --radius: 10px;
-  --radius-lg: 16px;
-  --shadow-sm: 0 1px 2px rgb(0 0 0 / 6%);
-  --shadow: 0 4px 16px rgb(0 0 0 / 8%);
+/* ==========================================================================
+   Public site styling: Tailwind v4 + daisyUI 5, themed per tenant.
 
+   There is ONE daisyUI theme, "tenant", and its colors are not fixed: each
+   points at a `--tenant-*` custom property that the root layout writes per
+   request — as an inline style on <html> — from the tenant's saved colors
+   (see lib/tenant-theme.ts; every value there has passed isValidColor). The CMS's live preview overwrites the
+   same properties on the page, so it previews exactly what visitors will get.
+
+   So components never name a color. They use daisyUI's semantic roles —
+   `btn-primary`, `bg-base-100`, `text-base-content/70`, `border-base-300`,
+   `alert-error` — and every tenant's site picks up its own palette.
+
+   What the tenant controls → which daisyUI role:
+     primary     → primary   (main actions, selected states, links)
+     secondary   → secondary + accent (decorative highlights)
+     background  → base-100  (page), with base-200/300 derived for surfaces/borders
+     text        → base-content, and neutral
+   ========================================================================== */
+
+@import "tailwindcss";
+
+@plugin "daisyui" {
+  themes: false;
+  logs: false;
+}
+
+/* --radius-selector (2rem below) makes badges and toggles pill-shaped. It
+   would also make checkboxes round, which reads as single-choice radio, so
+   checkboxes add `rounded-[0.35rem]` where they're rendered. */
+@plugin "daisyui/theme" {
+  name: "tenant";
+  default: true;
+  prefersdark: false;
+  color-scheme: light;
+
+  --color-base-100: var(--tenant-background);
+  --color-base-200: color-mix(in oklab, var(--tenant-text) 5%, var(--tenant-background));
+  --color-base-300: color-mix(in oklab, var(--tenant-text) 14%, var(--tenant-background));
+  --color-base-content: var(--tenant-text);
+
+  --color-primary: var(--tenant-primary);
+  --color-primary-content: var(--tenant-primary-content);
+  --color-secondary: var(--tenant-secondary);
+  --color-secondary-content: var(--tenant-secondary-content);
+  --color-accent: var(--tenant-secondary);
+  --color-accent-content: var(--tenant-secondary-content);
+  --color-neutral: var(--tenant-text);
+  --color-neutral-content: var(--tenant-background);
+
+  --color-info: var(--tenant-info);
+  --color-info-content: var(--tenant-status-content);
+  --color-success: var(--tenant-success);
+  --color-success-content: var(--tenant-status-content);
+  --color-warning: var(--tenant-warning);
+  --color-warning-content: var(--tenant-status-content);
+  --color-error: var(--tenant-error);
+  --color-error-content: var(--tenant-status-content);
+
+  /* Shape is platform-wide, not per tenant (the layout is fixed by design). */
+  --radius-selector: 2rem;
+  --radius-field: 0.75rem;
+  --radius-box: 1.25rem;
+  --size-selector: 0.25rem;
+  --size-field: 0.25rem;
+  --border: 1px;
+  --depth: 1;
+  --noise: 0;
+}
+
+/* System fonts only: no font download on the hot path (P95 < 300ms), with
+   Georgian-capable faces ahead of the generic fallback. */
+@theme {
   --font-sans:
     system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans Georgian", "BPG Nino Mtavruli", Helvetica, Arial,
     sans-serif;
-
-  --content-width: 46rem;
 }
 
-*,
-*::before,
-*::after {
-  box-sizing: border-box;
-}
+@layer base {
+  /* Fallbacks for a page that somehow renders without the layout's tenant
+     style — the same values as DEFAULT_TENANT_COLORS in shared-types. The
+     inline style on <html> always outranks these. */
+  :root {
+    --tenant-primary: #2563eb;
+    --tenant-primary-content: #ffffff;
+    --tenant-secondary: #7c3aed;
+    --tenant-secondary-content: #ffffff;
+    --tenant-background: #ffffff;
+    --tenant-text: #111827;
+    --tenant-info: #1d4ed8;
+    --tenant-success: #15803d;
+    --tenant-warning: #a16207;
+    --tenant-error: #b42318;
+    --tenant-status-content: #ffffff;
+  }
 
-html {
-  scrollbar-gutter: stable;
-}
+  html {
+    scrollbar-gutter: stable;
+  }
 
-body {
-  margin: 0;
-  font-family: var(--font-sans);
-  font-size: 16px;
-  line-height: 1.5;
-  background: var(--color-background);
-  color: var(--color-text);
-  -webkit-font-smoothing: antialiased;
-}
+  body {
+    @apply min-h-dvh bg-base-100 font-sans text-base-content antialiased;
+  }
 
-h1,
-h2,
-h3,
-p,
-figure {
-  margin: 0;
-}
+  :focus-visible {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 2px;
+  }
 
-button,
-input,
-select,
-textarea {
-  font: inherit;
-  color: inherit;
-}
-
-a {
-  color: var(--color-primary);
-}
-
-:focus-visible {
-  outline: 2px solid var(--color-primary);
-  outline-offset: 2px;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
-    animation-duration: 0.01ms !important;
-    transition-duration: 0.01ms !important;
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      transition-duration: 0.01ms !important;
+    }
   }
 }

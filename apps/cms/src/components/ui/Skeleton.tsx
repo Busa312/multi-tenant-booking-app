@@ -1,5 +1,4 @@
 import { cx } from "../../lib/cx.js";
-import styles from "./Skeleton.module.css";
 
 interface SkeletonProps {
   /** Any CSS length or percentage. Fills its container by default. */
@@ -21,10 +20,8 @@ interface SkeletonProps {
 export function Skeleton({ width, height, rounded, className }: SkeletonProps) {
   return (
     <span
-      className={cx(styles.block, rounded === true && styles.rounded, className)}
-      // Per-instance dimensions are the runtime-computed case that repo rule §6
-      // reserves inline style for — a utility class per width would be a
-      // worse version of the same thing.
+      className={cx("skeleton block h-[1em] w-full", rounded === true ? "rounded-full" : "rounded-field", className)}
+      // Per-instance dimensions are runtime values — inline style is the right tool.
       style={{ width, height }}
       aria-hidden="true"
     />

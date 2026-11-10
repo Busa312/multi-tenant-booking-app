@@ -24,7 +24,13 @@ export default async function BookPage({
   }
 
   const api = getPublicApiClient();
-  const [services, locations] = await Promise.all([api.listServices(), api.listLocations()]);
+  // R240: everyone, with the services they perform — decides which services
+  // and branches can be booked at all before the customer picks anything.
+  const [services, locations, professionals] = await Promise.all([
+    api.listServices(),
+    api.listLocations(),
+    api.listProfessionals(),
+  ]);
 
   const preselected = (searchParams.serviceIds ?? "")
     .split(",")
@@ -40,6 +46,7 @@ export default async function BookPage({
     <BookingWizard
       services={services}
       locations={locations}
+      professionals={professionals}
       preselectedServiceIds={preselected}
       preselectedLocationId={preselectedLocationId}
       timezone={context.tenant.timezone}

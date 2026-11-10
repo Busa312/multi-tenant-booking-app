@@ -6,7 +6,6 @@ import { loadPageContext } from "@/lib/page-context";
 import { ManageAppointment } from "@/components/ManageAppointment";
 import { UnavailableNotice } from "@/components/UnavailableNotice";
 import { isValidTimezone } from "@/lib/tenant-time";
-import styles from "./page.module.css";
 
 export const metadata: Metadata = {
   robots: { index: false, follow: false },
@@ -30,10 +29,10 @@ export default async function ManagePage({ params }: { params: { locale: string;
 
   if (!result.ok) {
     return (
-      <div className={styles.invalid}>
-        <h1 className={styles.heading}>{context.t("manage.heading")}</h1>
-        <p className={styles.message}>{context.t("manage.invalid")}</p>
-        <Link className={styles.link} href="/manage/resend">
+      <div className="flex flex-col items-start gap-4">
+        <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">{context.t("manage.heading")}</h1>
+        <p className="alert alert-soft alert-warning w-full">{context.t("manage.invalid")}</p>
+        <Link className="btn btn-primary" href="/manage/resend">
           {context.t("manage.lostLink")}
         </Link>
       </div>
@@ -42,10 +41,11 @@ export default async function ManagePage({ params }: { params: { locale: string;
 
   return (
     <ManageAppointment
-      appointment={result.appointment}
+      visit={result.visit}
       token={params.token}
       timezone={context.tenant.timezone}
       locale={context.locale}
+      defaultLocale={context.defaultLocale}
       messages={getMessages(context.locale)}
     />
   );

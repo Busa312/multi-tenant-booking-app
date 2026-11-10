@@ -7,9 +7,11 @@ import type {
   Location,
   Professional,
   Service,
+  PublicProfessional,
   Tenant,
   TenantConfig,
   TimeOff,
+  Visit,
 } from "@booking/shared-types";
 
 type PrismaTenant = Prisma.TenantGetPayload<Record<string, never>>;
@@ -18,7 +20,7 @@ type PrismaService = Prisma.ServiceGetPayload<Record<string, never>>;
 type PrismaTimeOff = Prisma.TimeOffGetPayload<Record<string, never>>;
 type PrismaLocation = Prisma.LocationGetPayload<Record<string, never>>;
 
-const serializeLocalizedText = (value: Prisma.JsonValue | null): LocalizedText | null => {
+export const serializeLocalizedText = (value: Prisma.JsonValue | null): LocalizedText | null => {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     return null;
   }
@@ -31,7 +33,8 @@ const serializeLocalizedText = (value: Prisma.JsonValue | null): LocalizedText |
 export const APPOINTMENT_INCLUDE = {
   services: {
     orderBy: { position: "asc" },
-    include: { service: { select: { name: true } } },
+    // R160: the translations travel with the name, so the public site can show it in the visitor's language
+    include: { service: { select: { name: true, nameI18n: true } } },
   },
 } satisfies Prisma.AppointmentInclude;
 
@@ -40,6 +43,7 @@ type PrismaAppointment = Prisma.AppointmentGetPayload<{ include: typeof APPOINTM
 const serializeServiceLine = (line: PrismaAppointment["services"][number]): AppointmentServiceLine => ({
   serviceId: line.serviceId,
   name: line.service.name,
+  nameI18n: serializeLocalizedText(line.service.nameI18n),
   durationMinutes: line.durationMinutes,
   price: line.price.toString(),
 });
@@ -52,6 +56,7 @@ export const serializeTenant = (t: PrismaTenant): Tenant => ({
   customDomain: t.customDomain,
   domainVerifiedAt: t.domainVerifiedAt?.toISOString() ?? null,
   configJson: t.configJson as TenantConfig,
+  maxVisitGapMinutes: t.maxVisitGapMinutes,
   createdAt: t.createdAt.toISOString(),
 });
 
@@ -80,6 +85,14 @@ export const serializeProfessional = (p: PrismaProfessional): Professional => ({
   createdAt: p.createdAt.toISOString(),
 });
 
+// R240: the public flow needs to know who performs what
+export const serializePublicProfessional = (
+  p: PrismaProfessional & { serviceProfessionals: { serviceId: string }[] },
+): PublicProfessional => ({
+  ...serializeProfessional(p),
+  serviceIds: p.serviceProfessionals.map((assignment) => assignment.serviceId),
+});
+
 export const serializeService = (s: PrismaService): Service => ({
   id: s.id,
   tenantId: s.tenantId,
@@ -103,6 +116,7 @@ export const serializeLocation = (l: PrismaLocation): Location => ({
   addressLine: l.addressLine,
   addressLineI18n: serializeLocalizedText(l.addressLineI18n),
   city: l.city,
+  cityI18n: serializeLocalizedText(l.cityI18n),
   phone: l.phone,
   latitude: l.latitude?.toString() ?? null,
   longitude: l.longitude?.toString() ?? null,
@@ -139,8 +153,11 @@ export const serializeAppointment = (a: PrismaAppointment): Appointment => ({
 
 export const APPOINTMENT_SUMMARY_INCLUDE = {
   ...APPOINTMENT_INCLUDE,
-  professional: { select: { name: true } },
-  location: { select: { name: true } },
+  // R160: translations too, so the CMS shows names in its own language
+  professional: { select: { name: true, nameI18n: true } },
+  location: { select: { name: true, nameI18n: true } },
+  // R230: the link lives on the visit, so that's where "has a link" is read
+  visit: { select: { accessTokenHash: true } },
 } satisfies Prisma.AppointmentInclude;
 
 export type PrismaAppointmentSummary = Prisma.AppointmentGetPayload<{
@@ -152,6 +169,62 @@ export const serializeAppointmentSummary = (a: PrismaAppointmentSummary): Appoin
   createdByUserId: a.createdByUserId,
   notes: a.notes,
   professionalName: a.professional?.name ?? null,
+  professionalNameI18n: serializeLocalizedText(a.professional?.nameI18n ?? null),
   locationName: a.location?.name ?? null,
-  hasMagicLink: a.accessTokenHash !== null,
+  locationNameI18n: serializeLocalizedText(a.location?.nameI18n ?? null),
+  hasMagicLink: a.visit?.accessTokenHash != null,
+  visitId: a.visitId,
 });
+
+/** R230: a customer visit with every segment, in time order. */
+export const VISIT_INCLUDE = {
+  appointments: {
+    orderBy: { startAt: "asc" },
+    include: {
+      ...APPOINTMENT_INCLUDE,
+      // R160: translated on the confirmation and manage pages
+      professional: { select: { name: true, nameI18n: true } },
+      location: { select: { name: true, nameI18n: true } },
+    },
+  },
+} satisfies Prisma.VisitInclude;
+
+export type PrismaVisit = Prisma.VisitGetPayload<{ include: typeof VISIT_INCLUDE }>;
+
+/**
+ * Times and price describe what is still happening: segments staff have
+ * cancelled drop out of them, unless everything is cancelled, in which case
+ * they describe what was booked. Status is derived (R230) — "cancelled" only
+ * when every segment is.
+ */
+export const serializeVisit = (v: PrismaVisit): Visit => {
+  const live = v.appointments.filter((appointment) => appointment.status !== "cancelled");
+  const shown = live.length > 0 ? live : v.appointments;
+  const [first, ...rest] = shown;
+  if (!first) {
+    throw new Error(`visit ${v.id} has no appointments`);
+  }
+  const status =
+    live.length === 0 ? "cancelled" : live.some((appointment) => appointment.status === "booked") ? "booked" : first.status;
+
+  return {
+    id: v.id,
+    status,
+    startAt: first.startAt.toISOString(),
+    endAt: new Date(Math.max(...shown.map((appointment) => appointment.endAt.getTime()))).toISOString(),
+    price: rest.reduce((sum, appointment) => sum.plus(appointment.price), first.price).toString(),
+    locationId: first.locationId,
+    locationName: first.location?.name ?? null,
+    locationNameI18n: serializeLocalizedText(first.location?.nameI18n ?? null),
+    segments: v.appointments.map((appointment) => ({
+      appointmentId: appointment.id,
+      services: appointment.services.map(serializeServiceLine),
+      professionalId: appointment.professionalId,
+      professionalName: appointment.professional?.name ?? null,
+      professionalNameI18n: serializeLocalizedText(appointment.professional?.nameI18n ?? null),
+      startAt: appointment.startAt.toISOString(),
+      endAt: appointment.endAt.toISOString(),
+      status: appointment.status,
+    })),
+  };
+};

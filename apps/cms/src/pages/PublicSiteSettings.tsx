@@ -5,9 +5,9 @@ import { cachedApi } from "../lib/cache.js";
 import { useI18n } from "../i18n/I18nContext.js";
 import { AppShell } from "../components/AppShell.js";
 import { LocalizedField } from "../components/LocalizedField.js";
+import { ContentLocaleSelect } from "../components/ContentLocaleSelect.js";
 import { CardSkeleton } from "../components/CardSkeleton.js";
-import { Alert, Button, Checkbox, Eyebrow } from "../components/ui/index.js";
-import styles from "./PublicSiteSettings.module.css";
+import { Alert, Button, Card, Checkbox, Eyebrow } from "../components/ui/index.js";
 
 // R170: the title and description shown on the public site
 
@@ -22,6 +22,10 @@ interface PageData {
 export function PublicSiteSettingsPage() {
   const { t } = useI18n();
   const [data, setData] = useState<PageData | null>(null);
+  // R160: which language the title and description are showing
+  const [contentLocale, setContentLocale] = useState("");
+  const enabled = data?.enabledLocales ?? [];
+  const activeLocale = enabled.includes(contentLocale) ? contentLocale : (enabled[0] ?? "");
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -73,15 +77,15 @@ export function PublicSiteSettingsPage() {
 
   return (
     <AppShell title={t("publicSite.title")} subtitle={t("publicSite.subtitle")}>
-      <div className="fade-up">
+      <div className="animate-fade-up motion-reduce:animate-none">
         {error && <Alert>{error}</Alert>}
         {!data && <CardSkeleton rows={2} rowHeight="86px" />}
 
         {data && (
-          <form className={styles.form} onSubmit={handleSubmit} noValidate>
+          <Card as="form" className="flex max-w-2xl flex-col gap-1 sm:p-6" onSubmit={handleSubmit} noValidate>
             <Eyebrow>{t("publicSite.languagesTitle")}</Eyebrow>
-            <p className={styles.hint}>{t("publicSite.languagesHint")}</p>
-            <div className={styles.languages}>
+            <p className="mt-1 mb-3 text-xs text-base-content/55">{t("publicSite.languagesHint")}</p>
+            <div className="mb-5 flex flex-col gap-1 border-b border-base-300 pb-5">
               {SUPPORTED_CONTENT_LOCALES.map((locale) => {
                 const isDefault = locale === data.enabledLocales[0];
                 return (
@@ -107,22 +111,30 @@ export function PublicSiteSettingsPage() {
               })}
             </div>
 
+            {/* R160: one language for both fields below */}
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+              <Eyebrow>{t("publicSite.textTitle")}</Eyebrow>
+              <ContentLocaleSelect locales={data.enabledLocales} value={activeLocale} onChange={setContentLocale} />
+            </div>
+
             <LocalizedField
               id="public-title"
               label={t("publicSite.titleLabel")}
               locales={data.enabledLocales}
+              locale={activeLocale}
               value={data.title}
               onChange={(title) => patch({ title })}
               i18n={data.titleI18n}
               onI18nChange={(titleI18n) => patch({ titleI18n })}
               placeholder={t("publicSite.titlePlaceholder")}
             />
-            <p className={styles.hint}>{t("publicSite.titleHint")}</p>
+            <p className="-mt-2 mb-4 text-xs text-base-content/55">{t("publicSite.titleHint")}</p>
 
             <LocalizedField
               id="public-description"
               label={t("publicSite.descriptionLabel")}
               locales={data.enabledLocales}
+              locale={activeLocale}
               value={data.description}
               onChange={(description) => patch({ description })}
               i18n={data.descriptionI18n}
@@ -130,15 +142,15 @@ export function PublicSiteSettingsPage() {
               placeholder={t("publicSite.descriptionPlaceholder")}
               multiline
             />
-            <p className={styles.hint}>{t("publicSite.descriptionHint")}</p>
+            <p className="-mt-2 mb-4 text-xs text-base-content/55">{t("publicSite.descriptionHint")}</p>
 
-            <div className={styles.actions}>
+            <div className="mt-2 flex items-center gap-3">
               <Button type="submit" disabled={saving}>
                 {saving ? t("common.saving") : t("common.save")}
               </Button>
-              {saved && <span className={styles.saved}>{t("publicSite.saved")}</span>}
+              {saved && <span className="inline-flex items-center gap-1 text-[13px] text-success">{t("publicSite.saved")}</span>}
             </div>
-          </form>
+          </Card>
         )}
       </div>
     </AppShell>

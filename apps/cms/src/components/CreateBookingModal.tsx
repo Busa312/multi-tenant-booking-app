@@ -2,13 +2,13 @@ import { useState, type FormEvent } from "react";
 import type { BookingConflict, LocationSummary, ProfessionalSummary, ServiceSummary } from "@booking/shared-types";
 import { cachedApi } from "../lib/cache.js";
 import { useI18n } from "../i18n/I18nContext.js";
+import { useLocalizedName } from "../lib/useLocalizedName.js";
 import { conflictsFromError } from "../lib/bookingConflicts.js";
 import { Modal } from "./Modal.js";
 import { SlotPicker } from "./SlotPicker.js";
 import { BookingServiceRows } from "./BookingServiceRows.js";
 import { BookingConflictNotice } from "./BookingConflictNotice.js";
-import { Alert, Button, Eyebrow, Field, Select, TextInput, Textarea } from "./ui/index.js";
-import styles from "./CreateBookingModal.module.css";
+import { Alert, Button, Eyebrow, Field, Icon, Select, TextInput, Textarea } from "./ui/index.js";
 
 interface CreateBookingModalProps {
   services: ServiceSummary[];
@@ -39,6 +39,7 @@ export function CreateBookingModal({
   onCreated,
 }: CreateBookingModalProps) {
   const { t } = useI18n();
+  const nameOf = useLocalizedName();
   const [professionalId, setProfessionalId] = useState(lockedProfessionalId ?? "");
   // R150: preselected when there is only one branch
 
@@ -183,7 +184,7 @@ export function CreateBookingModal({
                 setTime("");
               }}
               placeholder={t("bookings.locationPlaceholder")}
-              options={locations.map((location) => ({ value: location.id, label: location.name }))}
+              options={locations.map((location) => ({ value: location.id, label: nameOf(location.name, location.nameI18n) }))}
             />
           </Field>
         )}
@@ -192,19 +193,19 @@ export function CreateBookingModal({
           {lockedProfessionalId ? (
             // R20: a professional books into their own calendar and no other
 
-            <TextInput id="booking-professional" value={lockedProfessional?.name ?? ""} readOnly disabled />
+            <TextInput id="booking-professional" value={lockedProfessional ? nameOf(lockedProfessional.name, lockedProfessional.nameI18n) : ""} readOnly disabled />
           ) : (
             <Select
               id="booking-professional"
               value={professionalId}
               onChange={handleProfessionalChange}
               placeholder={t("bookings.professionalPlaceholder")}
-              options={selectableProfessionals.map((p) => ({ value: p.id, label: p.name }))}
+              options={selectableProfessionals.map((p) => ({ value: p.id, label: nameOf(p.name, p.nameI18n) }))}
             />
           )}
         </Field>
 
-        <Field label={t("bookings.dateLabel")} htmlFor="booking-date" className={styles.date}>
+        <Field label={t("bookings.dateLabel")} htmlFor="booking-date" className="max-w-52">
           <TextInput
             id="booking-date"
             type="date"
@@ -225,7 +226,7 @@ export function CreateBookingModal({
           onChange={reset(setTime)}
         />
 
-        <Eyebrow>{t("bookings.customer")}</Eyebrow>
+        <Eyebrow className="mt-2 mb-2.5 border-t border-base-300 pt-4">{t("bookings.customer")}</Eyebrow>
         <Field label={t("bookings.nameLabel")} htmlFor="booking-name">
           <TextInput
             id="booking-name"
@@ -235,7 +236,7 @@ export function CreateBookingModal({
             required
           />
         </Field>
-        <div className={styles.contactRow}>
+        <div className="grid sm:grid-cols-2 sm:gap-3">
           <Field label={t("bookings.phoneLabel")} htmlFor="booking-phone">
             <TextInput
               id="booking-phone"
@@ -267,7 +268,10 @@ export function CreateBookingModal({
         </Field>
 
         {/* R70: worth saying out loud */}
-        <p className={styles.hint}>{t("bookings.noNotificationHint")}</p>
+        <p className="mb-1 flex items-start gap-1.5 text-xs text-base-content/60">
+          <Icon name="info" size={16} />
+          {t("bookings.noNotificationHint")}
+        </p>
 
         {conflicts && <BookingConflictNotice conflicts={conflicts} timezone={timezone} />}
         {error && <Alert>{error}</Alert>}

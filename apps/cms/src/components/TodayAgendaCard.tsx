@@ -3,7 +3,6 @@ import type { TodaysAgenda } from "../lib/dashboardStats.js";
 import { AgendaList } from "./AgendaList.js";
 import { AgendaNextUp } from "./AgendaNextUp.js";
 import { ButtonLink, Card, Eyebrow } from "./ui/index.js";
-import styles from "./TodayAgendaCard.module.css";
 
 interface TodayAgendaCardProps {
   agenda: TodaysAgenda;
@@ -18,19 +17,19 @@ export function TodayAgendaCard({ agenda, timezone, isOwnOnly }: TodayAgendaCard
   const { all, nextUp, rest, heldCount } = agenda;
 
   return (
-    <Card className={styles.card}>
-      <div className={styles.head}>
-        <div className={styles.headText}>
+    <Card>
+      <div className="mb-4 flex flex-wrap items-start gap-x-3 gap-y-2">
+        <div className="min-w-0">
           <Eyebrow>{t("dashboard.agendaTitle")}</Eyebrow>
-          <div className={styles.count}>{t("dashboard.agendaCount", { count: heldCount })}</div>
+          <div className="mt-0.5 font-display text-lg font-semibold">{t("dashboard.agendaCount", { count: heldCount })}</div>
         </div>
-        <ButtonLink to="/bookings" variant="secondary" size="sm" className={styles.open}>
+        <ButtonLink to="/bookings" variant="secondary" size="sm" className="ml-auto flex-none">
           {t("dashboard.agendaOpenCalendar")}
         </ButtonLink>
       </div>
 
       {all.length === 0 ? (
-        <p className={styles.empty}>{t(isOwnOnly ? "dashboard.agendaEmptyOwn" : "dashboard.agendaEmpty")}</p>
+        <p className="py-6 text-center text-base-content/60">{t(isOwnOnly ? "dashboard.agendaEmptyOwn" : "dashboard.agendaEmpty")}</p>
       ) : (
         <>
           {nextUp ? (
@@ -38,12 +37,12 @@ export function TodayAgendaCard({ agenda, timezone, isOwnOnly }: TodayAgendaCard
           ) : (
             // The day's bookings are all behind us — say so rather than
             // highlighting something already finished as "next up".
-            <p className={styles.done}>{t("dashboard.agendaNothingLeft")}</p>
+            <p className="mb-4 rounded-field bg-base-200/60 px-4 py-3 text-base-content/60">{t("dashboard.agendaNothingLeft")}</p>
           )}
 
           {rest.length > 0 && (
             <>
-              {nextUp && <Eyebrow className={styles.restLabel}>{t("dashboard.agendaRest")}</Eyebrow>}
+              {nextUp && <Eyebrow className="mb-1">{t("dashboard.agendaRest")}</Eyebrow>}
               <AgendaList appointments={rest} timezone={timezone} />
             </>
           )}

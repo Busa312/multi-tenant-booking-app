@@ -7,6 +7,7 @@ import type {
 } from "@booking/shared-types";
 import { cachedApi } from "../lib/cache.js";
 import { useI18n } from "../i18n/I18nContext.js";
+import { useLocalizedName } from "../lib/useLocalizedName.js";
 import { conflictsFromError } from "../lib/bookingConflicts.js";
 import { tenantDateString, tenantTimeString } from "../lib/tenantTime.js";
 import { Modal } from "./Modal.js";
@@ -14,7 +15,6 @@ import { SlotPicker } from "./SlotPicker.js";
 import { BookingServiceRows } from "./BookingServiceRows.js";
 import { BookingConflictNotice } from "./BookingConflictNotice.js";
 import { Alert, Button, Field, Select, TextInput } from "./ui/index.js";
-import styles from "./EditBookingModal.module.css";
 
 interface EditBookingModalProps {
   appointment: AppointmentSummary;
@@ -38,6 +38,7 @@ export function EditBookingModal({
   onSaved,
 }: EditBookingModalProps) {
   const { t } = useI18n();
+  const nameOf = useLocalizedName();
   const bookedServiceIds = appointment.services.map((line) => line.serviceId);
   const [date, setDate] = useState(tenantDateString(timezone, new Date(appointment.startAt)));
   const [time, setTime] = useState(tenantTimeString(appointment.startAt, timezone));
@@ -147,19 +148,19 @@ export function EditBookingModal({
 
         <Field label={t("bookings.professionalLabel")} htmlFor="edit-booking-professional">
           {lockedProfessionalId ? (
-            <TextInput id="edit-booking-professional" value={lockedProfessional?.name ?? ""} readOnly disabled />
+            <TextInput id="edit-booking-professional" value={lockedProfessional ? nameOf(lockedProfessional.name, lockedProfessional.nameI18n) : ""} readOnly disabled />
           ) : (
             <Select
               id="edit-booking-professional"
               value={professionalId}
               onChange={reset(setProfessionalId)}
               placeholder={t("bookings.professionalPlaceholder")}
-              options={selectableProfessionals.map((p) => ({ value: p.id, label: p.name }))}
+              options={selectableProfessionals.map((p) => ({ value: p.id, label: nameOf(p.name, p.nameI18n) }))}
             />
           )}
         </Field>
 
-        <Field label={t("bookings.dateLabel")} htmlFor="edit-booking-date" className={styles.date}>
+        <Field label={t("bookings.dateLabel")} htmlFor="edit-booking-date" className="max-w-52">
           <TextInput
             id="edit-booking-date"
             type="date"
@@ -185,6 +186,8 @@ export function EditBookingModal({
 
         {/* R110: this is the one visible consequence of changing a booking */}
         {appointment.hasMagicLink && <Alert variant="warning">{t("bookings.magicLinkWarning")}</Alert>}
+        {/* R230: staff move one segment; the customer's other segments stay */}
+        {appointment.visitId && <Alert variant="warning">{t("bookings.visitPartNote")}</Alert>}
 
         {conflicts && <BookingConflictNotice conflicts={conflicts} timezone={timezone} />}
         {error && <Alert>{error}</Alert>}

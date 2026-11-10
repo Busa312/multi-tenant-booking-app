@@ -1,6 +1,5 @@
 import { useI18n } from "../i18n/I18nContext.js";
-import { Button, Card } from "./ui/index.js";
-import styles from "./ErrorScreen.module.css";
+import { Button, Card, Icon } from "./ui/index.js";
 
 /**
  * `stale` — a route chunk failed to load, essentially always because a deploy
@@ -31,10 +30,15 @@ export function ErrorScreen({ kind, onReload }: ErrorScreenProps) {
   const stale = kind === "stale";
 
   return (
-    <div className={styles.root}>
-      <Card className={styles.card} role="alert">
-        <h1 className={styles.title}>{t(stale ? "error.staleTitle" : "error.crashTitle")}</h1>
-        <p className={styles.body}>{t(stale ? "error.staleBody" : "error.crashBody")}</p>
+    <div className="grid min-h-dvh place-items-center p-4">
+      <Card className="w-full max-w-md p-8 text-center" role="alert">
+        <span
+          className={`mx-auto mb-4 grid size-12 place-items-center rounded-full ${stale ? "bg-info/15 text-info" : "bg-error/15 text-error"}`}
+        >
+          <Icon name={stale ? "update" : "error"} size={24} />
+        </span>
+        <h1 className="font-display text-2xl font-semibold">{t(stale ? "error.staleTitle" : "error.crashTitle")}</h1>
+        <p className="mt-2 mb-6 text-base-content/65">{t(stale ? "error.staleBody" : "error.crashBody")}</p>
         <Button variant={stale ? "primary" : "secondary"} icon="refresh" onClick={onReload}>
           {t("error.reload")}
         </Button>

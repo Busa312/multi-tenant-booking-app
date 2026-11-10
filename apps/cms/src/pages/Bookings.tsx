@@ -18,7 +18,6 @@ import { BookingsDayTable } from "../components/BookingsDayTable.js";
 import { BookingsWeekGrid } from "../components/BookingsWeekGrid.js";
 import { CardSkeleton } from "../components/CardSkeleton.js";
 import { type ActionMenuItem, Alert, Button, TextInput } from "../components/ui/index.js";
-import styles from "./Bookings.module.css";
 
 const DAY_ROW = "48px";
 const WEEK_ROW = "74px";
@@ -184,9 +183,9 @@ export function BookingsPage() {
 
   return (
     <AppShell title={t("bookings.title")} subtitle={subtitle()}>
-      <div className="fade-up">
-        <div className={styles.toolbar}>
-          <div className={styles.dayNav}>
+      <div className="animate-fade-up motion-reduce:animate-none">
+        <div className="mb-4 flex flex-wrap items-center gap-2.5">
+          <div className="flex items-center gap-1.5">
             <Button
               iconOnly
               size="sm"
@@ -198,7 +197,7 @@ export function BookingsPage() {
             />
             <TextInput
               type="date"
-              className={styles.dateInput}
+              className="input-sm w-40"
               aria-label={t("bookings.dateLabel")}
               value={date ?? ""}
               disabled={!date}
@@ -223,9 +222,10 @@ export function BookingsPage() {
             </Button>
           </div>
 
-          <div className={styles.viewToggle} role="group" aria-label={t("bookings.viewLabel")}>
+          <div className="join" role="group" aria-label={t("bookings.viewLabel")}>
             <Button
               size="sm"
+              className="join-item"
               variant={view === "day" ? "primary" : "secondary"}
               aria-pressed={view === "day"}
               onClick={() => setView("day")}
@@ -234,6 +234,7 @@ export function BookingsPage() {
             </Button>
             <Button
               size="sm"
+              className="join-item"
               variant={view === "week" ? "primary" : "secondary"}
               aria-pressed={view === "week"}
               onClick={() => setView("week")}
@@ -242,18 +243,20 @@ export function BookingsPage() {
             </Button>
           </div>
 
-          <Button className={styles.add} icon="add" disabled={!context || !date} onClick={() => setCreateOpen(true)}>
+          <Button className="w-full sm:ml-auto sm:w-auto" icon="add" disabled={!context || !date} onClick={() => setCreateOpen(true)}>
             {t("bookings.add")}
           </Button>
         </div>
 
         {error && <Alert>{error}</Alert>}
 
-        {context && (
-          <LocationTabs locations={context.locations} selectedId={locationId} onSelect={setLocationId} />
+        {context && context.locations.length > 1 && (
+          <div className="mb-4">
+            <LocationTabs locations={context.locations} selectedId={locationId} onSelect={setLocationId} />
+          </div>
         )}
 
-        <div className={styles.count}>
+        <div className="mb-2.5 text-[13px] text-base-content/60">
           {visible
             ? t(view === "week" ? "bookings.countWeek" : "bookings.count", { count: visible.length })
             : t("common.loading")}

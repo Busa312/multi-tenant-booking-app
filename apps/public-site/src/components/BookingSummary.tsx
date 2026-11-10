@@ -1,64 +1,54 @@
-import type { Location, Service } from "@booking/shared-types";
 import type { Translate } from "@/i18n/locales";
 import { formatInstant } from "@/lib/tenant-time";
-import styles from "./BookingSummary.module.css";
+import { VisitPlan, type VisitPlanRow } from "./VisitPlan";
 
 interface BookingSummaryProps {
-  services: Service[];
-  location: Location | null;
-  professionalName: string | null;
   startAt: string | null;
+  /** Branch name and address, already in the visitor's language; null = no branches. */
+  location: string | null;
+  /** R200: who does what, when. */
+  plan: VisitPlanRow[];
+  /** Total, already summed — a string so money is never re-added as a float here. */
+  total: string;
   timezone: string;
   locale: string;
   t: Translate;
-  text: (plain: string, i18n: unknown) => string;
 }
 
-export function BookingSummary({
-  services,
-  location,
-  professionalName,
-  startAt,
-  timezone,
-  locale,
-  t,
-  text,
-}: BookingSummaryProps) {
-  const total = services.reduce((sum, service) => sum + Number(service.price), 0);
+const ROW = "flex flex-col gap-0.5 py-3 min-[26rem]:flex-row min-[26rem]:gap-4";
+const TERM = "text-sm text-base-content/60 min-[26rem]:w-28 min-[26rem]:flex-none";
 
+// The booking as one card: used before booking (details step) and after
+// (confirmation), so the customer sees the same thing on both sides.
+export function BookingSummary({ startAt, location, plan, total, timezone, locale, t }: BookingSummaryProps) {
   return (
-    <dl className={styles.summary}>
-      <div className={styles.row}>
-        <dt className={styles.term}>{t("booking.summary.services")}</dt>
-        <dd className={styles.value}>{services.map((s) => text(s.name, s.nameI18n)).join(", ")}</dd>
-      </div>
-
+    <dl className="divide-y divide-base-300 rounded-box border border-base-300 bg-base-200/50 px-4">
       {startAt && (
-        <div className={styles.row}>
-          <dt className={styles.term}>{t("booking.summary.when")}</dt>
-          <dd className={styles.value}>{formatInstant(startAt, timezone, locale)}</dd>
+        <div className={ROW}>
+          <dt className={TERM}>{t("booking.summary.when")}</dt>
+          <dd className="min-w-0 font-medium">{formatInstant(startAt, timezone, locale)}</dd>
         </div>
       )}
 
       {location && (
-        <div className={styles.row}>
-          <dt className={styles.term}>{t("booking.summary.location")}</dt>
-          <dd className={styles.value}>
-            {text(location.name, location.nameI18n)} — {text(location.addressLine, location.addressLineI18n)}
+        <div className={ROW}>
+          <dt className={TERM}>{t("booking.summary.location")}</dt>
+          <dd className="min-w-0 font-medium">{location}</dd>
+        </div>
+      )}
+
+      {plan.length > 0 && (
+        <div className={ROW}>
+          <dt className={TERM}>{t("booking.summary.schedule")}</dt>
+          <dd className="-mb-3 min-w-0">
+            <VisitPlan rows={plan} timezone={timezone} locale={locale} t={t} />
           </dd>
         </div>
       )}
 
-      {professionalName && (
-        <div className={styles.row}>
-          <dt className={styles.term}>{t("booking.summary.professional")}</dt>
-          <dd className={styles.value}>{professionalName}</dd>
-        </div>
-      )}
-
-      <div className={styles.row}>
-        <dt className={styles.term}>{t("booking.summary.total")}</dt>
-        <dd className={styles.total}>{total.toFixed(2)} ₾</dd>
+      <div className={ROW}>
+        <dt className={TERM}>{t("booking.summary.total")}</dt>
+        <dd className="text-lg font-bold tabular-nums">{total} ₾</dd>
       </div>
     </dl>
   );

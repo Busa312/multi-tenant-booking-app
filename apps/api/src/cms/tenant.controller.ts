@@ -5,6 +5,7 @@ import type {
   Tenant,
   TenantColors,
   TenantConfig,
+  UpdateTenantBookingRulesRequest,
   UpdateTenantCopyRequest,
   UpdateTenantLocalesRequest,
 } from "@booking/shared-types";
@@ -17,6 +18,7 @@ import { Roles } from "../auth/decorators/roles.decorator.js";
 import { serializeTenant } from "../common/serializers.js";
 import {
   TenantDto,
+  UpdateTenantBookingRulesRequestDto,
   UpdateTenantColorsRequestDto,
   UpdateTenantConfigRequestDto,
   UpdateTenantCopyRequestDto,
@@ -25,6 +27,7 @@ import {
 import { enabledLocalesOf, validateLocalizedText, SUPPORTED_CONTENT_LOCALES } from "../common/i18n-validation.js";
 import { RevalidationService } from "./revalidation.service.js";
 import { isValidColor } from "./color-validation.js";
+import { VISIT_GAP_OPTIONS } from "../booking/booking-rules.js";
 
 const COPY_TITLE_MAX = 70;
 const COPY_DESCRIPTION_MAX = 200;
@@ -142,6 +145,27 @@ export class TenantController {
       )];
       return { ...current, enabledLocales: ordered };
     });
+  }
+
+  /**
+   * R220: the longest idle gap allowed between two segments of a customer's
+   * visit. Only the offered values are accepted — the database CHECK (0–60)
+   * is the backstop, this is the contract.
+   */
+  @Patch("booking-rules")
+  @Roles("owner")
+  @ApiBody({ type: UpdateTenantBookingRulesRequestDto })
+  @ApiOkResponse({ type: TenantDto })
+  async updateBookingRules(@Body() body: UpdateTenantBookingRulesRequest): Promise<Tenant> {
+    const gap = body?.maxVisitGapMinutes;
+    if (typeof gap !== "number" || !VISIT_GAP_OPTIONS.includes(gap)) {
+      throw new BadRequestException(`maxVisitGapMinutes must be one of ${VISIT_GAP_OPTIONS.join(", ")}`);
+    }
+    const { tenantId } = this.tenantContext.current;
+    const tenant = await this.prisma.forTenant((tx) =>
+      tx.tenant.update({ where: { id: tenantId }, data: { maxVisitGapMinutes: gap } }),
+    );
+    return serializeTenant(tenant);
   }
 
   @Patch("copy")

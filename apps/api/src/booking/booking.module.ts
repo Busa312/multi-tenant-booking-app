@@ -1,6 +1,7 @@
 import { Module } from "@nestjs/common";
 import { AvailabilityService } from "./availability.service.js";
 import { BookingService } from "./booking.service.js";
+import { VisitService } from "./visit.service.js";
 
 /**
  * Booking domain logic with no HTTP surface of its own — imported by both
@@ -8,7 +9,7 @@ import { BookingService } from "./booking.service.js";
  * computation and one set of write rules (see AvailabilityService's comment).
  */
 @Module({
-  providers: [AvailabilityService, BookingService],
-  exports: [AvailabilityService, BookingService],
+  providers: [AvailabilityService, BookingService, VisitService],
+  exports: [AvailabilityService, BookingService, VisitService],
 })
 export class BookingModule {}

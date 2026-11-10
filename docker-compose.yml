@@ -8,10 +8,10 @@ services:
       POSTGRES_PASSWORD: booking
       POSTGRES_DB: booking
     ports:
-      # Host-side 5433 (not 5432) to avoid clashing with a native Postgres
+      # Host-side 5434 (not 5432) to avoid clashing with a native Postgres
       # install on the host; container-to-container traffic (e.g. the api
       # service, via DATABASE_URL=...@postgres:5432) is unaffected.
-      - "5433:5432"
+      - "5434:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
       # Creates the RLS-bound `booking_app` runtime role on first init — see the file for why.

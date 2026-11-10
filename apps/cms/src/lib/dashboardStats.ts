@@ -1,4 +1,4 @@
-import type { AppointmentStatus, AppointmentSummary } from "@booking/shared-types";
+import type { AppointmentStatus, AppointmentSummary, LocalizedText } from "@booking/shared-types";
 import { addDays, tenantDateString } from "./tenantTime.js";
 
 /**
@@ -217,6 +217,8 @@ export function buildTrend(
 export interface TopServiceStat {
   serviceId: string;
   serviceName: string;
+  // R160: shown in the CMS's language by the card
+  serviceNameI18n: LocalizedText | null;
   /** How many times the service was booked — not how many appointments. */
   count: number;
   /** Expected value in minor units. Owner-only at the render site. */
@@ -251,6 +253,7 @@ export function topServices(
       const stat = byService.get(line.serviceId) ?? {
         serviceId: line.serviceId,
         serviceName: line.name,
+        serviceNameI18n: line.nameI18n,
         count: 0,
         valueMinor: 0,
         unpriced: 0,

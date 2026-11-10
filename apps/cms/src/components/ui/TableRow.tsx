@@ -1,6 +1,5 @@
-import type { CSSProperties, ReactNode } from "react";
+import type { ReactNode } from "react";
 import { cx } from "../../lib/cx.js";
-import styles from "./Table.module.css";
 
 interface TableRowProps {
   /** CSS grid column template — must match the row's TableHead. */
@@ -11,7 +10,10 @@ interface TableRowProps {
 
 export function TableRow({ columns, children, className }: TableRowProps) {
   return (
-    <div className={cx(styles.row, className)} style={{ "--cols": columns } as CSSProperties}>
+    <div
+      className={cx("grid items-center gap-3 px-5 py-3.5 transition-colors hover:bg-base-200/40", className)}
+      style={{ gridTemplateColumns: columns }}
+    >
       {children}
     </div>
   );

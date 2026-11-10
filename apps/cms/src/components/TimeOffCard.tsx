@@ -3,7 +3,6 @@ import { useI18n } from "../i18n/I18nContext.js";
 import { cx } from "../lib/cx.js";
 import { formatDateTimeLabel } from "../lib/tenantTime.js";
 import { Button, Card, Eyebrow, Pill } from "./ui/index.js";
-import styles from "./TimeOffCard.module.css";
 
 interface TimeOffCardProps {
   blocks: TimeOff[];
@@ -32,14 +31,17 @@ export function TimeOffCard({ blocks, timezone, labelFor, busyId, onAdd, onDelet
 
   function row(block: TimeOff, isPast: boolean) {
     return (
-      <li key={block.id} className={cx(styles.row, isPast && styles.rowPast)}>
-        <div className={styles.details}>
-          <div className={styles.when}>
+      <li
+        key={block.id}
+        className={cx("flex items-start gap-3 border-b border-base-300 py-2.5 last:border-b-0 pointer-coarse:py-3.5", isPast && "opacity-60")}
+      >
+        <div className="min-w-0 flex-1">
+          <div className="text-[13.5px] font-semibold [overflow-wrap:anywhere]">
             {formatDateTimeLabel(block.startAt, timezone, lang)} – {formatDateTimeLabel(block.endAt, timezone, lang)}
           </div>
-          <div className={styles.meta}>
+          <div className="mt-1 flex flex-wrap items-center gap-1.5">
             <Pill tone="neutral">{labelFor(block.professionalId)}</Pill>
-            {block.reason && <span className={styles.reason}>{block.reason}</span>}
+            {block.reason && <span className="text-xs text-base-content/60 [overflow-wrap:anywhere]">{block.reason}</span>}
           </div>
         </div>
         <Button
@@ -55,27 +57,27 @@ export function TimeOffCard({ blocks, timezone, labelFor, busyId, onAdd, onDelet
   }
 
   return (
-    <Card className={styles.card}>
-      <div className={styles.head}>
-        <div className={styles.headText}>
+    <Card>
+      <div className="mb-3 flex flex-wrap items-start gap-x-3 gap-y-2">
+        <div className="min-w-0">
           <Eyebrow>{t("hours.timeOff")}</Eyebrow>
-          <p className={styles.subtitle}>{t("hours.timeOffSubtitle")}</p>
+          <p className="mt-1 text-[13px] text-base-content/60">{t("hours.timeOffSubtitle")}</p>
         </div>
-        <Button size="sm" icon="add" className={styles.add} onClick={onAdd}>
+        <Button size="sm" icon="add" className="ml-auto flex-none" onClick={onAdd}>
           {t("hours.addTimeOff")}
         </Button>
       </div>
 
       {blocks.length === 0 ? (
-        <p className={styles.empty}>{t("hours.emptyTimeOff")}</p>
+        <p className="py-4 text-base-content/60">{t("hours.emptyTimeOff")}</p>
       ) : (
         <>
-          <ul className={styles.list}>{upcoming.map((block) => row(block, false))}</ul>
-          {upcoming.length === 0 && <p className={styles.empty}>{t("hours.noUpcomingTimeOff")}</p>}
+          <ul>{upcoming.map((block) => row(block, false))}</ul>
+          {upcoming.length === 0 && <p className="py-2 text-base-content/60">{t("hours.noUpcomingTimeOff")}</p>}
           {past.length > 0 && (
-            <details className={styles.pastWrap}>
-              <summary className={styles.pastSummary}>{t("hours.pastTimeOff", { count: past.length })}</summary>
-              <ul className={styles.list}>{past.map((block) => row(block, true))}</ul>
+            <details className="mt-3 border-t border-base-300 pt-2.5">
+              <summary className="w-fit cursor-pointer text-xs font-semibold text-primary pointer-coarse:flex pointer-coarse:min-h-11 pointer-coarse:items-center">{t("hours.pastTimeOff", { count: past.length })}</summary>
+              <ul>{past.map((block) => row(block, true))}</ul>
             </details>
           )}
         </>

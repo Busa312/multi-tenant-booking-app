@@ -1,16 +1,17 @@
 "use server";
 
 import { ApiError } from "@booking/api-client";
-import type { Appointment, AvailabilitySlot, Professional } from "@booking/shared-types";
+import type { PublicProfessional, Visit, VisitSlot } from "@booking/shared-types";
 import { getPublicApiClient } from "./api";
 
 export type ActionResult<T> = ({ ok: true } & T) | { ok: false; reason: FailureReason };
 
-export type FailureReason = "conflict" | "invalid" | "notFound" | "unknown";
+export type FailureReason = "conflict" | "invalid" | "notFound" | "limit" | "unknown";
 
 function toFailure(error: unknown): { ok: false; reason: FailureReason } {
   if (error instanceof ApiError) {
     if (error.status === 409) return { ok: false, reason: "conflict" };
+    if (error.status === 429) return { ok: false, reason: "limit" };
     if (error.status === 404) return { ok: false, reason: "notFound" };
     if (error.status === 400) return { ok: false, reason: "invalid" };
   }
@@ -19,17 +20,23 @@ function toFailure(error: unknown): { ok: false; reason: FailureReason } {
 
 export interface AvailabilityRequest {
   serviceIds: string[];
-  professionalId?: string;
+  // R200: aligned with serviceIds; null = any qualified professional
+  professionalIds: (string | null)[];
   locationId?: string;
 
   date: string;
+  // R250: the visitor's own hold, so the time they're holding stays listed
+  holdId?: string;
 }
 
 export async function fetchAvailability(
   request: AvailabilityRequest,
-): Promise<ActionResult<{ slots: AvailabilitySlot[] }>> {
+): Promise<ActionResult<{ slots: VisitSlot[] }>> {
   try {
-    const slots = await getPublicApiClient().getAvailability(request);
+    const slots = await getPublicApiClient().getAvailability({
+      ...request,
+      professionalIds: request.professionalIds.map((id) => id ?? "any"),
+    });
     return { ok: true, slots };
   } catch (error) {
     return toFailure(error);
@@ -39,7 +46,7 @@ export async function fetchAvailability(
 // R180: the staff bookable at one branch
 export async function fetchProfessionals(
   locationId?: string,
-): Promise<ActionResult<{ professionals: Professional[] }>> {
+): Promise<ActionResult<{ professionals: PublicProfessional[] }>> {
   try {
     const professionals = await getPublicApiClient().listProfessionals(locationId);
     return { ok: true, professionals };
@@ -73,7 +80,9 @@ export async function verifyPhone(
 
 export interface BookingRequest {
   serviceIds: string[];
-  professionalId?: string;
+  // R200: one per service — taken from the chosen slot's plan, so the visit
+  // booked is exactly the one the customer was shown
+  professionalIds: string[];
   locationId?: string;
   date: string;
   time: string;
@@ -81,11 +90,46 @@ export interface BookingRequest {
   phoneNumber: string;
   email?: string;
   verificationToken: string;
+  // R250: the hold taken when the time was picked, used up by the booking
+  holdId?: string;
+}
+
+export interface HoldRequest {
+  serviceIds: string[];
+  professionalIds: string[];
+  locationId?: string;
+  date: string;
+  time: string;
+  replaceHoldId?: string;
+}
+
+/**
+ * R250: holds the picked time while the customer finishes. "conflict" means
+ * someone else got it first; "limit" means no hold this time — the customer can
+ * still book, and the booking re-checks.
+ */
+export async function holdSlot(
+  request: HoldRequest,
+): Promise<ActionResult<{ holdId: string; expiresAt: string; slot: VisitSlot }>> {
+  try {
+    const response = await getPublicApiClient().holdSlot(request);
+    return { ok: true, ...response };
+  } catch (error) {
+    return toFailure(error);
+  }
+}
+
+// R250: best effort — an unreleased hold simply expires
+export async function releaseHold(holdId: string): Promise<{ ok: true }> {
+  await getPublicApiClient()
+    .releaseHold(holdId)
+    .catch(() => undefined);
+  return { ok: true };
 }
 
 export async function submitBooking(
   request: BookingRequest,
-): Promise<ActionResult<{ appointmentId: string; startAt: string; endAt: string; manageUrl: string }>> {
+): Promise<ActionResult<{ visit: Visit; manageUrl: string }>> {
   try {
     const response = await getPublicApiClient().createAppointment(request);
     return { ok: true, ...response };
@@ -94,10 +138,10 @@ export async function submitBooking(
   }
 }
 
-export async function fetchAppointment(token: string): Promise<ActionResult<{ appointment: Appointment }>> {
+export async function fetchAppointment(token: string): Promise<ActionResult<{ visit: Visit }>> {
   try {
-    const appointment = await getPublicApiClient().getAppointmentByToken(token);
-    return { ok: true, appointment };
+    const visit = await getPublicApiClient().getAppointmentByToken(token);
+    return { ok: true, visit };
   } catch (error) {
     return toFailure(error);
   }
@@ -107,20 +151,20 @@ export async function rescheduleBooking(
   token: string,
   date: string,
   time: string,
-): Promise<ActionResult<{ appointment: Appointment; manageUrl: string }>> {
+): Promise<ActionResult<{ visit: Visit; manageUrl: string }>> {
   try {
-    const { appointment, manageUrl } = await getPublicApiClient().rescheduleAppointment(token, { date, time });
-    return { ok: true, appointment, manageUrl };
+    const { visit, manageUrl } = await getPublicApiClient().rescheduleAppointment(token, { date, time });
+    return { ok: true, visit, manageUrl };
   } catch (error) {
     return toFailure(error);
   }
 }
 
-// R80: slots for re-timing one appointment, with itself excluded
+// R80/R230: start times for moving the whole visit, with itself excluded
 export async function fetchRescheduleAvailability(
   token: string,
   date: string,
-): Promise<ActionResult<{ slots: AvailabilitySlot[] }>> {
+): Promise<ActionResult<{ slots: VisitSlot[] }>> {
   try {
     const slots = await getPublicApiClient().getRescheduleAvailability(token, date);
     return { ok: true, slots };
@@ -129,10 +173,10 @@ export async function fetchRescheduleAvailability(
   }
 }
 
-export async function cancelBooking(token: string): Promise<ActionResult<{ appointment: Appointment }>> {
+export async function cancelBooking(token: string): Promise<ActionResult<{ visit: Visit }>> {
   try {
-    const appointment = await getPublicApiClient().cancelAppointment(token);
-    return { ok: true, appointment };
+    const visit = await getPublicApiClient().cancelAppointment(token);
+    return { ok: true, visit };
   } catch (error) {
     return toFailure(error);
   }

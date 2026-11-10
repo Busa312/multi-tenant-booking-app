@@ -2,10 +2,10 @@ import { useState, type FormEvent } from "react";
 import type { ProfessionalSummary } from "@booking/shared-types";
 import { cachedApi } from "../lib/cache.js";
 import { useI18n } from "../i18n/I18nContext.js";
+import { useLocalizedName } from "../lib/useLocalizedName.js";
 import { tenantWallTimeToUtc } from "../lib/tenantTime.js";
 import { Modal } from "./Modal.js";
 import { Alert, Button, Field, Select, TextInput } from "./ui/index.js";
-import styles from "./AddTimeOffModal.module.css";
 
 interface AddTimeOffModalProps {
   professionals: ProfessionalSummary[];
@@ -34,16 +34,19 @@ export function AddTimeOffModal({
   onCreated,
 }: AddTimeOffModalProps) {
   const { t } = useI18n();
+  const nameOf = useLocalizedName();
   const [professionalId, setProfessionalId] = useState(defaultProfessionalId ?? "");
   const [startAt, setStartAt] = useState("");
   const [endAt, setEndAt] = useState("");
   const [reason, setReason] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const chosen = professionals.find((p) => p.id === professionalId);
+  const chosenName = chosen ? nameOf(chosen.name, chosen.nameI18n) : "";
 
   const options = [
     { value: "", label: t("hours.scopeOrganisation") },
-    ...professionals.filter((p) => p.isActive || p.id === professionalId).map((p) => ({ value: p.id, label: p.name })),
+    ...professionals.filter((p) => p.isActive || p.id === professionalId).map((p) => ({ value: p.id, label: nameOf(p.name, p.nameI18n) })),
   ];
 
   async function handleSubmit(e: FormEvent) {
@@ -95,7 +98,7 @@ export function AddTimeOffModal({
           {locked ? (
             <TextInput
               id="timeoff-applies-to"
-              value={professionals.find((p) => p.id === professionalId)?.name ?? ""}
+              value={chosenName}
               readOnly
               disabled
             />
@@ -104,8 +107,8 @@ export function AddTimeOffModal({
           )}
         </Field>
 
-        <div className={styles.range}>
-          <Field label={t("hours.from")} htmlFor="timeoff-from" className={styles.rangeCol}>
+        <div className="grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-x-3">
+          <Field label={t("hours.from")} htmlFor="timeoff-from" className="min-w-0">
             <TextInput
               id="timeoff-from"
               type="datetime-local"
@@ -114,7 +117,7 @@ export function AddTimeOffModal({
               required
             />
           </Field>
-          <Field label={t("hours.to")} htmlFor="timeoff-to" className={styles.rangeCol}>
+          <Field label={t("hours.to")} htmlFor="timeoff-to" className="min-w-0">
             <TextInput
               id="timeoff-to"
               type="datetime-local"
@@ -134,7 +137,7 @@ export function AddTimeOffModal({
           />
         </Field>
 
-        <p className={styles.hint}>{t("hours.timezoneHint", { timezone })}</p>
+        <p className="mb-3 text-xs leading-relaxed text-base-content/60">{t("hours.timezoneHint", { timezone })}</p>
 
         {error && <Alert>{error}</Alert>}
       </form>

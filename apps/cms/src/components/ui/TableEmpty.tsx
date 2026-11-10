@@ -1,5 +1,4 @@
 import type { ReactNode } from "react";
-import styles from "./Table.module.css";
 
 interface TableEmptyProps {
   children: ReactNode;
@@ -7,5 +6,5 @@ interface TableEmptyProps {
 
 // Empty-state row shown inside a Table when there are no records.
 export function TableEmpty({ children }: TableEmptyProps) {
-  return <div className={styles.empty}>{children}</div>;
+  return <div className="px-5 py-10 text-center text-sm text-base-content/55">{children}</div>;
 }

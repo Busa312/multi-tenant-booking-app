@@ -45,7 +45,7 @@ export function getCachedTenant(host: string): Promise<Tenant> {
 /**
  * Merges platform defaults with the tenant's saved colors, re-validating each
  * value at render time (not just at CMS save time) before it's ever
- * interpolated into a `<style>` tag — defense in depth against a row that
+ * written into the page's theme (lib/tenant-theme.ts) — defense in depth against a row that
  * somehow ended up with a malformed value.
  */
 export function resolveTenantColors(tenant: Pick<Tenant, "configJson">): Required<TenantColors> {

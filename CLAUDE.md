@@ -28,8 +28,8 @@ These rules codify the conventions already used across this monorepo. Follow the
 - Tag code that implements a spec requirement with its `// Rxx:` comment linking back to the requirements doc.
 
 ## 4. React / Next components
-- **Exactly one component per file — no exceptions.** A page's modals and sub-forms get their own files too, even when nothing else will ever use them; a file that renders two components gets split. Each component brings its own co-located `.module.css` with it (§6), so splitting a file means splitting its stylesheet. Component files are PascalCase.
-- CMS (`apps/cms`): named exports; route components in `pages/` with a `Page` suffix, every other component in `components/` — including page-specific ones like `EditServiceModal`. Data fetching = `useState`/`useEffect` + a local `load()`, `null` as the loading sentinel, an error string in state. Use Context only for cross-cutting state (auth); consumer hooks like `useAuth` throw when used outside their provider.
+- **Exactly one component per file — no exceptions.** A page's modals and sub-forms get their own files too, even when nothing else will ever use them; a file that renders two components gets split. Styling lives in each component's own JSX (§6), so a split carries its classes with it. Component files are PascalCase.
+- CMS (`apps/cms`): named exports; route components in `pages/` with a `Page` suffix, every other component in `components/` — including page-specific ones like `EditServiceModal`. Data fetching = `useState`/`useEffect` + a local `load()`, `null` as the loading sentinel, an error string in state. Use Context only for cross-cutting state (auth); consumer hooks like `useAuth` throw when used outside their provider. Show service/professional/location names and descriptions through `useLocalizedName()` (`lib/useLocalizedName.ts`), never `.name` directly — it picks the translation for the CMS language (R160); plain helpers like `serviceLabel` take its picker as an argument. Translatable inputs are `LocalizedField`s driven by **one** `ContentLocaleSelect` per form (a modal's `headerAction`, or the top of a settings card) — never per-field language tabs.
 - public-site (`apps/public-site`): App Router route files stay lowercase (`page.tsx`, `layout.tsx`, `route.ts`) with default exports (framework-forced); shared components are PascalCase named exports. Server Components by default; add `"use client"` only when needed.
 - Relative imports in CMS/API use an explicit `.js` suffix (ESM). Cross-`@booking/*` imports omit extensions.
 
@@ -41,13 +41,27 @@ These rules codify the conventions already used across this monorepo. Follow the
 - `[R]` Standardize on the `@/*` → `./src/*` path alias for new frontend code (currently only in public-site).
 
 ## 6. Styling
-- **Every component and every page owns its own co-located style file.** No shared catch-all stylesheet for component/page styles, and no ad-hoc inline `style={{}}` for structural layout.
-  - Use **CSS Modules** (natively supported by Vite and Next): `Professionals.module.css` next to `Professionals.tsx`, imported as `import styles from "./Professionals.module.css"` and applied via `className={styles.grid}`.
-  - This supersedes the old CMS pattern (single global `theme.css` + heavy inline styles). Migrate existing pages to per-file `.module.css` incrementally; all *new* components/pages follow this rule from the start.
-- **Design tokens stay global and shared.** Keep CSS custom properties (`--accent`, `--ink`, `--bg`, `--danger`, …) in one root token stylesheet (`theme.css`) imported once. Per-component modules *consume* tokens (`color: var(--accent)`) but never redefine the token layer — this preserves per-tenant theming.
-- **Inline `style={{}}` is allowed only for genuinely dynamic values** computed at runtime (a tenant color resolved per request, a computed grid size) — never for static layout that belongs in the module file.
-- public-site: tenant colors are injected as CSS custom properties in a server-rendered `<style>` in `layout.tsx`; **always run color values through `isValidColor` before interpolating** into the style tag (injection guard). Components reference `var(--color-primary)` from their own `.module.css`.
-- `[R]` Remove the unused `packages/config/tailwind/base.js` — it is wired into nothing and now competes with the CSS-Modules standard.
+Both frontends use **Tailwind CSS v4 + daisyUI 5** (same pinned versions). They differ only in where their theme comes from: the CMS has one fixed brand; the public site is themed per tenant at request time.
+
+**Both apps**
+- Style with daisyUI component classes (`btn`, `card`, `input`, `badge`, `alert`, `modal`, `steps`, `join`, …) plus Tailwind utilities, directly in `className`. No `.module.css` files, no per-component stylesheets.
+- **Colors are semantic, never literal.** Use daisyUI roles — `bg-base-100`, `bg-base-200`, `border-base-300`, `text-base-content/60` (muted), `primary` (main action, selected state), `success`/`warning`/`error`/`info` (status only). Never hex/rgb, never Tailwind palette colors (`text-red-600`) — on the public site a literal color would ignore the tenant's palette.
+- Never put two classes for the same property on one element (e.g. `justify-end` + `justify-between`, `mb-4` + `mb-0`) — Tailwind doesn't resolve them by order. Use a component prop or restructure instead.
+- When several components must share exact classes (a skeleton and the thing it stands in for; every step of a wizard), put the strings in one `lib/*Classes.ts` module they import (`trendChartClasses.ts`, `scheduleGridClasses.ts` in the CMS; `wizardClasses.ts` in public-site).
+- Dialogs are native `<dialog>` + `showModal()` with daisyUI `modal` classes (focus trap, Escape, inert background for free): mounted = open, `onCancel` routes Escape to the parent's `onClose`.
+- Inline `style={{}}` only for genuinely dynamic runtime values (a bar height, a per-table grid template) — never for static layout. Keep `motion-reduce:` / reduced-motion handling and touch-target sizing.
+
+**CMS (`apps/cms`)**
+- **`src/theme.css` is the single brand file**: the two daisyUI themes (`salon` light, `salon-dark` dark, OS-following) plus fonts. Restyling the CMS = editing that file. Theme names must match `src/lib/theme.ts` (the light/dark toggle). `src/index.css` holds only the Tailwind/daisyUI setup and the few true globals (icon font, iOS 16px input rule).
+- Repeated markup goes into the `components/ui/` primitives (`Button`, `Card`, `Field`, `Alert`, `Table*`, `Select`, …), not copy-pasted class strings. Use their props (`variant`, `size`, `flush`).
+
+**public-site (`apps/public-site`)**
+- One daisyUI theme, `tenant` (`src/app/theme.css`), whose colors are `var(--tenant-*)` references — never fixed values. Tailwind runs through PostCSS (`postcss.config.js`) under Next 14.
+- The root `layout.tsx` writes the `--tenant-*` values per request as an **inline `style` on `<html>`** via `lib/tenant-theme.ts` (`tenantThemeVars` → `tenantThemeStyle`), which derives button-text contrast, light/dark `color-scheme` and readable status colors from the tenant's four colors. **Every tenant color passes `isValidColor` first** (injection guard) — `resolveTenantColors` validates, `tenantThemeStyle` checks again.
+- Don't render a `<style>` (or other hydrated element) into `<head>` from a component: React 18 hydrates `<head>` children by position, so browser extensions that inject into `<head>` cause hydration errors.
+- `PreviewColorListener` (CMS live preview) must apply colors through the same `tenantThemeVars`, so a preview can never differ from what visitors see.
+- System fonts only — no web-font download on the P95 < 300ms path.
+- `[R]` Remove the unused `packages/config/tailwind/base.js` — a Tailwind v3 JS config wired into nothing; both apps' Tailwind v4 setups are CSS-first and don't use it.
 
 ## 7. Formatting & lint
 - ESLint config is intentionally legacy `.eslintrc` (Next 14 / react-hooks 4 don't support flat config). Extend `packages/config/eslint/base.js`; don't migrate to flat config until Next is upgraded.
@@ -57,7 +71,7 @@ These rules codify the conventions already used across this monorepo. Follow the
 ## 8. Testing
 - `apps/api` runs Jest + ts-jest (`apps/api/jest.config.js`), with **colocated `*.spec.ts`** next to the unit under test. Run via `pnpm test` (Turbo) or `pnpm --filter @booking/api test:watch`.
 - These are **unit tests: no database, no Redis, no Nest bootstrap.** Construct the subject directly and hand it stubs — `PrismaService` becomes `{ forTenant: (fn) => fn(txStub) }`, `TenantContextService` becomes `{ current: { tenantId } }` (or a real instance when the AsyncLocalStorage behaviour *is* the thing under test). `pnpm test` must stay runnable with nothing else running.
-- Covered so far: `common/timezone`, `common/serializers`, `common/i18n-validation`, `common/tenant-url`, `cms/color-validation`, `tenant/tenant-context.service`, `prisma/prisma.service` (the `forTenant`/RLS choke point), `auth/guards/roles.guard`, `booking/availability.service`, `booking/booking.service`, `public/public.controller` (magic-link lookup, cancel, resend non-disclosure).
+- Covered so far: `common/timezone`, `common/serializers`, `common/i18n-validation`, `common/tenant-url`, `cms/color-validation`, `tenant/tenant-context.service`, `prisma/prisma.service` (the `forTenant`/RLS choke point), `auth/guards/roles.guard`, `booking/availability.service`, `booking/booking.service` (incl. the R260 day lock), `booking/visit.service` (visits, R250 holds), `booking/visit-planner`, `booking/slot-hold`, `public/public.controller` (magic-link lookup, cancel, resend non-disclosure).
 - `packages/shared-types` has its own Jest setup (`jest.config.cjs` + `tsconfig.spec.json`) for the logic both frontends import at *runtime* — currently `i18n.ts`. Same rules as above: pure functions, no environment.
 - Tag a test with the same `// Rxx:` comment as the code it pins (§3), and prefer asserting the *rule* (`price` is never rewritten on reschedule) over the mechanics.
 - Still open: integration tests that exercise the Postgres RLS policies against a real database — a unit test can only prove `forTenant` sets `app.tenant_id`, not that the policies act on it. Frontend tests come after that.

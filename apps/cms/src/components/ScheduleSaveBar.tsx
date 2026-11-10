@@ -1,6 +1,5 @@
 import { useI18n } from "../i18n/I18nContext.js";
 import { Button } from "./ui/index.js";
-import styles from "./ScheduleSaveBar.module.css";
 
 interface ScheduleSaveBarProps {
   /** The draft differs from what's stored. */
@@ -38,11 +37,11 @@ export function ScheduleSaveBar({ dirty, saving, invalidCount, saved, onSubmit, 
         : t("hours.upToDate");
 
   return (
-    <div className={styles.bar}>
-      <p className={`${styles.status} ${blocked ? styles.blocked : ""}`} role="status">
+    <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2.5 border-t border-base-300 pt-3.5">
+      <p className={blocked ? "min-w-0 text-[13px] font-semibold text-error" : "min-w-0 text-[13px] text-base-content/60"} role="status">
         {status}
       </p>
-      <div className={styles.actions}>
+      <div className="flex w-full gap-2 sm:ml-auto sm:w-auto [&>*]:flex-1 sm:[&>*]:flex-none">
         <Button variant="secondary" size="sm" disabled={!dirty || saving} onClick={onDiscard}>
           {t("hours.discard")}
         </Button>

@@ -1,4 +1,8 @@
 import type { AppointmentServiceLine } from "@booking/shared-types";
+import type { NameOf } from "./useLocalizedName.js";
+
+// R160: callers pass the hook's name picker; without one the plain name shows.
+const plainName: NameOf = (plain) => plain;
 
 /**
  * Rendering an appointment's service list.
@@ -27,8 +31,8 @@ export interface AppointmentWithServices {
  * least one line when appointment.service_id was dropped), so it answers with a
  * dash rather than an empty cell that reads as a rendering bug.
  */
-export function serviceLabel(appointment: AppointmentWithServices): string {
-  const names = appointment.services.map((line) => line.name);
+export function serviceLabel(appointment: AppointmentWithServices, nameOf: NameOf = plainName): string {
+  const names = appointment.services.map((line) => nameOf(line.name, line.nameI18n));
   if (names.length === 0) return "—";
   const shown = names.slice(0, MAX_NAMES).join(" + ");
   const hidden = names.length - MAX_NAMES;
@@ -36,8 +40,8 @@ export function serviceLabel(appointment: AppointmentWithServices): string {
 }
 
 /** Every service name, for tooltips and detail views that aren't width-limited. */
-export const serviceNames = (appointment: AppointmentWithServices): string =>
-  appointment.services.map((line) => line.name).join(" + ");
+export const serviceNames = (appointment: AppointmentWithServices, nameOf: NameOf = plainName): string =>
+  appointment.services.map((line) => nameOf(line.name, line.nameI18n)).join(" + ");
 
 /**
  * Length of the whole block, from the stored instants rather than by summing

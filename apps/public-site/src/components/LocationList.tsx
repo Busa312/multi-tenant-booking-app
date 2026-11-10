@@ -1,6 +1,5 @@
 import type { Location } from "@booking/shared-types";
 import { LocationCard } from "./LocationCard";
-import styles from "./LocationList.module.css";
 
 interface LocationListProps {
   locations: Location[];
@@ -17,11 +16,12 @@ export function LocationList({ locations, heading, bookLabel, text }: LocationLi
   }
 
   return (
-    <section className={styles.section} aria-labelledby="locations-heading">
-      <h2 className={styles.heading} id="locations-heading">
+    <section aria-labelledby="locations-heading">
+      <h2 className="mb-4 text-xl font-bold tracking-tight" id="locations-heading">
         {heading}
       </h2>
-      <ul className={styles.list} data-single={locations.length === 1 || undefined}>
+      {/* One branch takes the full width rather than sitting alone in a half column. */}
+      <ul className={locations.length === 1 ? "grid gap-3" : "grid gap-3 sm:grid-cols-2"}>
         {locations.map((location) => (
           <li key={location.id}>
             <LocationCard

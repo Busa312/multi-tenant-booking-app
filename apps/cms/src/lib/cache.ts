@@ -15,9 +15,11 @@ import type {
   UpdateLocationRequest,
   UpdateProfessionalRequest,
   UpdateServiceRequest,
+  UpdateTenantBookingRulesRequest,
   UpdateTenantCopyRequest,
   UpdateTenantLocalesRequest,
   UpsertBusinessHoursRequest,
+  Tenant,
 } from "@booking/shared-types";
 import { cmsApiClient } from "./api.js";
 
@@ -118,6 +120,8 @@ const LOCATION_KEYS: CacheKey[] = ["locations", "professionals"];
 
 export const cachedApi = {
   getTenant: () => cached("tenant", () => cmsApiClient.getTenant()),
+  /** Whatever tenant is cached, however old — for a first render that can't wait. */
+  peekTenant: (): Tenant | undefined => (entries.get("tenant") as Entry<Tenant> | undefined)?.value,
   listServices: () => cached("services", () => cmsApiClient.listServices()),
   listLocations: () => cached("locations", () => cmsApiClient.listLocations()),
   listProfessionals: () => cached("professionals", () => cmsApiClient.listProfessionals()),
@@ -147,6 +151,9 @@ export const cachedApi = {
   updateTenantColors: (colors: TenantColors) => mutating(cmsApiClient.updateTenantColors(colors), ["tenant"]),
   resetTenantColors: () => mutating(cmsApiClient.resetTenantColors(), ["tenant"]),
   updateTenantCopy: (payload: UpdateTenantCopyRequest) => mutating(cmsApiClient.updateTenantCopy(payload), ["tenant"]),
+  // R220
+  updateTenantBookingRules: (payload: UpdateTenantBookingRulesRequest) =>
+    mutating(cmsApiClient.updateTenantBookingRules(payload), ["tenant"]),
   // Turning a language on or off changes which tabs every editor shows, so the
   // listings that render LocalizedField go stale alongside the tenant itself.
   updateTenantLocales: (payload: UpdateTenantLocalesRequest) =>

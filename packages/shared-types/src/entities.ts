@@ -15,6 +15,8 @@ export interface Tenant {
   customDomain: string | null;
   domainVerifiedAt: string | null;
   configJson: TenantConfig;
+  // R220: longest gap, in minutes, between consecutive segments of a visit
+  maxVisitGapMinutes: number;
   createdAt: string;
 }
 
@@ -41,6 +43,7 @@ export interface Location {
   addressLine: string;
   addressLineI18n: LocalizedText | null;
   city: string | null;
+  cityI18n: LocalizedText | null;
   phone: string | null;
 
   latitude: string | null;
@@ -67,6 +70,15 @@ export interface Professional {
   name: string;
   isActive: boolean;
   createdAt: string;
+}
+
+/**
+ * R240: what the public site needs to know about a professional — including
+ * which services they perform, so the booking flow can hide services nobody
+ * performs and offer only qualified people for each service.
+ */
+export interface PublicProfessional extends Professional {
+  serviceIds: string[];
 }
 
 export type CmsLoginStatus = "none" | "invited" | "active";
@@ -139,6 +151,8 @@ export interface TimeOff {
 export interface AppointmentServiceLine {
   serviceId: string;
   name: string;
+  // R160: the service's translations, for showing `name` in the visitor's language
+  nameI18n: LocalizedText | null;
   durationMinutes: number;
   price: string;
 }
@@ -167,14 +181,74 @@ export interface AppointmentSummary extends Appointment {
   createdByUserId: string | null;
   notes: string | null;
   professionalName: string | null;
+  // R160: translations of the two names, for showing them in the CMS's language
+  professionalNameI18n: LocalizedText | null;
 
   locationName: string | null;
+  locationNameI18n: LocalizedText | null;
 
   hasMagicLink: boolean;
+  // R200: the customer visit this appointment is one segment of; null for a
+  // staff-created booking. Other segments may belong to other professionals.
+  visitId: string | null;
 }
 
 export interface AvailabilitySlot {
   startAt: string;
   endAt: string;
   professionalId: string | null;
+}
+
+/**
+ * R200: one planned appointment of a visit — who performs which services, and
+ * when. Consecutive services by the same professional with no gap between them
+ * share one segment, exactly as they will share one appointment when booked.
+ */
+export interface VisitSlotSegment {
+  serviceIds: string[];
+  professionalId: string;
+  startAt: string;
+  endAt: string;
+}
+
+/**
+ * R200: a bookable start time for a whole visit, with the plan behind it.
+ * `segments` follow the customer's service order; gaps between them are at
+ * most the tenant's `maxVisitGapMinutes` (R220).
+ */
+export interface VisitSlot {
+  startAt: string;
+  endAt: string;
+  segments: VisitSlotSegment[];
+}
+
+/** R200: one appointment of a visit, as the customer's manage page shows it. */
+export interface VisitSegment {
+  appointmentId: string;
+  services: AppointmentServiceLine[];
+  professionalId: string | null;
+  professionalName: string | null;
+  // R160
+  professionalNameI18n: LocalizedText | null;
+  startAt: string;
+  endAt: string;
+  status: AppointmentStatus;
+}
+
+/**
+ * R230: a customer booking as a unit — what the magic link manages. `status`
+ * is derived: "cancelled" only when every segment is, otherwise "booked" while
+ * any segment still is, else the first segment's status.
+ */
+export interface Visit {
+  id: string;
+  status: AppointmentStatus;
+  startAt: string;
+  endAt: string;
+  price: string;
+  locationId: string | null;
+  locationName: string | null;
+  // R160
+  locationNameI18n: LocalizedText | null;
+  segments: VisitSegment[];
 }

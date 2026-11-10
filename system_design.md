@@ -56,7 +56,7 @@ Either way, the resolved `tenant_id` is handed to a request-scoped `TenantContex
 
 ## 5. Data Layer
 
-Postgres is the only datastore (no Mongo). Full entity list, column types, and the ER diagram are in `Unified Requirements and Data Model.md`; the short version: `Tenant`, `Location`, `Professional`, `TenantUser`, `Service`, `ServiceProfessional` (join table), `BusinessHours`, `TimeOff`, `Appointment`. Availability is computed at query time (`BusinessHours` minus `TimeOff` minus existing `Appointment`s) rather than stored as pre-generated slot rows — avoids keeping a second table in sync with every booking/cancellation.
+Postgres is the only datastore (no Mongo). Full entity list, column types, and the ER diagram are in `Unified Requirements and Data Model.md`; the short version: `Tenant`, `Location`, `Professional`, `TenantUser`, `Service`, `ServiceProfessional` (join table), `BusinessHours`, `TimeOff`, `Appointment`, `Visit`, `SlotHold`. Availability is computed at query time (`BusinessHours` minus `TimeOff` minus existing `Appointment`s) rather than stored as pre-generated slot rows — avoids keeping a second table in sync with every booking/cancellation. A multi-professional booking (R200) is planned the same way, one segment at a time: each segment is an ordinary single-professional check, chained back to back with up to `tenant.max_visit_gap_minutes` between them. While a customer finishes booking, the time they picked is held for 10 minutes (`SlotHold`, R250) and counts as busy for everyone else. Because availability is computed rather than reserved, every booking write first takes a Postgres advisory lock on (tenant, local date) and only then re-checks and writes, so two requests for the same time can't both pass the check (R260).
 
 `Tenant.config_json` (JSONB) holds presentation config (theme, logo, copy); everything queryable — pricing, hours, staff, bookings — is normalized columns, not JSON blobs.
 
@@ -69,14 +69,14 @@ Locale resolution deliberately does **not** happen in the API. `apps/api` return
 Two separate identity systems, deliberately not unified:
 
 - **CMS (`TenantUser`)**: email + password, JWT-issued. Exactly one `owner` role per tenant (partial unique constraint); any number of `professional` roles, each optionally linked to a `Professional` business record via nullable `professional_id`. `owner` has full CMS access; `professional` is restricted to their own appointments and their own hours/time-off. Role enforcement happens in the API layer, not in Postgres — RLS scopes rows to a tenant, it has no concept of roles within a tenant. Deactivating a `Professional` record does not cascade to disable their login; the owner does that by hand.
-- **Public site customers**: no accounts at all. Each `Appointment` carries a hashed, expiring access token; visiting `/manage/{token}` authorizes actions against that one appointment only (details below).
+- **Public site customers**: no accounts at all. Each customer booking is a `Visit` (one or more single-professional appointments, R200) carrying a hashed, expiring access token; visiting `/manage/{token}` authorizes actions against that one visit only (details below).
 
 ### Magic Link Flow
 
 1. Customer books (name, phone, email — no signup).
-2. Server generates a token, stores its hash + expiry (`appointment end + 24h`) on the `Appointment` row.
+2. Server generates a token, stores its hash + expiry (`end of the visit's last segment + 24h`) on the `Visit` row.
 3. Server emails a link to `/manage/{token}`.
-4. The link scopes access to that single appointment — it's not a login, and it grants no access to any other booking.
+4. The link scopes access to that single visit — all its segments, moved or cancelled together (R230). It's not a login, and it grants no access to any other booking.
 5. Rescheduling rotates the token (old one invalidated).
 6. Lost-link recovery: customer enters their phone number; server looks up upcoming, non-cancelled appointments for that number and re-sends valid tokens — rate-limited to prevent phone-number enumeration, and answering identically whether or not anything matched.
 

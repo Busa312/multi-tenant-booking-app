@@ -13,14 +13,15 @@ import {
 } from "../lib/weekSchedule.js";
 import { useAuth } from "../auth/AuthContext.js";
 import { useI18n } from "../i18n/I18nContext.js";
+import { useLocalizedName } from "../lib/useLocalizedName.js";
 import { AppShell } from "../components/AppShell.js";
 import { HoursScopePicker } from "../components/HoursScopePicker.js";
 import { WeeklyScheduleEditor } from "../components/WeeklyScheduleEditor.js";
 import { TimeOffCard } from "../components/TimeOffCard.js";
+import { VisitGapCard } from "../components/VisitGapCard.js";
 import { AddTimeOffModal } from "../components/AddTimeOffModal.js";
 import { CardSkeleton } from "../components/CardSkeleton.js";
 import { Alert } from "../components/ui/index.js";
-import styles from "./Hours.module.css";
 
 /**
  * Placeholder row heights. A ScheduleDayRow is a label, two time inputs and an
@@ -48,6 +49,7 @@ interface PageData {
  */
 export function HoursPage() {
   const { t } = useI18n();
+  const nameOf = useLocalizedName();
   const { role, professionalId: ownProfessionalId } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
 
@@ -113,7 +115,8 @@ export function HoursPage() {
 
   function professionalLabel(id: string | null): string {
     if (!id) return t("hours.scopeOrganisation");
-    return data?.professionals.find((p) => p.id === id)?.name ?? t("hours.unknown");
+    const professional = data?.professionals.find((p) => p.id === id);
+    return professional ? nameOf(professional.name, professional.nameI18n) : t("hours.unknown");
   }
 
   const changes = useMemo(
@@ -202,13 +205,13 @@ export function HoursPage() {
   return (
     <AppShell
       title={t("hours.title")}
-      subtitle={scopedProfessional ? t("hours.subtitleScoped", { name: scopedProfessional.name }) : t("hours.subtitle")}
+      subtitle={scopedProfessional ? t("hours.subtitleScoped", { name: nameOf(scopedProfessional.name, scopedProfessional.nameI18n) }) : t("hours.subtitle")}
     >
-      <div className={`fade-up ${styles.grid}`}>
-        {error && <Alert className={styles.errorFull}>{error}</Alert>}
+      <div className="grid animate-fade-up items-start gap-4 motion-reduce:animate-none 2xl:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)] 2xl:gap-5">
+        {error && <Alert flush className="2xl:col-span-2">{error}</Alert>}
 
         {!locked && data && (
-          <div className={styles.scope}>
+          <div className="2xl:col-span-2">
             <HoursScopePicker
               professionals={data.professionals}
               value={professionalId}
@@ -224,11 +227,11 @@ export function HoursPage() {
           </div>
         )}
 
-        <div className={styles.week}>
+        <div>
           {data && draft ? (
             <WeeklyScheduleEditor
               scope={scope}
-              professionalName={scopedProfessional?.name ?? null}
+              professionalName={scopedProfessional ? nameOf(scopedProfessional.name, scopedProfessional.nameI18n) : null}
               draft={draft}
               hours={data.hours}
               saving={saving}
@@ -245,7 +248,7 @@ export function HoursPage() {
           )}
         </div>
 
-        <div className={styles.timeOff}>
+        <div>
           {data ? (
             <TimeOffCard
               blocks={visibleTimeOff}
@@ -260,6 +263,13 @@ export function HoursPage() {
           )}
         </div>
       </div>
+
+      {/* R220: an organisation-wide booking rule, so only in organisation scope */}
+      {!locked && !professionalId && (
+        <div className="mt-4 2xl:mt-5">
+          <VisitGapCard />
+        </div>
+      )}
 
       {addOpen && data && (
         <AddTimeOffModal

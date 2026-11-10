@@ -1,9 +1,9 @@
 import type {
-  Appointment,
   AvailabilityQuery,
-  AvailabilitySlot,
   CreateAppointmentRequest,
   CreateAppointmentResponse,
+  HoldSlotRequest,
+  HoldSlotResponse,
   Location,
   ResendMagicLinkRequest,
   RescheduleAppointmentRequest,
@@ -13,8 +13,10 @@ import type {
   VerifyPhoneRequest,
   VerifyPhoneResponse,
   Service,
-  Professional,
+  PublicProfessional,
   Tenant,
+  Visit,
+  VisitSlot,
 } from "@booking/shared-types";
 import { HttpClient, type ApiClientOptions } from "./http";
 
@@ -38,20 +40,33 @@ export class PublicApiClient {
     return this.http.get<Location[]>("/public/locations");
   }
 
-  // R150: `locationId` narrows to that branch's staff plus those at every branch
+  // R150: `locationId` narrows to that branch's staff plus those at every branch.
+  // R240: each carries the services they perform.
   listProfessionals(locationId?: string) {
     const query = locationId ? `?${new URLSearchParams({ locationId }).toString()}` : "";
-    return this.http.get<Professional[]>(`/public/professionals${query}`);
+    return this.http.get<PublicProfessional[]>(`/public/professionals${query}`);
   }
 
   getAvailability(query: AvailabilityQuery) {
     const params = new URLSearchParams({
       serviceIds: query.serviceIds.join(","),
       date: query.date,
-      ...(query.professionalId ? { professionalId: query.professionalId } : {}),
+      // R200: aligned with serviceIds, each an id or "any"
+      ...(query.professionalIds ? { professionalIds: query.professionalIds.join(",") } : {}),
       ...(query.locationId ? { locationId: query.locationId } : {}),
+      // R250: so the time this visitor is holding stays on their own list
+      ...(query.holdId ? { holdId: query.holdId } : {}),
     });
-    return this.http.get<AvailabilitySlot[]>(`/public/availability?${params.toString()}`);
+    return this.http.get<VisitSlot[]>(`/public/availability?${params.toString()}`);
+  }
+
+  // R250: hold the time just picked; 409 = someone else got it first
+  holdSlot(payload: HoldSlotRequest) {
+    return this.http.post<HoldSlotResponse>("/public/holds", payload);
+  }
+
+  releaseHold(holdId: string) {
+    return this.http.delete<void>(`/public/holds/${encodeURIComponent(holdId)}`);
   }
 
   startVerification(payload: StartVerificationRequest) {
@@ -67,21 +82,21 @@ export class PublicApiClient {
   }
 
   getAppointmentByToken(token: string) {
-    return this.http.get<Appointment>(`/public/manage/${token}`);
+    return this.http.get<Visit>(`/public/manage/${token}`);
   }
 
   rescheduleAppointment(token: string, payload: RescheduleAppointmentRequest) {
     return this.http.patch<RescheduleAppointmentResponse>(`/public/manage/${token}/reschedule`, payload);
   }
 
-  // R80: slots for re-timing this appointment, with itself excluded
+  // R80/R230: start times for moving the whole visit, with itself excluded
   getRescheduleAvailability(token: string, date: string) {
     const params = new URLSearchParams({ date });
-    return this.http.get<AvailabilitySlot[]>(`/public/manage/${token}/availability?${params.toString()}`);
+    return this.http.get<VisitSlot[]>(`/public/manage/${token}/availability?${params.toString()}`);
   }
 
   cancelAppointment(token: string) {
-    return this.http.post<Appointment>(`/public/manage/${token}/cancel`);
+    return this.http.post<Visit>(`/public/manage/${token}/cancel`);
   }
 
   resendMagicLink(payload: ResendMagicLinkRequest) {

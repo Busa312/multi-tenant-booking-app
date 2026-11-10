@@ -1,5 +1,6 @@
 import { BadRequestException, NotFoundException } from "@nestjs/common";
 import { Prisma } from "../../generated/prisma/index.js";
+import { MAX_SERVICES_PER_BOOKING } from "./booking-rules.js";
 
 /**
  * Resolving a requested list of services into the lines an appointment is made
@@ -47,6 +48,11 @@ export const totalPrice = (lines: readonly ResolvedServiceLine[]): Prisma.Decima
 export function validateServiceIds(serviceIds: readonly string[]): void {
   if (serviceIds.length === 0) {
     throw new BadRequestException("at least one serviceId is required");
+  }
+  // R210: enforced here, the one gate every booking path goes through, rather
+  // than trusted to the booking flow's UI.
+  if (serviceIds.length > MAX_SERVICES_PER_BOOKING) {
+    throw new BadRequestException(`a booking can cover at most ${MAX_SERVICES_PER_BOOKING} services`);
   }
   // Booking the same service twice in one appointment isn't offered yet — it
   // would need quantity semantics everywhere an appointment is read. Rejected

@@ -4,7 +4,8 @@ import { BrowserRouter } from "react-router-dom";
 import { AuthProvider } from "./auth/AuthContext.js";
 import { I18nProvider } from "./i18n/I18nContext.js";
 import { App } from "./App.js";
-import "./theme.css";
+import { applyStoredTheme } from "./lib/theme.js";
+import "./index.css";
 
 const RELOAD_KEY = "booking_cms_chunk_reload";
 
@@ -35,6 +36,8 @@ window.addEventListener("vite:preloadError", (event) => {
   event.preventDefault();
   window.location.reload();
 });
+
+applyStoredTheme();
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>

@@ -1,6 +1,6 @@
 
 
-import type { Appointment, AppointmentStatus } from "./entities";
+import type { AppointmentStatus, Visit, VisitSlot } from "./entities";
 import type { TenantColors } from "./colors";
 import type { LocalizedText } from "./i18n";
 
@@ -18,6 +18,11 @@ export interface UpdateTenantColorsRequest {
  */
 export interface UpdateTenantLocalesRequest {
   enabledLocales: string[];
+}
+
+// R220: owner-only booking rules
+export interface UpdateTenantBookingRulesRequest {
+  maxVisitGapMinutes: number;
 }
 
 export interface UpdateTenantCopyRequest {
@@ -57,8 +62,12 @@ export interface VerifyPhoneResponse {
 }
 
 export interface CreateAppointmentRequest {
+  // R210: one to five, in the order they'll be performed
   serviceIds: string[];
-  professionalId?: string;
+  // R200: one entry per service, aligned with `serviceIds` — a professional id,
+  // or "any". The booking flow sends the ids from the chosen VisitSlot, so the
+  // visit booked is exactly the plan the customer was shown.
+  professionalIds: string[];
   // R150: required when the tenant has locations
   locationId?: string;
 
@@ -69,14 +78,15 @@ export interface CreateAppointmentRequest {
   // R30: optional, as it is for a staff-taken booking. Without one the link
   // can't be emailed or re-sent, so `manageUrl` is the customer's only copy.
   email?: string;
+  // R250: the hold taken when the time was picked. Optional — a booking without
+  // one (or with an expired one) still goes through while the time is free.
+  holdId?: string;
   /** From VerifyPhoneResponse — proves this phone number was verified. */
   verificationToken: string;
 }
 
 export interface CreateAppointmentResponse {
-  appointmentId: string;
-  startAt: string;
-  endAt: string;
+  visit: Visit;
 
   manageUrl: string;
 }
@@ -89,7 +99,7 @@ export interface CreateAppointmentResponse {
  * resend-by-phone flow.
  */
 export interface RescheduleAppointmentResponse {
-  appointment: Appointment;
+  visit: Visit;
   manageUrl: string;
 }
 
@@ -100,10 +110,33 @@ export interface RescheduleAppointmentRequest {
 
 export interface AvailabilityQuery {
   serviceIds: string[];
-  professionalId?: string;
+  // R200: aligned with serviceIds; each a professional id or "any". Omitted =
+  // "any" for every service.
+  professionalIds?: string[];
   // R150: narrows candidates to that branch's professionals (plus those at every branch)
   locationId?: string;
   date: string;
+  // R250: the asker's own hold, so the time they're holding stays on their list
+  holdId?: string;
+}
+
+/** R250: hold the time just picked while the customer finishes booking. */
+export interface HoldSlotRequest {
+  serviceIds: string[];
+  // R200: aligned with serviceIds — a professional id, or "any"
+  professionalIds: string[];
+  locationId?: string;
+  date: string;
+  time: string;
+  /** The customer's previous hold, released by this one. */
+  replaceHoldId?: string;
+}
+
+export interface HoldSlotResponse {
+  holdId: string;
+  expiresAt: string;
+  /** The plan actually held — re-planned at hold time, so it can differ from the one shown. */
+  slot: VisitSlot;
 }
 
 export interface CmsAvailabilityQuery {
@@ -155,13 +188,16 @@ export interface UpdateAppointmentStatusRequest {
   status: Exclude<AppointmentStatus, "cancelled">;
 }
 
-export type BookingConflictType = "appointment" | "outside_business_hours" | "time_off";
+// "hold" (R250): an online customer is finishing a booking for that time
+export type BookingConflictType = "appointment" | "outside_business_hours" | "time_off" | "hold";
 
 // R60: staff may book over any of these
 
 export interface BookingConflict {
   type: BookingConflictType;
   professionalName: string | null;
+  // R160
+  professionalNameI18n: LocalizedText | null;
 
   startAt: string | null;
   endAt: string | null;
@@ -235,6 +271,7 @@ export interface CreateLocationRequest {
   addressLine: string;
   addressLineI18n?: LocalizedText;
   city?: string | null;
+  cityI18n?: LocalizedText;
   phone?: string | null;
 
   latitude?: string | null;
@@ -249,6 +286,7 @@ export interface UpdateLocationRequest {
   addressLine?: string;
   addressLineI18n?: LocalizedText;
   city?: string | null;
+  cityI18n?: LocalizedText;
   phone?: string | null;
   latitude?: string | null;
   longitude?: string | null;

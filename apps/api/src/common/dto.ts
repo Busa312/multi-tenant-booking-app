@@ -43,6 +43,8 @@ export class TenantDto {
   @ApiProperty({ nullable: true, type: String }) customDomain!: string | null;
   @ApiProperty({ nullable: true, type: String }) domainVerifiedAt!: string | null;
   @ApiProperty({ type: TenantConfigDto }) configJson!: TenantConfigDto;
+  @ApiProperty({ description: "R220: longest gap in minutes between consecutive visit segments (0–60)" })
+  maxVisitGapMinutes!: number;
   @ApiProperty() createdAt!: string;
 }
 
@@ -54,6 +56,7 @@ export class LocationDto {
   @ApiProperty() addressLine!: string;
   @ApiProperty({ nullable: true, ...LOCALIZED_MAP }) addressLineI18n!: Record<string, string> | null;
   @ApiProperty({ nullable: true, type: String }) city!: string | null;
+  @ApiProperty({ nullable: true, ...LOCALIZED_MAP }) cityI18n!: Record<string, string> | null;
   @ApiProperty({ nullable: true, type: String }) phone!: string | null;
   @ApiProperty({
     nullable: true,
@@ -79,6 +82,7 @@ export class CreateLocationRequestDto {
   @ApiProperty() addressLine!: string;
   @ApiPropertyOptional(LOCALIZED_MAP) addressLineI18n?: Record<string, string>;
   @ApiPropertyOptional({ nullable: true, type: String }) city?: string | null;
+  @ApiPropertyOptional(LOCALIZED_MAP) cityI18n?: Record<string, string>;
   @ApiPropertyOptional({ nullable: true, type: String }) phone?: string | null;
   @ApiPropertyOptional({ nullable: true, type: String, example: "41.712000" }) latitude?: string | null;
   @ApiPropertyOptional({ nullable: true, type: String, example: "44.789000" }) longitude?: string | null;
@@ -99,6 +103,11 @@ export class ProfessionalDto {
   @ApiProperty() name!: string;
   @ApiProperty() isActive!: boolean;
   @ApiProperty() createdAt!: string;
+}
+
+export class PublicProfessionalDto extends ProfessionalDto {
+  @ApiProperty({ type: [String], description: "R240: the services this professional performs" })
+  serviceIds!: string[];
 }
 
 export class ProfessionalSummaryDto extends ProfessionalDto {
@@ -214,6 +223,8 @@ export class CreateTimeOffRequestDto {
 export class AppointmentServiceLineDto {
   @ApiProperty() serviceId!: string;
   @ApiProperty({ description: "The service's current name — not snapshotted" }) name!: string;
+  @ApiProperty({ nullable: true, ...LOCALIZED_MAP, description: "R160: the name's translations" })
+  nameI18n!: Record<string, string> | null;
   @ApiProperty({ description: "Snapshotted when the service was added to the appointment" })
   durationMinutes!: number;
   @ApiProperty({ description: "Snapshotted when the service was added to the appointment (R40)" })
@@ -250,10 +261,47 @@ export class AppointmentSummaryDto extends AppointmentDto {
   @ApiProperty({ nullable: true, type: String, description: "Internal staff note — never shown to the customer" })
   notes!: string | null;
   @ApiProperty({ nullable: true, type: String }) professionalName!: string | null;
+  @ApiProperty({ nullable: true, ...LOCALIZED_MAP, description: "R160" }) professionalNameI18n!: Record<string, string> | null;
   @ApiProperty({ nullable: true, type: String, description: "Joined so a calendar row needs no second lookup" })
   locationName!: string | null;
+  @ApiProperty({ nullable: true, ...LOCALIZED_MAP, description: "R160" }) locationNameI18n!: Record<string, string> | null;
   @ApiProperty({ description: "A customer magic link exists (public-site booking) — rescheduling rotates it (R110)" })
   hasMagicLink!: boolean;
+  @ApiProperty({
+    nullable: true,
+    type: String,
+    description: "R200: the customer visit this is one segment of; null = staff-created",
+  })
+  visitId!: string | null;
+}
+
+export class VisitSegmentDto {
+  @ApiProperty() appointmentId!: string;
+  @ApiProperty({ type: [AppointmentServiceLineDto] }) services!: AppointmentServiceLineDto[];
+  @ApiProperty({ nullable: true, type: String }) professionalId!: string | null;
+  @ApiProperty({ nullable: true, type: String }) professionalName!: string | null;
+  @ApiProperty({ nullable: true, ...LOCALIZED_MAP, description: "R160" }) professionalNameI18n!: Record<string, string> | null;
+  @ApiProperty() startAt!: string;
+  @ApiProperty() endAt!: string;
+  @ApiProperty({ enum: ["booked", "cancelled", "completed", "no_show"] })
+  status!: "booked" | "cancelled" | "completed" | "no_show";
+}
+
+export class VisitDto {
+  @ApiProperty() id!: string;
+  @ApiProperty({
+    enum: ["booked", "cancelled", "completed", "no_show"],
+    description: "Derived: cancelled only when every segment is (R230)",
+  })
+  status!: "booked" | "cancelled" | "completed" | "no_show";
+  @ApiProperty() startAt!: string;
+  @ApiProperty() endAt!: string;
+  @ApiProperty({ description: "Sum of the segments still happening" }) price!: string;
+  @ApiProperty({ nullable: true, type: String }) locationId!: string | null;
+  @ApiProperty({ nullable: true, type: String }) locationName!: string | null;
+  @ApiProperty({ nullable: true, ...LOCALIZED_MAP, description: "R160" }) locationNameI18n!: Record<string, string> | null;
+  @ApiProperty({ type: [VisitSegmentDto], description: "R200: one per professional appointment, in time order" })
+  segments!: VisitSegmentDto[];
 }
 
 export class CreateCmsAppointmentRequestDto {
@@ -293,9 +341,10 @@ export class UpdateAppointmentStatusRequestDto {
 }
 
 export class BookingConflictDto {
-  @ApiProperty({ enum: ["appointment", "outside_business_hours", "time_off"] })
-  type!: "appointment" | "outside_business_hours" | "time_off";
+  @ApiProperty({ enum: ["appointment", "outside_business_hours", "time_off", "hold"], description: "hold = R250" })
+  type!: "appointment" | "outside_business_hours" | "time_off" | "hold";
   @ApiProperty({ nullable: true, type: String }) professionalName!: string | null;
+  @ApiProperty({ nullable: true, ...LOCALIZED_MAP, description: "R160" }) professionalNameI18n!: Record<string, string> | null;
   @ApiProperty({ nullable: true, type: String }) startAt!: string | null;
   @ApiProperty({ nullable: true, type: String }) endAt!: string | null;
   @ApiProperty({ nullable: true, type: String, description: "Customer name, or a time-off block's reason" })
@@ -331,8 +380,13 @@ export class VerifyPhoneResponseDto {
 }
 
 export class CreateAppointmentRequestDto {
-  @ApiProperty({ type: [String] }) serviceIds!: string[];
-  @ApiPropertyOptional({ description: 'Omitted = "any available"' }) professionalId?: string;
+  @ApiProperty({ type: [String], description: "R210: one to five, in the order they'll be performed" })
+  serviceIds!: string[];
+  @ApiProperty({
+    type: [String],
+    description: 'R200: one per service, aligned with serviceIds — a professional id or "any"',
+  })
+  professionalIds!: string[];
   @ApiPropertyOptional({ description: "R150: required when the tenant has locations" }) locationId?: string;
 
   @ApiProperty({ example: "2026-08-03", description: "YYYY-MM-DD, tenant timezone" }) date!: string;
@@ -342,12 +396,12 @@ export class CreateAppointmentRequestDto {
   @ApiPropertyOptional({ description: "R30: optional — without it the link can't be emailed or re-sent" })
   email?: string;
   @ApiProperty({ description: "From POST /public/verification/verify" }) verificationToken!: string;
+  @ApiPropertyOptional({ description: "R250: the hold from POST /public/holds — optional, used up by the booking" })
+  holdId?: string;
 }
 
 export class CreateAppointmentResponseDto {
-  @ApiProperty() appointmentId!: string;
-  @ApiProperty() startAt!: string;
-  @ApiProperty() endAt!: string;
+  @ApiProperty({ type: VisitDto }) visit!: VisitDto;
   @ApiProperty({
     description: "The customer's magic link — returned because email delivery is stubbed (no provider wired in)",
   })
@@ -367,6 +421,50 @@ export class AvailabilitySlotDto {
   @ApiProperty() startAt!: string;
   @ApiProperty() endAt!: string;
   @ApiProperty({ nullable: true, type: String }) professionalId!: string | null;
+}
+
+export class VisitSlotSegmentDto {
+  @ApiProperty({ type: [String], description: "Consecutive services this professional performs with no gap" })
+  serviceIds!: string[];
+  @ApiProperty() professionalId!: string;
+  @ApiProperty() startAt!: string;
+  @ApiProperty() endAt!: string;
+}
+
+export class VisitSlotDto {
+  @ApiProperty() startAt!: string;
+  @ApiProperty() endAt!: string;
+  @ApiProperty({ type: [VisitSlotSegmentDto], description: "R200: the plan — one entry per appointment to be booked" })
+  segments!: VisitSlotSegmentDto[];
+}
+
+export class HoldSlotRequestDto {
+  @ApiProperty({ type: [String], description: "R210: one to five, in the order they'll be performed" })
+  serviceIds!: string[];
+  @ApiProperty({ type: [String], description: 'R200: one per service, aligned with serviceIds — a professional id or "any"' })
+  professionalIds!: string[];
+  @ApiPropertyOptional({ description: "R150: required when the tenant has locations" }) locationId?: string;
+  @ApiProperty({ example: "2026-08-03", description: "YYYY-MM-DD, tenant timezone" }) date!: string;
+  @ApiProperty({ example: "14:00", description: "HH:mm, tenant timezone" }) time!: string;
+  @ApiPropertyOptional({ description: "R250: the customer's previous hold, released by this one" })
+  replaceHoldId?: string;
+}
+
+export class HoldSlotResponseDto {
+  @ApiProperty() holdId!: string;
+  @ApiProperty() expiresAt!: string;
+  @ApiProperty({ type: VisitSlotDto, description: "The plan actually held — may differ from the one shown" })
+  slot!: VisitSlotDto;
+}
+
+export class RescheduleVisitResponseDto {
+  @ApiProperty({ type: VisitDto }) visit!: VisitDto;
+  @ApiProperty({ description: "R110: the rotated link — the one the caller used is dead now" }) manageUrl!: string;
+}
+
+export class UpdateTenantBookingRulesRequestDto {
+  @ApiProperty({ enum: [0, 5, 10, 15, 20, 30, 45, 60], description: "R220: longest gap between visit segments" })
+  maxVisitGapMinutes!: number;
 }
 
 export class LoginRequestDto {

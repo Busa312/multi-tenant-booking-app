@@ -1,0 +1,75 @@
+/* Tailwind + daisyUI setup and the few global rules nothing else can own.
+   Brand colors, radii and fonts live in theme.css — not here. Component
+   styling is Tailwind/daisyUI classes in the component's own JSX. */
+
+@import "tailwindcss";
+@import "./theme.css";
+/* Leaflet's own layout rules (panes, tiles, controls) — the map picker needs them. */
+@import "leaflet/dist/leaflet.css";
+
+/* Built-in themes are off: the CMS ships only the two defined in theme.css. */
+@plugin "daisyui" {
+  themes: false;
+  logs: false;
+}
+
+@theme {
+  --animate-fade-up: fade-up 0.35s ease both;
+
+  @keyframes fade-up {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+}
+
+@layer base {
+  html,
+  body,
+  #root {
+    min-height: 100dvh;
+  }
+
+  body {
+    @apply bg-base-200 font-sans text-sm text-base-content antialiased;
+  }
+
+  /* Touch devices: under 16px, iOS Safari zooms the page into a focused field
+     and leaves it zoomed. Desktop keeps the denser 14px. */
+  @media (pointer: coarse) {
+    input,
+    select,
+    textarea,
+    .input,
+    .select,
+    .textarea {
+      font-size: 16px;
+    }
+  }
+}
+
+@layer components {
+  /* Material Symbols ligature font, rendered through the <Icon> primitive. */
+  .ms {
+    font-family: "Material Symbols Outlined";
+    font-weight: normal;
+    font-style: normal;
+    font-size: 20px;
+    line-height: 1;
+    letter-spacing: normal;
+    text-transform: none;
+    white-space: nowrap;
+    overflow-wrap: normal;
+    direction: ltr;
+    font-feature-settings: "liga";
+    -webkit-font-smoothing: antialiased;
+    display: inline-block;
+    vertical-align: middle;
+    flex-shrink: 0;
+  }
+}

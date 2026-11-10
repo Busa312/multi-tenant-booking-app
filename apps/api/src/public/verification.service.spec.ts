@@ -1,6 +1,6 @@
 import { BadRequestException, ServiceUnavailableException } from "@nestjs/common";
 import { VerificationService } from "./verification.service.js";
-import { hashToken } from "../booking/booking.service.js";
+import { hashToken } from "../booking/magic-link.js";
 import type { RedisService } from "../redis/redis.service.js";
 import type { TenantContextService } from "../tenant/tenant-context.service.js";
 

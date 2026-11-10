@@ -1,16 +1,16 @@
 import type { ComponentPropsWithoutRef, ElementType } from "react";
 import { cx } from "../../lib/cx.js";
-import styles from "./Card.module.css";
 
-interface CardOwnProps {
+interface CardOwnProps<T extends ElementType> {
   /** Render as a different element — e.g. `as="form"` for a card that is itself a form. */
-  as?: ElementType;
+  as?: T;
   className?: string;
 }
 
-type CardProps<T extends ElementType> = CardOwnProps & Omit<ComponentPropsWithoutRef<T>, keyof CardOwnProps>;
+// `as` is typed by T, so `<Card as="form">` accepts form props such as `noValidate`.
+type CardProps<T extends ElementType> = CardOwnProps<T> & Omit<ComponentPropsWithoutRef<T>, keyof CardOwnProps<T>>;
 
 export function Card<T extends ElementType = "div">({ as, className, ...rest }: CardProps<T>) {
-  const Tag = as ?? "div";
-  return <Tag className={cx(styles.card, className)} {...rest} />;
+  const Tag: ElementType = as ?? "div";
+  return <Tag className={cx("rounded-box border border-base-300 bg-base-100 p-5 shadow-xs", className)} {...rest} />;
 }

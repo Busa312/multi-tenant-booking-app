@@ -1,21 +1,26 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
+  Headers,
   HttpCode,
-  NotFoundException,
+  HttpException,
+  HttpStatus,
   Param,
   Patch,
   Post,
   Query,
+  Req,
 } from "@nestjs/common";
+import type { FastifyRequest } from "fastify";
 import { ApiBody, ApiOkResponse, ApiParam, ApiQuery, ApiTags } from "@nestjs/swagger";
 import type {
   AvailabilityQuery,
-  AvailabilitySlot,
   CreateAppointmentRequest,
   CreateAppointmentResponse,
-  Appointment,
+  HoldSlotRequest,
+  HoldSlotResponse,
   Location,
   ResendMagicLinkRequest,
   RescheduleAppointmentRequest,
@@ -25,31 +30,33 @@ import type {
   VerifyPhoneResponse,
   RescheduleAppointmentResponse,
   Service,
-  Professional,
+  PublicProfessional,
   Tenant,
+  Visit,
+  VisitSlot,
 } from "@booking/shared-types";
-import type { Prisma } from "../../generated/prisma/index.js";
 import { PrismaService } from "../prisma/prisma.service.js";
 import { TenantContextService } from "../tenant/tenant-context.service.js";
 import { RedisService } from "../redis/redis.service.js";
 import {
-  APPOINTMENT_INCLUDE,
-  serializeAppointment,
   serializeLocation,
-  serializeProfessional,
+  serializePublicProfessional,
   serializePublicTenant,
   serializeService,
+  serializeVisit,
+  type PrismaVisit,
 } from "../common/serializers.js";
 import { parseIdList } from "../common/query.js";
 import { manageUrl } from "../common/tenant-url.js";
 import {
-  AppointmentDto,
-  AvailabilitySlotDto,
   CreateAppointmentRequestDto,
   CreateAppointmentResponseDto,
+  HoldSlotRequestDto,
+  HoldSlotResponseDto,
   LocationDto,
-  ProfessionalDto,
+  PublicProfessionalDto,
   RescheduleAppointmentRequestDto,
+  RescheduleVisitResponseDto,
   ResendMagicLinkRequestDto,
   ServiceDto,
   StartVerificationRequestDto,
@@ -57,9 +64,13 @@ import {
   TenantDto,
   VerifyPhoneRequestDto,
   VerifyPhoneResponseDto,
+  VisitDto,
+  VisitSlotDto,
 } from "../common/dto.js";
 import { AvailabilityService } from "../booking/availability.service.js";
-import { BookingService, hashToken } from "../booking/booking.service.js";
+import { hashToken } from "../booking/magic-link.js";
+import { ANY_PROFESSIONAL, HoldLimitError, VisitService } from "../booking/visit.service.js";
+import { HOLD_MAX_PER_VISITOR, HOLD_VISITOR_WINDOW_SECONDS, parseHoldId } from "../booking/slot-hold.js";
 import { NotificationService } from "../notifications/notification.service.js";
 import { VerificationService } from "./verification.service.js";
 
@@ -74,7 +85,7 @@ export class PublicController {
     private readonly prisma: PrismaService,
     private readonly tenantContext: TenantContextService,
     private readonly availability: AvailabilityService,
-    private readonly booking: BookingService,
+    private readonly visits: VisitService,
     private readonly notifications: NotificationService,
     private readonly redis: RedisService,
     private readonly verification: VerificationService,
@@ -114,8 +125,8 @@ export class PublicController {
 
   @Get("professionals")
   @ApiQuery({ name: "locationId", required: false, description: "R150: only staff who work at that branch" })
-  @ApiOkResponse({ type: [ProfessionalDto] })
-  async listProfessionals(@Query("locationId") locationId?: string): Promise<Professional[]> {
+  @ApiOkResponse({ type: [PublicProfessionalDto] })
+  async listProfessionals(@Query("locationId") locationId?: string): Promise<PublicProfessional[]> {
     const { tenantId } = this.tenantContext.current;
 
     const professionals = await this.prisma.forTenant((tx) =>
@@ -127,26 +138,98 @@ export class PublicController {
 
           ...(locationId ? { OR: [{ locationId }, { locationId: null }] } : {}),
         },
+        // R240: so the booking flow can offer only qualified people per service
+        include: { serviceProfessionals: { select: { serviceId: true } } },
       }),
     );
-    return professionals.map(serializeProfessional);
+    return professionals.map(serializePublicProfessional);
   }
 
+  /**
+   * R200: start times at which the whole visit fits, each with its plan — who
+   * performs which services, when. R240: never an unassigned segment; a service
+   * nobody can perform yields no slots at all.
+   */
   @Get("availability")
-  @ApiQuery({ name: "serviceIds", description: "Comma-separated service ids" })
-  @ApiQuery({ name: "professionalId", required: false })
+  @ApiQuery({ name: "serviceIds", description: "Comma-separated service ids, in order (R210: at most 5)" })
+  @ApiQuery({
+    name: "professionalIds",
+    required: false,
+    description: 'Comma-separated, aligned with serviceIds: a professional id or "any". Omitted = any for every service',
+  })
   @ApiQuery({ name: "locationId", required: false, description: "R150: narrows to that branch's professionals" })
   @ApiQuery({ name: "date", description: "YYYY-MM-DD, in tenant timezone" })
-  @ApiOkResponse({ type: [AvailabilitySlotDto] })
-  getAvailability(@Query() query: AvailabilityQuery): Promise<AvailabilitySlot[]> {
+  @ApiQuery({ name: "holdId", required: false, description: "R250: the asker's own hold, so its time stays listed" })
+  @ApiOkResponse({ type: [VisitSlotDto] })
+  getAvailability(@Query() query: AvailabilityQuery): Promise<VisitSlot[]> {
     const serviceIds = parseIdList(query.serviceIds);
+    // Parsed by hand rather than with parseIdList: positions matter here, so
+    // nothing may be dropped or reordered.
+    const raw = query.professionalIds as unknown;
+    const professionalIds =
+      typeof raw === "string" && raw.length > 0
+        ? raw.split(",").map((id) => {
+            const trimmed = id.trim();
+            return trimmed === ANY_PROFESSIONAL || trimmed === "" ? null : trimmed;
+          })
+        : serviceIds.map(() => null);
 
-    return this.availability.computeSlots({
+    return this.availability.computeVisitSlots({
       serviceIds,
-      professionalId: query.professionalId ?? null,
+      professionalIds,
       locationId: query.locationId ?? null,
       date: query.date,
+      holdId: parseHoldId(query.holdId),
     });
+  }
+
+  /**
+   * R250: holds the time a customer just picked for a few minutes, so nobody
+   * else is offered or can book it while they enter their details and verify
+   * their phone. 409 = someone got there first (the site shows fresh times);
+   * 429 = a hold limit was hit, and the customer simply carries on without one.
+   */
+  @Post("holds")
+  @ApiBody({ type: HoldSlotRequestDto })
+  @ApiOkResponse({ type: HoldSlotResponseDto })
+  async holdSlot(
+    @Body() body: HoldSlotRequest,
+    @Headers("x-forwarded-for") forwardedFor: string | undefined,
+    @Req() req: FastifyRequest,
+  ): Promise<HoldSlotResponse> {
+    const { tenantId } = this.tenantContext.current;
+    if (!(await this.withinHoldLimit(tenantId, visitorIp(forwardedFor, req.ip)))) {
+      throw new HttpException({ code: "hold_limit" }, HttpStatus.TOO_MANY_REQUESTS);
+    }
+
+    try {
+      const { holdId, expiresAt, slot } = await this.visits.hold({
+        serviceIds: parseIdList(body.serviceIds),
+        professionalIds: Array.isArray(body.professionalIds) ? body.professionalIds : [],
+        locationId: body.locationId,
+        date: body.date,
+        time: body.time,
+        replaceHoldId: parseHoldId(body.replaceHoldId),
+      });
+      return { holdId, expiresAt: expiresAt.toISOString(), slot };
+    } catch (error) {
+      if (error instanceof HoldLimitError) {
+        throw new HttpException({ code: "hold_limit" }, HttpStatus.TOO_MANY_REQUESTS);
+      }
+      throw error;
+    }
+  }
+
+  // R250: the customer let go of the time. Always 204 — an unknown or expired
+  // hold is already released.
+  @Delete("holds/:holdId")
+  @HttpCode(204)
+  @ApiParam({ name: "holdId" })
+  async releaseHold(@Param("holdId") holdId: string): Promise<void> {
+    const id = parseHoldId(holdId);
+    if (id) {
+      await this.visits.release(id);
+    }
   }
 
   /**
@@ -190,136 +273,79 @@ export class PublicController {
     // so verifying one number can't authorize a booking under another.
     await this.verification.consume(body.phoneNumber, body.verificationToken);
 
-    const { appointment, magicLinkToken } = await this.booking.create({
+    const { visit, magicLinkToken } = await this.visits.create({
       serviceIds: parseIdList(body.serviceIds),
-      professionalId: body.professionalId ?? null,
+      professionalIds: Array.isArray(body.professionalIds) ? body.professionalIds : [],
       locationId: body.locationId,
       date: body.date,
       time: body.time,
       userName: body.userName,
       phoneNumber: body.phoneNumber,
       email,
-      createdByUserId: null,
-      issueMagicLink: true,
+      holdId: parseHoldId(body.holdId),
     });
 
     const url = this.buildManageUrl(magicLinkToken);
-
     if (email) {
-      await this.notifications.sendMagicLink({
-        email,
-        userName: appointment.userName,
-        manageUrl: url,
-        startAt: appointment.startAt,
-        locationName: appointment.location?.name ?? null,
-      });
+      await this.sendLink(visit, email, url);
     }
 
-    return {
-      appointmentId: appointment.id,
-      startAt: appointment.startAt.toISOString(),
-      endAt: appointment.endAt.toISOString(),
-      manageUrl: url,
-    };
+    return { visit: serializeVisit(visit), manageUrl: url };
   }
 
   @Get("manage/:token")
   @ApiParam({ name: "token" })
-  @ApiOkResponse({ type: AppointmentDto })
-  async getAppointmentByToken(@Param("token") token: string): Promise<Appointment> {
-    const appointment = await this.prisma.forTenant((tx) => this.findByToken(tx, token));
-    return serializeAppointment(appointment);
+  @ApiOkResponse({ type: VisitDto })
+  async getAppointmentByToken(@Param("token") token: string): Promise<Visit> {
+    return serializeVisit(await this.visits.getByToken(token));
   }
 
   /**
-   * R80: open times for re-timing one appointment, with that appointment
-   * excluded from its own occupancy check.
+   * R80/R230: start times for moving the whole visit, with the visit excluded
+   * from its own occupancy check and each segment keeping its professional.
    *
    * Separate from `GET /public/availability` because the exclusion has to be
-   * *authorized*: taking an `appointmentId` on the open endpoint would let
-   * anyone suppress an arbitrary booking from the slot list. The token already
-   * proves the caller owns this one, so the appointment is derived from it
-   * rather than accepted from the query. Its services and professional come
-   * from the row too, so the slots offered are the ones the reschedule call
-   * will actually accept.
+   * *authorized*: taking a visit id on the open endpoint would let anyone
+   * suppress an arbitrary booking from the slot list. The token proves the
+   * caller owns this one, so the visit is derived from it.
    */
   @Get("manage/:token/availability")
   @ApiParam({ name: "token" })
   @ApiQuery({ name: "date", description: "YYYY-MM-DD, in tenant timezone" })
-  @ApiOkResponse({ type: [AvailabilitySlotDto] })
-  async getRescheduleAvailability(
-    @Param("token") token: string,
-    @Query("date") date: string,
-  ): Promise<AvailabilitySlot[]> {
-    const appointment = await this.prisma.forTenant((tx) => this.findByToken(tx, token));
-
-    return this.availability.computeSlots({
-      serviceIds: appointment.services.map((line) => line.serviceId),
-      professionalId: appointment.professionalId,
-      locationId: appointment.locationId,
-      date,
-      excludeAppointmentId: appointment.id,
-    });
+  @ApiOkResponse({ type: [VisitSlotDto] })
+  getRescheduleAvailability(@Param("token") token: string, @Query("date") date: string): Promise<VisitSlot[]> {
+    return this.visits.rescheduleSlots(token, date);
   }
 
-  // R110: rescheduling rotates the token
+  // R110: rescheduling rotates the token; R230: the whole visit moves
   @Patch("manage/:token/reschedule")
   @ApiParam({ name: "token" })
   @ApiBody({ type: RescheduleAppointmentRequestDto })
-  @ApiOkResponse({ type: AppointmentDto })
+  @ApiOkResponse({ type: RescheduleVisitResponseDto })
   async rescheduleAppointment(
     @Param("token") token: string,
     @Body() body: RescheduleAppointmentRequest,
   ): Promise<RescheduleAppointmentResponse> {
-    const existing = await this.prisma.forTenant((tx) => this.findByToken(tx, token));
-
-    const { appointment, magicLinkToken } = await this.booking.update({
-      appointmentId: existing.id,
-      date: body.date,
-      time: body.time,
-      professionalScope: null,
-    });
+    const { visit, magicLinkToken } = await this.visits.reschedule(token, body.date, body.time);
 
     const manageUrl = this.buildManageUrl(magicLinkToken);
-    if (magicLinkToken && appointment.email) {
-      await this.notifications.sendMagicLink({
-        email: appointment.email,
-        userName: appointment.userName,
-        manageUrl,
-        startAt: appointment.startAt,
-        locationName: appointment.location?.name ?? null,
-      });
+    const email = this.contactEmail(visit);
+    if (email) {
+      await this.sendLink(visit, email, manageUrl);
     }
 
     // R110: the token the caller arrived with is dead now, so the replacement
     // goes back in the response as well as by email — the customer must not be
     // locked out of their own booking by the act of moving it.
-    return { appointment: serializeAppointment(appointment), manageUrl };
+    return { visit: serializeVisit(visit), manageUrl };
   }
 
+  // R230: the customer cancels the whole visit; R90: rows stay as history
   @Post("manage/:token/cancel")
   @ApiParam({ name: "token" })
-  @ApiOkResponse({ type: AppointmentDto })
-  async cancelAppointment(@Param("token") token: string): Promise<Appointment> {
-    const appointment = await this.prisma.forTenant(async (tx) => {
-      const existing = await this.findByToken(tx, token);
-      if (existing.status === "cancelled") {
-        return existing;
-      }
-
-      return tx.appointment.update({
-        where: { id: existing.id, tenantId: existing.tenantId },
-        data: {
-          // R90: the row stays as history
-          status: "cancelled",
-          accessTokenHash: null,
-          accessTokenExpiresAt: null,
-        },
-        include: APPOINTMENT_INCLUDE,
-      });
-    });
-
-    return serializeAppointment(appointment);
+  @ApiOkResponse({ type: VisitDto })
+  async cancelAppointment(@Param("token") token: string): Promise<Visit> {
+    return serializeVisit(await this.visits.cancel(token));
   }
 
   @Post("manage/resend")
@@ -335,51 +361,37 @@ export class PublicController {
       return;
     }
 
-    const appointments = await this.prisma.forTenant((tx) =>
-      tx.appointment.findMany({
-        where: {
-          tenantId,
-          phoneNumber,
-          status: { not: "cancelled" },
-          startAt: { gt: new Date() },
-          accessTokenHash: { not: null },
-          accessTokenExpiresAt: { gt: new Date() },
-          // Nothing to re-send to when the customer gave no address (R30).
-          email: { not: "" },
-        },
-        include: { location: { select: { name: true } } },
-      }),
-    );
+    // Nothing to re-send to when the customer gave no address (R30) — the
+    // lookup only returns visits with an email on an upcoming segment.
+    const visits = await this.visits.findResendable(phoneNumber);
 
-    for (const appointment of appointments) {
-      const { magicLinkToken } = await this.booking.reissueToken(appointment.id);
-      if (!magicLinkToken) {
+    for (const visit of visits) {
+      const email = this.contactEmail(visit);
+      const magicLinkToken = await this.visits.reissue(visit.id);
+      if (!magicLinkToken || !email) {
         continue;
       }
-      await this.notifications.sendMagicLink({
-        email: appointment.email,
-        userName: appointment.userName,
-        manageUrl: this.buildManageUrl(magicLinkToken),
-        startAt: appointment.startAt,
-        locationName: appointment.location?.name ?? null,
-      });
+      await this.sendLink(visit, email, this.buildManageUrl(magicLinkToken));
     }
   }
 
-  private async findByToken(tx: Prisma.TransactionClient, token: string) {
-    const { tenantId } = this.tenantContext.current;
-    const appointment =
-      typeof token === "string" && token.length > 0
-        ? await tx.appointment.findFirst({
-            where: { tenantId, accessTokenHash: hashToken(token) },
-            include: APPOINTMENT_INCLUDE,
-          })
-        : null;
+  /** Every segment carries the same contact details; the first live one speaks for the visit. */
+  private contactEmail(visit: PrismaVisit): string {
+    const live = visit.appointments.find((appointment) => appointment.status !== "cancelled");
+    return (live ?? visit.appointments[0])?.email ?? "";
+  }
 
-    if (!appointment || !appointment.accessTokenExpiresAt || appointment.accessTokenExpiresAt < new Date()) {
-      throw new NotFoundException("This link is no longer valid");
-    }
-    return appointment;
+  private async sendLink(visit: PrismaVisit, email: string, manageUrl: string): Promise<void> {
+    const live = visit.appointments.filter((appointment) => appointment.status !== "cancelled");
+    const first = live[0] ?? visit.appointments[0];
+    if (!first) return;
+    await this.notifications.sendMagicLink({
+      email,
+      userName: first.userName,
+      manageUrl,
+      startAt: first.startAt,
+      locationName: first.location?.name ?? null,
+    });
   }
 
   private buildManageUrl(token: string | null): string {
@@ -410,11 +422,36 @@ export class PublicController {
     }
   }
 
-  private async bumpCounter(key: string): Promise<number> {
+  /**
+   * R250: one visitor can't take holds faster than someone deciding would.
+   * Fails open like the resend limits — a Redis outage costs the hold, never
+   * the booking.
+   */
+  private async withinHoldLimit(tenantId: string, ip: string): Promise<boolean> {
+    try {
+      const key = `hold:${tenantId}:${hashToken(ip)}`;
+      return (await this.bumpCounter(key, HOLD_VISITOR_WINDOW_SECONDS)) <= HOLD_MAX_PER_VISITOR;
+    } catch {
+      return true;
+    }
+  }
+
+  private async bumpCounter(key: string, windowSeconds = RESEND_WINDOW_SECONDS): Promise<number> {
     const count = await this.redis.client.incr(key);
     if (count === 1) {
-      await this.redis.client.expire(key, RESEND_WINDOW_SECONDS);
+      await this.redis.client.expire(key, windowSeconds);
     }
     return count;
   }
+}
+
+/**
+ * The visitor's address. The public site calls this API from its own server,
+ * so the socket address is that server's; it forwards the visitor's address as
+ * x-forwarded-for, trusted the same way x-forwarded-host already is for tenant
+ * resolution (system_design.md §4). First hop only.
+ */
+export function visitorIp(forwardedFor: string | undefined, socketIp: string): string {
+  const first = (forwardedFor ?? "").split(",")[0]?.trim();
+  return first || socketIp;
 }

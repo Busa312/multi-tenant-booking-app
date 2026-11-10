@@ -4,7 +4,6 @@ import { cx } from "../lib/cx.js";
 import { addDays, dayOfMonth, formatWeekdayLabel, tenantDateString } from "../lib/tenantTime.js";
 import { BookingCard } from "./BookingCard.js";
 import type { ActionMenuItem } from "./ui/index.js";
-import styles from "./BookingsWeekGrid.module.css";
 
 interface BookingsWeekGridProps {
   /** Monday of the week being shown, "YYYY-MM-DD". */
@@ -44,18 +43,28 @@ export function BookingsWeekGrid({
   }
 
   return (
-    <div className={styles.scroll}>
-      <div className={styles.grid}>
+    <div className="overflow-x-auto pb-1">
+      <div className="grid min-w-[900px] grid-cols-[repeat(7,minmax(148px,1fr))] gap-2">
         {days.map((day) => {
           const dayAppointments = byDay.get(day) ?? [];
           return (
-            <section key={day} className={cx(styles.column, day === today && styles.columnToday)}>
-              <button type="button" className={styles.head} onClick={() => onSelectDay(day)}>
-                <span className={styles.weekday}>{formatWeekdayLabel(day, lang)}</span>
-                <span className={styles.dayNumber}>{dayOfMonth(day)}</span>
-                {dayAppointments.length > 0 && <span className={styles.tally}>{dayAppointments.length}</span>}
+            <section
+              key={day}
+              className={cx(
+                "flex flex-col gap-2 rounded-box border bg-base-100/60 p-2",
+                day === today ? "border-primary/60 bg-primary/5" : "border-base-300",
+              )}
+            >
+              <button
+                type="button"
+                className="group flex w-full cursor-pointer items-baseline gap-1.5 border-b border-base-300 px-0.5 pb-1.5 text-left"
+                onClick={() => onSelectDay(day)}
+              >
+                <span className="text-[11px] tracking-wider text-base-content/55 uppercase group-hover:text-primary">{formatWeekdayLabel(day, lang)}</span>
+                <span className="font-display text-lg leading-none group-hover:text-primary">{dayOfMonth(day)}</span>
+                {dayAppointments.length > 0 && <span className="badge ml-auto badge-xs border-none bg-primary/12 font-semibold text-primary tabular-nums">{dayAppointments.length}</span>}
               </button>
-              <div className={styles.cards}>
+              <div className="grid content-start gap-1.5">
                 {dayAppointments.map((appointment) => (
                   <BookingCard
                     key={appointment.id}
@@ -64,7 +73,7 @@ export function BookingsWeekGrid({
                     actions={actionsFor(appointment)}
                   />
                 ))}
-                {dayAppointments.length === 0 && <p className={styles.empty}>{t("bookings.dayEmpty")}</p>}
+                {dayAppointments.length === 0 && <p className="px-0.5 text-xs text-base-content/45">{t("bookings.dayEmpty")}</p>}
               </div>
             </section>
           );

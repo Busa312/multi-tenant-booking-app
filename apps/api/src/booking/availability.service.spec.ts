@@ -21,6 +21,8 @@ interface Overrides {
   businessHours?: { professionalId: string | null; dayOfWeek: number; startTime: Date; endTime: Date }[];
   timeOff?: { professionalId: string | null; startAt: Date; endAt: Date; reason: string | null }[];
   appointments?: { professionalId: string | null; startAt: Date; endAt: Date; userName?: string }[];
+  /** R250: live holds (the stub doesn't filter — pass only the ones the query would return) */
+  holds?: { professionalId: string; startAt: Date; endAt: Date }[];
 }
 
 const setup = (overrides: Overrides = {}) => {
@@ -55,6 +57,7 @@ const setup = (overrides: Overrides = {}) => {
     },
     timeOff: { findMany: jest.fn().mockResolvedValue(overrides.timeOff ?? []) },
     appointment: { findMany: jest.fn().mockResolvedValue(overrides.appointments ?? []) },
+    slotHold: { findMany: jest.fn().mockResolvedValue(overrides.holds ?? []) },
   };
 
   const prisma = {
@@ -492,6 +495,33 @@ describe("AvailabilityService.computeSlots", () => {
       expect(slots).toHaveLength(9);
     });
 
+    // R250
+    it("removes slots overlapping another customer's live hold", async () => {
+      const { service } = setup({
+        holds: [
+          { professionalId: "p1", startAt: new Date("2026-08-05T05:00:00.000Z"), endAt: new Date("2026-08-05T05:30:00.000Z") },
+        ],
+      });
+
+      const slots = await service.computeSlots({ serviceIds: ["s1"], date: WEDNESDAY });
+
+      expect(startTimes(slots)).not.toContain("2026-08-05T05:00:00.000Z");
+      expect(startTimes(slots)).toContain("2026-08-05T05:30:00.000Z");
+    });
+
+    // R250
+    it("asks only for unexpired holds", async () => {
+      const { service, tx } = setup();
+
+      await service.computeSlots({ serviceIds: ["s1"], date: WEDNESDAY });
+
+      expect(tx.slotHold.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ tenantId: TENANT_ID, expiresAt: { gt: new Date("2026-08-05T00:00:00.000Z") } }),
+        }),
+      );
+    });
+
     it("leaves a slot open when an appointment merely abuts it", async () => {
       const { service } = setup({
         appointments: [
@@ -649,6 +679,7 @@ describe("AvailabilityService.findConflictsIn", () => {
       {
         type: "appointment",
         professionalName: "Levan",
+        professionalNameI18n: null,
         startAt: "2026-08-05T06:30:00.000Z",
         endAt: "2026-08-05T07:30:00.000Z",
         detail: "ნინო",
@@ -672,11 +703,26 @@ describe("AvailabilityService.findConflictsIn", () => {
       {
         type: "time_off",
         professionalName: "Levan",
+        professionalNameI18n: null,
         startAt: "2026-08-05T06:15:00.000Z",
         endAt: "2026-08-05T06:45:00.000Z",
         detail: "dentist",
       },
     ]);
+  });
+
+  // R160: the CMS shows the professional's name in its own language
+  it("carries the professional's name translations on the conflict", async () => {
+    const { service, tx } = conflictSetup({
+      appointments: [
+        { professionalId: "p1", startAt: new Date("2026-08-05T06:30:00.000Z"), endAt: new Date("2026-08-05T07:30:00.000Z") },
+      ],
+    });
+    tx.professional.findUnique.mockResolvedValue({ name: "Levan", nameI18n: { ka: "ლევანი" } });
+
+    const [conflict] = await service.findConflictsIn(tx, { professionalId: "p1", startAt, endAt });
+
+    expect(conflict).toMatchObject({ professionalName: "Levan", professionalNameI18n: { ka: "ლევანი" } });
   });
 
   it("reports tenant-wide time off without attributing it to a professional", async () => {
@@ -694,7 +740,7 @@ describe("AvailabilityService.findConflictsIn", () => {
     const conflicts = await service.findConflictsIn(tx, { professionalId: "p1", startAt, endAt });
 
     expect(conflicts).toHaveLength(1);
-    expect(conflicts[0]).toMatchObject({ type: "time_off", professionalName: null, detail: "public holiday" });
+    expect(conflicts[0]).toMatchObject({ type: "time_off", professionalName: null, professionalNameI18n: null, detail: "public holiday" });
   });
 
   it("flags a window that runs past closing time", async () => {
@@ -707,7 +753,14 @@ describe("AvailabilityService.findConflictsIn", () => {
     const conflicts = await service.findConflictsIn(tx, { professionalId: "p1", startAt, endAt });
 
     expect(conflicts).toEqual([
-      { type: "outside_business_hours", professionalName: "Levan", startAt: null, endAt: null, detail: null },
+      {
+        type: "outside_business_hours",
+        professionalName: "Levan",
+        professionalNameI18n: null,
+        startAt: null,
+        endAt: null,
+        detail: null,
+      },
     ]);
   });
 
@@ -831,5 +884,100 @@ describe("AvailabilityService.findConflictsIn", () => {
     expect(tx.businessHours.findMany).toHaveBeenCalledWith(
       expect.objectContaining({ where: expect.objectContaining({ dayOfWeek: { in: [3] } }) }),
     );
+  });
+});
+
+// R250: holds in the public visit flow
+describe("AvailabilityService.computeVisitSlots — holds", () => {
+  beforeEach(() => {
+    jest.useFakeTimers().setSystemTime(new Date("2026-08-05T00:00:00.000Z"));
+  });
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
+  const visitSetup = (holds: Overrides["holds"] = []) =>
+    setup({
+      professionals: [{ id: "p1", name: "Levan", isActive: true, locationId: null }] as unknown as Overrides["professionals"],
+      holds,
+    });
+  const query = (holdId?: string) => ({
+    serviceIds: ["s1"],
+    professionalIds: [null],
+    locationId: null,
+    date: WEDNESDAY,
+    ...(holdId ? { holdId } : {}),
+  });
+
+  it("doesn't offer a time another customer is holding", async () => {
+    const { service } = visitSetup([
+      { professionalId: "p1", startAt: new Date("2026-08-05T05:00:00.000Z"), endAt: new Date("2026-08-05T05:30:00.000Z") },
+    ]);
+
+    const slots = await service.computeVisitSlots(query());
+
+    expect(startTimes(slots)).not.toContain("2026-08-05T05:00:00.000Z");
+    expect(startTimes(slots)).toContain("2026-08-05T05:30:00.000Z");
+  });
+
+  it("leaves the asker's own hold out, so the time they're holding stays on their list", async () => {
+    const { service, tx } = visitSetup();
+
+    await service.computeVisitSlots(query("own-hold"));
+
+    expect(tx.slotHold.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: expect.objectContaining({ holdId: { not: "own-hold" } }) }),
+    );
+  });
+
+  it("filters by nobody's hold when the asker has none", async () => {
+    const { service, tx } = visitSetup();
+
+    await service.computeVisitSlots(query());
+
+    expect(tx.slotHold.findMany.mock.calls[0]?.[0]?.where).not.toHaveProperty("holdId");
+  });
+});
+
+describe("AvailabilityService.findConflictsIn — holds", () => {
+  // R250 + R60: staff see a hold as a named conflict they may book over
+  it("names a live hold on the professional", async () => {
+    const { service, tx } = setup({
+      businessHours: [{ professionalId: null, dayOfWeek: 3, startTime: timeOfDay("09:00"), endTime: timeOfDay("18:00") }],
+      holds: [
+        { professionalId: "p1", startAt: new Date("2026-08-05T06:15:00.000Z"), endAt: new Date("2026-08-05T06:45:00.000Z") },
+      ],
+    });
+
+    const conflicts = await service.findConflictsIn(tx as unknown as Prisma.TransactionClient, {
+      professionalId: "p1",
+      startAt: new Date("2026-08-05T06:00:00.000Z"),
+      endAt: new Date("2026-08-05T07:00:00.000Z"),
+    });
+
+    expect(conflicts).toEqual([
+      {
+        type: "hold",
+        professionalName: "Levan",
+        professionalNameI18n: null,
+        startAt: "2026-08-05T06:15:00.000Z",
+        endAt: "2026-08-05T06:45:00.000Z",
+        detail: null,
+      },
+    ]);
+  });
+
+  it("doesn't look for holds on an unassigned booking — public holds always have a professional (R240)", async () => {
+    const { service, tx } = setup({
+      businessHours: [{ professionalId: null, dayOfWeek: 3, startTime: timeOfDay("09:00"), endTime: timeOfDay("18:00") }],
+    });
+
+    await service.findConflictsIn(tx as unknown as Prisma.TransactionClient, {
+      professionalId: null,
+      startAt: new Date("2026-08-05T06:00:00.000Z"),
+      endAt: new Date("2026-08-05T07:00:00.000Z"),
+    });
+
+    expect(tx.slotHold.findMany).not.toHaveBeenCalled();
   });
 });

@@ -1,12 +1,13 @@
-import { createHash, randomBytes } from "node:crypto";
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from "@nestjs/common";
 import type { BookingConflictResponse } from "@booking/shared-types";
 import { Prisma } from "../../generated/prisma/index.js";
 import { PrismaService } from "../prisma/prisma.service.js";
 import { TenantContextService } from "../tenant/tenant-context.service.js";
 import { APPOINTMENT_SUMMARY_INCLUDE, type PrismaAppointmentSummary } from "../common/serializers.js";
-import { parseTimeOfDay, zonedTimeToUtc } from "../common/timezone.js";
+import { parseTimeOfDay, zonedDateString, zonedTimeToUtc } from "../common/timezone.js";
 import { AvailabilityService } from "./availability.service.js";
+import { lockBookingDay } from "./booking-lock.js";
+import { issueToken } from "./magic-link.js";
 import {
   resolveServiceLines,
   totalDurationMinutes,
@@ -14,13 +15,7 @@ import {
   type ResolvedServiceLine,
 } from "./service-lines.js";
 
-const MAGIC_LINK_GRACE_MS = 24 * 60 * 60 * 1000;
-
-export function hashToken(token: string): string {
-  return createHash("sha256").update(token).digest("hex");
-}
-
-function requireText(value: string, field: string): string {
+export function requireText(value: string, field: string): string {
   const trimmed = typeof value === "string" ? value.trim() : "";
   if (!trimmed) {
     throw new BadRequestException(`${field} is required`);
@@ -45,13 +40,15 @@ export interface CreateBookingInput {
   createdByUserId: string | null;
   // R60: book despite named conflicts
   override?: boolean;
-  // R70: staff bookings are tokenless and stay that way
-  issueMagicLink?: boolean;
 }
 
 export interface BookingResult {
   appointment: PrismaAppointmentSummary;
-
+  /**
+   * R110/R230: set when the move rotated the customer's visit link. Customer
+   * bookings are created by VisitService; this service creates staff bookings,
+   * which never have a link (R70).
+   */
   magicLinkToken: string | null;
 }
 
@@ -95,14 +92,14 @@ export class BookingService {
       const startAt = this.resolveStartAt(input.date, input.time, timezone);
       const endAt = new Date(startAt.getTime() + totalDurationMinutes(lines) * 60_000);
 
+      // R260: checked behind the day's lock, so a concurrent booking can't slip in
+      await lockBookingDay(tx, tenantId, input.date);
       await this.assertBookable(tx, {
         professionalId: input.professionalId,
         startAt,
         endAt,
         override: input.override ?? false,
       });
-
-      const magicLink = input.issueMagicLink ? this.issueToken(endAt) : null;
 
       const appointment = await tx.appointment.create({
         data: {
@@ -121,17 +118,14 @@ export class BookingService {
           // R40: snapshot — a later price change must not rewrite history
           price: totalPrice(lines),
           notes: input.notes?.trim() || null,
+          // R70: staff-created bookings carry no customer link, so no visit
           createdByUserId: input.createdByUserId,
-          // R70: staff-created bookings carry no customer link
-
-          accessTokenHash: magicLink?.accessTokenHash ?? null,
-          accessTokenExpiresAt: magicLink?.accessTokenExpiresAt ?? null,
           services: { create: lines.map((line) => this.lineData(tenantId, line)) },
         },
         include: APPOINTMENT_SUMMARY_INCLUDE,
       });
 
-      return { appointment, magicLinkToken: magicLink?.token ?? null };
+      return { appointment, magicLinkToken: null };
     });
   }
 
@@ -188,6 +182,8 @@ export class BookingService {
           : existing.startAt;
       const endAt = new Date(startAt.getTime() + totalDurationMinutes(lines) * 60_000);
 
+      // R260: the day it lands on — the only day a move can create a conflict on
+      await lockBookingDay(tx, tenantId, zonedDateString(startAt, timezone));
       await this.assertBookable(tx, {
         professionalId,
         startAt,
@@ -203,10 +199,6 @@ export class BookingService {
         });
       }
 
-      // R110: rotated whenever the appointment moves
-
-      const rotated = this.rotatedToken(existing.accessTokenHash, endAt);
-
       const appointment = await tx.appointment.update({
         where: { id: existing.id, tenantId },
         data: {
@@ -215,39 +207,14 @@ export class BookingService {
           startAt,
           endAt,
           price: totalPrice(lines),
-          ...(rotated
-            ? { accessTokenHash: rotated.accessTokenHash, accessTokenExpiresAt: rotated.accessTokenExpiresAt }
-            : {}),
         },
         include: APPOINTMENT_SUMMARY_INCLUDE,
       });
 
-      return { appointment, magicLinkToken: rotated?.token ?? null };
-    });
-  }
+      // R110/R230: moving any segment rotates the visit's link
+      const magicLinkToken = existing.visitId ? await this.rotateVisitToken(tx, tenantId, existing.visitId) : null;
 
-  // R70: a staff-created booking never had a link to reissue
-  async reissueToken(appointmentId: string): Promise<Pick<BookingResult, "magicLinkToken">> {
-    const { tenantId } = this.tenantContext.current;
-
-    return this.prisma.forTenant(async (tx) => {
-      const existing = await tx.appointment.findFirst({
-        where: { id: appointmentId, tenantId },
-        select: { accessTokenHash: true, endAt: true },
-      });
-      if (!existing?.accessTokenHash) {
-        return { magicLinkToken: null };
-      }
-
-      const issued = this.issueToken(existing.endAt);
-      await tx.appointment.update({
-        where: { id: appointmentId, tenantId },
-        data: {
-          accessTokenHash: issued.accessTokenHash,
-          accessTokenExpiresAt: issued.accessTokenExpiresAt,
-        },
-      });
-      return { magicLinkToken: issued.token };
+      return { appointment, magicLinkToken };
     });
   }
 
@@ -261,25 +228,26 @@ export class BookingService {
     };
   }
 
-  // R110: a customer-created booking's magic link is invalidated whenever
-  private rotatedToken(currentHash: string | null, endAt: Date): ReturnType<BookingService["issueToken"]> | null {
-    if (currentHash === null) {
+  /**
+   * R110/R230: a fresh link for the visit, expiring a day after its last live
+   * segment. A visit whose link was cleared (cancelled) stays linkless — moving
+   * a cancelled customer's leftovers must not resurrect a link.
+   */
+  async rotateVisitToken(tx: Prisma.TransactionClient, tenantId: string, visitId: string): Promise<string | null> {
+    const visit = await tx.visit.findFirst({
+      where: { id: visitId, tenantId },
+      select: { accessTokenHash: true, appointments: { where: { status: { not: "cancelled" } }, select: { endAt: true } } },
+    });
+    if (!visit?.accessTokenHash) {
       return null;
     }
-    return this.issueToken(endAt);
-  }
-
-  private issueToken(endAt: Date): {
-    token: string;
-    accessTokenHash: string;
-    accessTokenExpiresAt: Date;
-  } {
-    const token = randomBytes(32).toString("hex");
-    return {
-      token,
-      accessTokenHash: hashToken(token),
-      accessTokenExpiresAt: new Date(endAt.getTime() + MAGIC_LINK_GRACE_MS),
-    };
+    const lastEnd = Math.max(...visit.appointments.map((appointment) => appointment.endAt.getTime()));
+    const issued = issueToken(new Date(Number.isFinite(lastEnd) ? lastEnd : Date.now()));
+    await tx.visit.update({
+      where: { id: visitId, tenantId },
+      data: { accessTokenHash: issued.accessTokenHash, accessTokenExpiresAt: issued.accessTokenExpiresAt },
+    });
+    return issued.token;
   }
 
   async loadOwnAppointment(
@@ -299,7 +267,7 @@ export class BookingService {
   }
 
   // R130: wall-clock date + time resolved against the tenant's own timezone
-  private resolveStartAt(date: string, time: string, timezone: string): Date {
+  resolveStartAt(date: string, time: string, timezone: string): Date {
     let startAt: Date;
     try {
       startAt = zonedTimeToUtc(date, parseTimeOfDay(time), timezone);
@@ -346,7 +314,7 @@ export class BookingService {
   }
 
   // R150: resolves which branch an appointment is booked at
-  private async resolveLocation(
+  async resolveLocation(
     tx: Prisma.TransactionClient,
     tenantId: string,
     requested: string | null | undefined,

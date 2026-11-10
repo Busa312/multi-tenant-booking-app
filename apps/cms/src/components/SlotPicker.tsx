@@ -5,7 +5,6 @@ import { useI18n } from "../i18n/I18nContext.js";
 import { cx } from "../lib/cx.js";
 import { formatTimeLabel, tenantTimeString } from "../lib/tenantTime.js";
 import { Eyebrow, Field, TextInput } from "./ui/index.js";
-import styles from "./SlotPicker.module.css";
 
 interface SlotPickerProps {
   /** Empty until picked — slots can't be computed without these and a date. */
@@ -76,15 +75,18 @@ export function SlotPicker({
   }, [key, professionalId, date, appointmentId, incomplete]);
 
   return (
-    <div className={styles.root}>
-      <Eyebrow>{t("bookings.openSlots")}</Eyebrow>
-      {incomplete && <p className={styles.hint}>{t("bookings.slotsNeedSelection")}</p>}
-      {!incomplete && error && <p className={styles.hint}>{error}</p>}
-      {!incomplete && !error && slots === null && <p className={styles.hint}>{t("common.loading")}</p>}
-      {!error && slots?.length === 0 && <p className={styles.hint}>{t("bookings.noSlots")}</p>}
+    <div className="mb-1">
+      <Eyebrow className="mb-2">{t("bookings.openSlots")}</Eyebrow>
+      {incomplete && <p className="mb-3 text-[13px] text-base-content/60">{t("bookings.slotsNeedSelection")}</p>}
+      {!incomplete && error && <p className="mb-3 text-[13px] text-error">{error}</p>}
+      {!incomplete && !error && slots === null && <p className="mb-3 flex items-center gap-2 text-[13px] text-base-content/60">
+          <span className="loading loading-spinner loading-xs" aria-hidden="true" />
+          {t("common.loading")}
+        </p>}
+      {!error && slots?.length === 0 && <p className="mb-3 text-[13px] text-base-content/60">{t("bookings.noSlots")}</p>}
 
       {slots && slots.length > 0 && (
-        <div className={styles.slots}>
+        <div className="mb-3 flex max-h-40 flex-wrap gap-1.5 overflow-y-auto p-0.5">
           {slots.map((slot) => {
             const time = tenantTimeString(slot.startAt, timezone);
             return (
@@ -92,7 +94,10 @@ export function SlotPicker({
                 key={slot.startAt}
                 type="button"
                 aria-pressed={time === value}
-                className={cx(styles.slot, time === value && styles.slotActive)}
+                className={cx(
+                  "btn rounded-full px-3 font-medium tabular-nums btn-sm",
+                  time === value ? "btn-primary" : "border-base-300 bg-base-100 hover:border-primary hover:bg-base-100",
+                )}
                 onClick={() => onChange(time)}
               >
                 {formatTimeLabel(slot.startAt, timezone, lang)}
@@ -102,7 +107,7 @@ export function SlotPicker({
         </div>
       )}
 
-      <Field label={t("bookings.timeLabel")} htmlFor="booking-time" className={styles.manual}>
+      <Field label={t("bookings.timeLabel")} htmlFor="booking-time" className="max-w-44">
         <TextInput id="booking-time" type="time" value={value} onChange={(e) => onChange(e.target.value)} required />
       </Field>
     </div>

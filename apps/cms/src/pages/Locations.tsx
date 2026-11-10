@@ -1,8 +1,10 @@
 import { useEffect, useState } from "react";
+import { localizedAddress } from "@booking/shared-types";
 import type { LocationSummary } from "@booking/shared-types";
 import { ApiError } from "@booking/api-client";
 import { cachedApi } from "../lib/cache.js";
 import { useI18n } from "../i18n/I18nContext.js";
+import { useLocalizedName } from "../lib/useLocalizedName.js";
 import { AppShell } from "../components/AppShell.js";
 import { EditLocationModal } from "../components/EditLocationModal.js";
 import { CardSkeleton } from "../components/CardSkeleton.js";
@@ -17,7 +19,6 @@ import {
   TableRow,
   TableEmpty,
 } from "../components/ui/index.js";
-import styles from "./Locations.module.css";
 
 const COLUMNS = "1.2fr 1.6fr 1fr 100px 60px";
 const TABLE_ROW = "46px";
@@ -30,6 +31,7 @@ interface PageData {
 // R150: the tenant's branches
 export function LocationsPage() {
   const { t } = useI18n();
+  const nameOf = useLocalizedName();
   const [data, setData] = useState<PageData | null>(null);
   const [listError, setListError] = useState<string | null>(null);
   const [editTarget, setEditTarget] = useState<LocationSummary | "new" | null>(null);
@@ -61,7 +63,7 @@ export function LocationsPage() {
   }
 
   async function handleDelete(location: LocationSummary) {
-    if (!window.confirm(t("locations.confirmDelete", { name: location.name }))) return;
+    if (!window.confirm(t("locations.confirmDelete", { name: nameOf(location.name, location.nameI18n) }))) return;
     setListError(null);
     try {
       await cachedApi.deleteLocation(location.id);
@@ -90,12 +92,12 @@ export function LocationsPage() {
 
   return (
     <AppShell title={t("locations.title")} subtitle={t("locations.subtitle")}>
-      <div className="fade-up">
-        <div className={styles.toolbar}>
-          <div className={styles.count}>
+      <div className="animate-fade-up motion-reduce:animate-none">
+        <div className="mb-5 flex flex-wrap items-center gap-3">
+          <div className="text-[13px] text-base-content/60">
             {data ? t("locations.count", { count: data.locations.length }) : t("common.loading")}
           </div>
-          <Button className={styles.add} icon="add" disabled={!data} onClick={() => setEditTarget("new")}>
+          <Button className="ml-auto" icon="add" disabled={!data} onClick={() => setEditTarget("new")}>
             {t("locations.add")}
           </Button>
         </div>
@@ -105,8 +107,8 @@ export function LocationsPage() {
         {data?.locations.length === 0 && <Alert variant="warning">{t("locations.firstLocationNotice")}</Alert>}
 
         {data && data.locations.length > 0 && (
-          <div className={styles.tableScroll}>
-            <Table className={styles.table}>
+          <div className="overflow-x-auto">
+            <Table className="min-w-[720px]">
               <TableHead columns={COLUMNS}>
                 <div>{t("locations.colName")}</div>
                 <div>{t("locations.colAddress")}</div>
@@ -116,11 +118,11 @@ export function LocationsPage() {
               </TableHead>
               {data.locations.map((location) => (
                 <TableRow key={location.id} columns={COLUMNS}>
-                  <div className={styles.name}>{location.name}</div>
-                  <div className={styles.cell}>
-                    {location.city ? `${location.addressLine}, ${location.city}` : location.addressLine}
+                  <div className="font-semibold">{nameOf(location.name, location.nameI18n)}</div>
+                  <div className="text-[13.5px]">
+                    {localizedAddress(location, nameOf)}
                   </div>
-                  <div className={styles.cell}>
+                  <div className="text-[13.5px]">
                     {t("locations.staffCount", { count: location.professionalIds.length })}
                   </div>
                   <div>
@@ -128,9 +130,9 @@ export function LocationsPage() {
                       {t(location.isActive ? "locations.active" : "locations.inactive")}
                     </Pill>
                   </div>
-                  <div className={styles.actions}>
+                  <div className="flex justify-end">
                     <ActionMenu
-                      ariaLabel={t("common.rowActions", { name: location.name })}
+                      ariaLabel={t("common.rowActions", { name: nameOf(location.name, location.nameI18n) })}
                       items={rowActions(location)}
                     />
                   </div>

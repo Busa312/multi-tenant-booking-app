@@ -1,4 +1,4 @@
-import { DEFAULT_CONTENT_LOCALE, defaultLocaleOf, localized } from "./i18n";
+import { DEFAULT_CONTENT_LOCALE, defaultLocaleOf, localized, localizedAddress } from "./i18n";
 
 // R160: these pin the *rule*
 
@@ -38,5 +38,28 @@ describe("defaultLocaleOf", () => {
   it("falls back to the platform default when a tenant has none configured", () => {
     expect(defaultLocaleOf([])).toBe(DEFAULT_CONTENT_LOCALE);
     expect(defaultLocaleOf(undefined)).toBe(DEFAULT_CONTENT_LOCALE);
+  });
+});
+
+describe("localizedAddress", () => {
+  const vake = {
+    addressLine: "12 Chavchavadze Ave",
+    addressLineI18n: { ka: "ჭავჭავაძის გამზ. 12" },
+    city: "Tbilisi",
+    cityI18n: { ka: "თბილისი" },
+  };
+  const pick = (locale: string) => (plain: string, i18n: unknown) => localized(plain, i18n, locale, "en");
+
+  it("translates the street and the city together", () => {
+    expect(localizedAddress(vake, pick("ka"))).toBe("ჭავჭავაძის გამზ. 12, თბილისი");
+    expect(localizedAddress(vake, pick("en"))).toBe("12 Chavchavadze Ave, Tbilisi");
+  });
+
+  it("falls back per part, so a missing city translation still shows the city", () => {
+    expect(localizedAddress({ ...vake, cityI18n: null }, pick("ka"))).toBe("ჭავჭავაძის გამზ. 12, Tbilisi");
+  });
+
+  it("is just the line when there's no city", () => {
+    expect(localizedAddress({ ...vake, city: null }, pick("ka"))).toBe("ჭავჭავაძის გამზ. 12");
   });
 });

@@ -5,12 +5,15 @@
     "saving": "Saving…",
     "create": "Create",
     "done": "Done",
+    "close": "Close",
     "copy": "Copy",
     "loading": "Loading…",
     "rowActions": "Actions for {name}",
     "somethingWrong": "Something went wrong",
     "passwordPlaceholder": "••••••••",
-    "translationFallback": "Not translated — visitors see the {locale} text."
+    "translationFallback": "Not translated — visitors see the {locale} text.",
+    "contentLanguage": "Content language",
+    "alsoNames": "Also: {names}"
   },
   "error": {
     "staleTitle": "The app has been updated",
@@ -34,7 +37,9 @@
   },
   "shell": {
     "signOut": "Sign out",
-    "openMenu": "Open menu"
+    "openMenu": "Open menu",
+    "themeDark": "Switch to dark theme",
+    "themeLight": "Switch to light theme"
   },
   "language": {
     "label": "Language"
@@ -174,11 +179,13 @@
     "move": "Move booking",
     "moveAnyway": "Move anyway",
     "magicLinkWarning": "This customer booked online. Moving the appointment invalidates their existing manage link.",
+    "visitPartNote": "If this customer booked several services with different specialists, only this part moves — the others keep their times.",
     "conflictLead": "This time isn't free:",
     "conflictAppointment": "{name} already has an appointment at {at} ({customer}).",
     "conflictTimeOff": "Time off is blocked at {at}.",
     "conflictTimeOffReason": "Time off is blocked at {at} — {reason}.",
     "conflictOutsideHours": "This is outside business hours.",
+    "conflictHold": "An online customer is finishing a booking with {name} at {at}. It's held for a few minutes.",
     "conflictNoProfessional": "This professional",
     "errLoad": "Could not load bookings",
     "errSlots": "Could not load open slots",
@@ -341,7 +348,15 @@
       "Thursday",
       "Friday",
       "Saturday"
-    ]
+    ],
+    "gapTitle": "Visits with several specialists",
+    "gapHint": "When a customer books services done by different people, the next one can start up to this long after the previous ends. More room means more open times, but more waiting.",
+    "gapLabel": "Longest wait between services",
+    "gapNone": "Back to back (no wait)",
+    "gapMinutes": "Up to {count} min",
+    "gapSave": "Save",
+    "gapSaved": "Saved",
+    "gapErr": "Couldn't save. Please try again."
   },
   "branding": {
     "title": "Public website",
@@ -394,14 +409,25 @@
     "addressPlaceholder": "12 Chavchavadze Ave",
     "cityLabel": "City",
     "phoneLabel": "Phone",
-    "latitudeLabel": "Latitude",
-    "longitudeLabel": "Longitude",
-    "coordinatesHint": "Optional. Set both to give customers an accurate map pin; leave both blank to search by address instead.",
     "errLoad": "Couldn't load locations.",
     "errSave": "Couldn't save this location.",
     "errNameRequired": "Name is required.",
     "errAddressRequired": "Street address is required.",
     "errCoordinatePair": "Set both latitude and longitude, or neither.",
+    "mapLabel": "Location on the map",
+    "mapSearchPlaceholder": "Search for an address",
+    "mapSearch": "Search",
+    "mapSearching": "Searching…",
+    "mapNoResults": "Nothing found. Try a fuller address, or place the pin by hand.",
+    "mapSearchFailed": "Address search isn't available right now — place the pin by hand.",
+    "mapHint": "Click the map to place the pin, or drag it. Customers get directions to this spot; without a pin, the map link searches by address.",
+    "mapUseMyLocation": "Use my location",
+    "mapLocating": "Finding you…",
+    "mapLocationDenied": "Couldn't get your location — check the browser's location permission.",
+    "mapRemovePin": "Remove pin",
+    "mapNoPin": "No pin yet",
+    "mapYouAreHere": "You are here",
+    "mapPin": "Branch location",
     "errLatitudeRange": "Latitude must be between -90 and 90.",
     "errLongitudeRange": "Longitude must be between -180 and 180.",
     "errHasHistory": "This location has appointment history, so it can only be marked as closed — not deleted.",
@@ -411,6 +437,7 @@
   "publicSite": {
     "title": "Public site text",
     "subtitle": "The heading and the short description customers see on your booking page.",
+    "textTitle": "Site text",
     "titleLabel": "Title",
     "titlePlaceholder": "Book at Salon Rustaveli",
     "titleHint": "Shown as the page heading and in the browser tab. Leave blank to use your business name.",

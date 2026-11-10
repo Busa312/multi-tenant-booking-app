@@ -1,7 +1,5 @@
 import { useI18n } from "../i18n/I18nContext.js";
-import { cx } from "../lib/cx.js";
 import { Card, Skeleton } from "./ui/index.js";
-import styles from "./CardSkeleton.module.css";
 
 interface CardSkeletonProps {
   /**
@@ -22,24 +20,19 @@ interface CardSkeletonProps {
 }
 
 /**
- * The stand-in for a `Card` whose contents are still loading.
- *
- * Every dashboard and settings slot previously rendered one line of "Loading…"
- * and then expanded to a few hundred pixels of real card, which is most of the
- * layout shift on those pages. Sizing this from `rows` × `rowHeight` rather
- * than a hand-tuned `min-height` keeps the reservation tied to something with
- * a meaning, so it can be checked against the real component instead of being
- * a number nobody dares touch.
+ * The stand-in for a `Card` whose contents are still loading. Sized from
+ * `rows` × `rowHeight` rather than a hand-tuned min-height, so the reservation
+ * can be checked against the real component instead of being a magic number.
  */
 export function CardSkeleton({ rows = 4, rowHeight = "44px", subtitle = true, className }: CardSkeletonProps) {
   const { t } = useI18n();
 
   return (
-    <Card className={cx(styles.card, className)} role="status" aria-busy="true" aria-label={t("common.loading")}>
+    <Card className={className} role="status" aria-busy="true" aria-label={t("common.loading")}>
       <Skeleton width="38%" height="11px" />
-      {subtitle && <Skeleton width="58%" height="13px" className={styles.subtitle} />}
+      {subtitle && <Skeleton width="58%" height="22px" className="mt-1.5" />}
 
-      <div className={styles.rows}>
+      <div className="mt-4 flex flex-col gap-2.5">
         {Array.from({ length: rows }, (_, index) => (
           // Index keys are correct here: the rows are identical, purely
           // positional, and never reordered or filtered.

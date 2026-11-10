@@ -21,9 +21,12 @@ type AppointmentRow = {
   startAt: Date;
   endAt: Date;
   status: string;
-  accessTokenHash: string | null;
+  visitId: string | null;
   services: LineRow[];
 };
+
+// R230: the customer's link lives on the visit
+type VisitRow = { accessTokenHash: string | null; appointments: { endAt: Date }[] };
 
 interface AppointmentWriteData {
   tenantId: string;
@@ -37,8 +40,7 @@ interface AppointmentWriteData {
   price: Prisma.Decimal;
   notes: string | null;
   createdByUserId: string | null;
-  accessTokenHash: string | null;
-  accessTokenExpiresAt: Date | null;
+  visitId?: string | null;
   services: { create: LineRow[] };
 }
 
@@ -52,6 +54,7 @@ interface Overrides {
   // R150: defaults to none
   locations?: LocationRow[];
   appointment?: Partial<AppointmentRow>;
+  visit?: VisitRow | null;
   conflicts?: unknown[];
 }
 
@@ -86,12 +89,14 @@ const setup = (overrides: Overrides = {}) => {
     startAt: new Date("2026-08-05T06:00:00.000Z"),
     endAt: new Date("2026-08-05T06:30:00.000Z"),
     status: "booked",
-    accessTokenHash: null,
+    visitId: null,
     services: [{ serviceId: "s1", position: 0, durationMinutes: 30, price: new Prisma.Decimal("45.00") }],
     ...overrides.appointment,
   };
 
   const tx = {
+    // R260: lockBookingDay
+    $executeRaw: jest.fn().mockResolvedValue(1),
     tenant: { findUniqueOrThrow: jest.fn().mockResolvedValue({ timezone: TZ }) },
     service: {
       findMany: jest.fn(({ where }: { where: { id: { in: string[] } } }) =>
@@ -123,6 +128,10 @@ const setup = (overrides: Overrides = {}) => {
     appointmentService: {
       deleteMany: jest.fn().mockResolvedValue({ count: 1 }),
       createMany: jest.fn().mockResolvedValue({ count: 1 }),
+    },
+    visit: {
+      findFirst: jest.fn().mockResolvedValue(overrides.visit ?? null),
+      update: jest.fn().mockResolvedValue({}),
     },
   };
 
@@ -212,12 +221,15 @@ describe("BookingService.create", () => {
   });
 
   // R70: staff-created bookings carry no customer link
-  it("issues no magic-link token", async () => {
+  // R70: staff bookings have no link, so no visit
+  it("creates a staff booking outside any visit, with no link", async () => {
     const { service, tx } = setup();
 
-    await service.create(createInput());
+    const result = await service.create(createInput());
 
-    expect(createdData(tx)).toMatchObject({ accessTokenHash: null, accessTokenExpiresAt: null });
+    expect(createdData(tx).visitId).toBeUndefined();
+    expect(tx.visit.update).not.toHaveBeenCalled();
+    expect(result.magicLinkToken).toBeNull();
   });
 
   it("records who created it and asks for the summary shape back", async () => {
@@ -465,6 +477,30 @@ describe("BookingService.create", () => {
         excludeAppointmentId: undefined,
       });
     });
+
+    // R260
+    it("takes the tenant's lock for the booked day before checking", async () => {
+      const { service, tx, availability } = setup();
+      availability.findConflictsIn.mockImplementation(() => {
+        expect(tx.$executeRaw).toHaveBeenCalledTimes(1);
+        return Promise.resolve([]);
+      });
+
+      await service.create(createInput());
+
+      const [strings, key] = tx.$executeRaw.mock.calls[0] as [TemplateStringsArray, string];
+      expect(strings.join("?")).toContain("pg_advisory_xact_lock");
+      expect(key).toBe(`booking:${TENANT_ID}:2026-08-05`);
+    });
+
+    // R260 + R60: override skips the check, not the queue
+    it("still takes the lock when booking over a conflict", async () => {
+      const { service, tx } = setup();
+
+      await service.create(createInput({ override: true }));
+
+      expect(tx.$executeRaw).toHaveBeenCalledTimes(1);
+    });
   });
 
   // R180: the rule is that a booking can never end up at a branch
@@ -671,6 +707,28 @@ describe("BookingService.update", () => {
       expect(tx.appointmentService.createMany).not.toHaveBeenCalled();
     });
 
+    // R260: a move can only create a conflict on the day it lands on
+    it("locks the day the appointment moves to", async () => {
+      const { service, tx } = setup();
+
+      await service.update(updateInput({ date: "2026-08-09", time: "11:00" }));
+
+      expect(tx.$executeRaw.mock.calls[0]?.[1]).toBe(`booking:${TENANT_ID}:2026-08-09`);
+    });
+
+    it("locks the appointment's own local day when only the professional changes", async () => {
+      const { service, tx } = setup({
+        professionals: [
+          { id: "p1", name: "Levan", isActive: true },
+          { id: "p2", name: "Nino", isActive: true },
+        ],
+      });
+
+      await service.update(updateInput({ professionalId: "p2" }));
+
+      expect(tx.$executeRaw.mock.calls[0]?.[1]).toBe(`booking:${TENANT_ID}:2026-08-05`);
+    });
+
     it("keeps the existing time when only the professional changes", async () => {
       const { service, tx } = setup({
         professionals: [
@@ -847,38 +905,65 @@ describe("BookingService.update", () => {
   });
 
   describe("magic-link rotation", () => {
-    // R110: a customer's link must never point at a stale time
-    it("rotates a customer booking's token and re-dates its expiry", async () => {
-      const oldHash = "a".repeat(64);
-      const { service, tx } = setup({ appointment: { accessTokenHash: oldHash } });
+    const OLD_HASH = "a".repeat(64);
+    // The moved segment now ends at 07:30Z; the visit's other live segment ends earlier.
+    const customerVisit = (): Overrides => ({
+      appointment: { visitId: "v1" },
+      visit: {
+        accessTokenHash: OLD_HASH,
+        appointments: [{ endAt: new Date("2026-08-06T06:30:00.000Z") }, { endAt: new Date("2026-08-06T07:30:00.000Z") }],
+      },
+    });
+    const rotatedData = (tx: TxStub) => {
+      const call = tx.visit.update.mock.calls[0] as unknown as
+        | [{ data: { accessTokenHash: string; accessTokenExpiresAt: Date } }]
+        | undefined;
+      if (!call) throw new Error("expected visit.update to have been called");
+      return call[0].data;
+    };
 
-      await service.update(updateInput({ date: "2026-08-06", time: "11:00" }));
+    // R110/R230: moving any segment rotates the visit's link
+    it("rotates the visit's token and re-dates it to a day after the visit's last segment", async () => {
+      const { service, tx } = setup(customerVisit());
 
-      const data = updatedData(tx);
+      const result = await service.update(updateInput({ date: "2026-08-06", time: "11:00" }));
+
+      const data = rotatedData(tx);
       expect(data.accessTokenHash).toMatch(/^[0-9a-f]{64}$/);
-      expect(data.accessTokenHash).not.toBe(oldHash);
-
-      expect(data.accessTokenExpiresAt?.toISOString()).toBe("2026-08-07T07:30:00.000Z");
+      expect(data.accessTokenHash).not.toBe(OLD_HASH);
+      expect(data.accessTokenExpiresAt.toISOString()).toBe("2026-08-07T07:30:00.000Z");
+      // The plaintext goes back to the caller once and is never what's stored.
+      expect(result.magicLinkToken).toMatch(/^[0-9a-f]{64}$/);
+      expect(result.magicLinkToken).not.toBe(data.accessTokenHash);
     });
 
     it("issues a different token every time", async () => {
-      const first = setup({ appointment: { accessTokenHash: "a".repeat(64) } });
-      const second = setup({ appointment: { accessTokenHash: "a".repeat(64) } });
+      const first = setup(customerVisit());
+      const second = setup(customerVisit());
 
       await first.service.update(updateInput({ date: "2026-08-06", time: "11:00" }));
       await second.service.update(updateInput({ date: "2026-08-06", time: "11:00" }));
 
-      expect(updatedData(first.tx).accessTokenHash).not.toBe(updatedData(second.tx).accessTokenHash);
+      expect(rotatedData(first.tx).accessTokenHash).not.toBe(rotatedData(second.tx).accessTokenHash);
     });
 
     // R70: a staff-created booking is tokenless and stays that way
-    it("leaves a staff-created booking without a token", async () => {
+    it("leaves a staff-created booking without a link", async () => {
       const { service, tx } = setup();
 
-      await service.update(updateInput({ date: "2026-08-06", time: "11:00" }));
+      const result = await service.update(updateInput({ date: "2026-08-06", time: "11:00" }));
 
-      expect(updatedData(tx)).not.toHaveProperty("accessTokenHash");
-      expect(updatedData(tx)).not.toHaveProperty("accessTokenExpiresAt");
+      expect(tx.visit.update).not.toHaveBeenCalled();
+      expect(result.magicLinkToken).toBeNull();
+    });
+
+    it("doesn't resurrect the link of a visit the customer cancelled", async () => {
+      const { service, tx } = setup({ appointment: { visitId: "v1" }, visit: { accessTokenHash: null, appointments: [] } });
+
+      const result = await service.update(updateInput({ date: "2026-08-06", time: "11:00" }));
+
+      expect(tx.visit.update).not.toHaveBeenCalled();
+      expect(result.magicLinkToken).toBeNull();
     });
   });
 

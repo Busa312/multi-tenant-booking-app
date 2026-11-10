@@ -5,11 +5,12 @@ This document is a source of truth for both client and tenant side apps. System 
 ### Client side (customer-facing booking site)
 
 - **User** can see information about **Tenant**
-- **User** can choose one or more services
+- **User** can choose one or more services — at most five per booking (R210)
+- **User** can have different professionals perform different services in one booking: the booking becomes a *visit* of back-to-back segments, each with its own professional (R200)
 - **User** can see open appointment time slots, filtered by chosen service(s) and duration
 - **User** can choose a specific **Professional** to book with, or "any available"
 - **User** can choose which **Location** to book at, when the tenant has more than one (R150)
-- **User** can view, reschedule, or cancel an existing appointment via a magic link (see below) — no account/login required
+- **User** can view, reschedule, or cancel an existing booking via a magic link (see below) — no account/login required. The link covers the whole visit; rescheduling or cancelling moves or cancels every segment together (R230)
 - **User** can read the site in any of the tenant's enabled locales, chosen with a switcher (R160)
 - **Tenant** can edit colors and logo for the client side page (via `config_json`)
 - **Tenant** can set a public-site title and description, per enabled locale (R170)
@@ -25,6 +26,7 @@ to this one. This is a product decision, not a deferral.
 - **Tenant** can edit service list and service details (name, price, duration, assigned professionals)
 - **Tenant** can edit list of professionals
 - **Tenant** can edit business hours
+- **Tenant** can set the longest gap allowed between two segments of one visit, 0–60 minutes, 0 = strictly back to back (R220)
 - **Tenant** can block off time (vacation, breaks, holidays) per professional or business-wide
 - **Tenant** can book, reschedule, or cancel appointments on a customer's behalf
 - **Tenant** can monitor booked appointments (calendar/list view)
@@ -48,18 +50,25 @@ as those code comments — they are not written down here yet, and back-filling 
 | R170 | A tenant authors a public-site title and description, per enabled locale. |
 | R180 | A professional with no location works at every location. |
 | R190 | A location with appointment history is deactivated, never deleted. |
+| R200 | A booking of several services may be split across professionals. It is one **visit**: an ordered chain of segments in the order the customer chose them, each segment one ordinary appointment with exactly one professional. Consecutive services by the same professional with no gap between them share one appointment. |
+| R210 | A booking covers one to five services, enforced by the API as well as the UI. |
+| R220 | `tenant.max_visit_gap_minutes` (0–60, default 0) is the longest idle gap allowed between consecutive segments of a visit. The planner always prefers the smallest gap. |
+| R230 | The customer manages a visit as a unit: one magic link, and rescheduling or cancelling applies to every segment. Staff in the CMS still act on each appointment separately (a professional sees and edits only their own segment, R20). |
+| R240 | The public site never books a segment with no professional. A service nobody performs (at the chosen location) can't be selected online; the old "unassigned" fallback applies only to staff bookings in the CMS. |
+| R250 | When a customer picks a time on the public site, the professionals in that plan are **held** for 10 minutes: nobody else is offered that time or can book it. One hold per customer — picking another time replaces it. A hold that has expired doesn't stop the booking while the time is still free. If someone else got there first, the customer is told and shown the times that are still open. In the CMS a hold is a conflict warning like any other (R60). |
+| R260 | Two bookings can't both be written for the same time by arriving together. Every write that can create a conflict — a customer booking, a hold, a reschedule, a CMS create or move — is serialized per tenant and local day, and checks availability only once it holds that turn. Staff override (R60) skips the check, not the queue. |
 
 ## Booking Access — Magic Link
 
-Resolves the open question "should User log in to book an appointment?" — decision: **no login system**. Instead, each appointment gets a single-use-context access token.
+Resolves the open question "should User log in to book an appointment?" — decision: **no login system**. Instead, each customer booking (a `Visit`, R200) gets a single-use-context access token.
 
 **Flow**
 
 1. Customer books an appointment (name + phone number, no account creation).
-2. Server generates a random, high-entropy token, stores its hash on the `Appointment` row, and sets an expiry (appointment end time + 24h grace period).
+2. Server generates a random, high-entropy token, stores its hash on the `Visit` row, and sets an expiry (end of the visit's last segment + 24h grace period).
 3. Server sends an email to `email` with a link: `https://{tenant-domain}/manage/{token}`.
-4. Visiting that link authorizes read/reschedule/cancel actions against that one appointment only — it does not authenticate a customer identity or grant access to other bookings.
-5. Rescheduling issues a new token (old one invalidated) so a leaked/expired link can't be reused after the appointment moves.
+4. Visiting that link authorizes read/reschedule/cancel actions against that one visit only (all of its segments, together — R230) — it does not authenticate a customer identity or grant access to other bookings.
+5. Rescheduling issues a new token (old one invalidated) so a leaked/expired link can't be reused after the visit moves. Staff moving one segment of a visit in the CMS rotates the visit's token too.
 
 **Recovering a lost link**: customer enters their phone number on a "resend link" page; server looks up upcoming, non-cancelled appointments for that phone number and re-sends valid tokens. Rate-limit this endpoint (phone-number enumeration risk).
 
@@ -96,6 +105,7 @@ JWT claims: `sub` (user id), `tenant_id`, `role`, `professional_id` (present onl
 
 - **Service ↔ Professional is many-to-many** (a professional can perform several services; a service can be performed by several professionals), via a join table. The two original docs disagreed on this (array-style fields vs. singular FK) — confirm this matches reality before building the schema, since it's the one modeling decision with the biggest schema impact.
 - **Time-slots are computed, not stored.** Rather than a granular `Time-slot` row per bookable interval, availability is derived at query time from `BusinessHours` minus existing `Appointment`s minus `TimeOff` blocks. This is what "Tenant can change status of time slots" is modeled as below (create/remove a `TimeOff` block) rather than a giant pre-generated slot table.
+  The one stored exception is `SlotHold` (R250): short-lived rows that read as busy time while a customer finishes booking, then expire. They hold a planned visit's segments, not a grid of slots.
 
 ## Data Model
 
@@ -111,6 +121,7 @@ All tables include `tenant_id uuid` + RLS policy scoping to the current tenant, 
 | `custom_domain` | text, unique, nullable | CNAME target |
 | `domain_verified_at` | timestamptz, nullable | null until DNS TXT verification passes |
 | `config_json` | jsonb | theme/presentation config (colors, logo, copy) |
+| `max_visit_gap_minutes` | smallint, default 0 | R220: longest gap between visit segments, 0–60. A booking rule, so a column rather than `config_json` |
 | `created_at` | timestamptz | |
 
 ### Localized content (convention)
@@ -151,8 +162,9 @@ address worth modelling), one, or several.
 | `address_line` | text | street address as one line |
 | `address_line_i18n` | jsonb, nullable | |
 | `city` | text, nullable | |
+| `city_i18n` | jsonb, nullable | non-default locales, as for the address line — so a translated address doesn't end in the default-language city |
 | `phone` | text, nullable | branch phone, shown on the public site |
-| `latitude` | numeric(9,6), nullable | for the map link; both coords set or neither |
+| `latitude` | numeric(9,6), nullable | for the map link; both coords set or neither. Set in the CMS by placing a pin on a map (searchable by address), not typed |
 | `longitude` | numeric(9,6), nullable | |
 | `position` | smallint | display order on the public site |
 | `is_active` | boolean, default true | R190: deactivated, never deleted, once it has history |
@@ -252,10 +264,65 @@ Composite PK on (`service_id`, `professional_id`).
 | `end_at`                  | timestamptz            | derived from `start_at` + the summed durations of its `AppointmentService` rows at booking time, stored for query simplicity |
 | `price`                   | numeric                | sum of its `AppointmentService` prices, each snapshotted when that service was added    |
 | `status`                  | text                   | `booked` \| `cancelled` \| `completed` \| `no_show`                                     |
-| `access_token_hash`       | text, unique, nullable | null after expiry/cancellation cleanup if desired                                       |
-| `access_token_expires_at` | timestamptz            |                                                                                         |
+| `visit_id`                | uuid, FK, nullable     | R200: the customer visit this segment belongs to. null = a staff-created booking (R70: no link). **Restrict** on delete |
 | `created_at`              | timestamptz            |                                                                                         |
 | `updated_at`              | timestamptz            |                                                                                         |
+
+### Visit
+A customer booking from the public site (R200). It owns the magic link and groups the
+appointments — one per professional segment — that the customer sees as one booking.
+Contact details stay on each `Appointment` (identical across a visit's segments), so
+the CMS reads an appointment exactly as before; the visit adds only what is per-booking.
+
+| column | type | notes |
+|---|---|---|
+| `id` | uuid, PK | |
+| `tenant_id` | uuid, FK | |
+| `access_token_hash` | text, unique, nullable | null once cancelled |
+| `access_token_expires_at` | timestamptz, nullable | end of the last segment + 24h |
+| `created_at` | timestamptz | |
+| `updated_at` | timestamptz | |
+
+A visit's status is derived, not stored: cancelled when every segment is cancelled, otherwise
+the status of its segments. Staff-created bookings have no visit — they never had a link (R70).
+
+**Planning a visit.** Segments run in the customer's order. Each service needs a professional
+who performs it (and works at the chosen location, R180), is inside their own hours, and is
+free. Between one segment's end and the next one's start the gap is 0 to
+`max_visit_gap_minutes`, smallest first; the same professional is preferred for consecutive
+segments, so a one-person booking is still one appointment. A visit never spans midnight.
+
+### SlotHold
+A customer's claim on the time they just picked, while they type their details and verify
+their phone (R250). One row per segment of the planned visit; the segments of one hold share
+a `hold_id`, which is what the browser keeps and sends back with the booking.
+
+| column | type | notes |
+|---|---|---|
+| `id` | uuid, PK | |
+| `tenant_id` | uuid, FK | |
+| `hold_id` | uuid | groups one hold's segments. Random, and known only to the browser that took it — it lets that browser replace, release or book against its own hold |
+| `professional_id` | uuid, FK | always set: public segments always have a professional (R240). Cascade on delete |
+| `start_at` | timestamptz | |
+| `end_at` | timestamptz | |
+| `expires_at` | timestamptz | creation + 10 min. Rows past it are ignored everywhere, so nothing has to delete them on time; they are swept opportunistically when the next hold is taken |
+| `created_at` | timestamptz | |
+
+A live hold is busy time to availability, to visit planning and to the CMS conflict check,
+except to the booking that presents its own `hold_id`. Booking converts the hold: its rows
+are deleted in the same transaction that writes the visit.
+
+Hold creation is limited per visitor (by IP, forwarded by the public site's server) and per
+tenant (a cap on live holds), so nobody can freeze a calendar by clicking through times.
+Hitting a limit just means no hold: the customer can still book, and the booking re-checks.
+
+**Concurrency (R260).** Availability is computed, so a check-then-write could pass twice for
+two requests arriving together. Each booking write takes a Postgres transaction-scoped
+advisory lock on (tenant, local date) *before* it checks, then writes in the same transaction:
+the second request waits for the first to commit, then sees its rows. A per-day lock rather
+than a per-professional one, because "any available" plans can land on anyone; at salon
+volumes a day's bookings queueing for a few milliseconds is invisible. Not a database
+exclusion constraint, because R60 lets staff overlap appointments on purpose.
 
 ### AppointmentService (join table)
 The services one appointment covers — one or more, per "User can choose one or more
@@ -289,6 +356,9 @@ erDiagram
     TENANT ||--o{ TIME_OFF : has
     TENANT ||--o{ APPOINTMENT : has
     TENANT ||--o{ APPOINTMENT_SERVICE : has
+    TENANT ||--o{ VISIT : has
+    VISIT ||--o{ APPOINTMENT : "segments (R200)"
+    TENANT ||--o{ SLOT_HOLD : has
 
     LOCATION ||--o{ PROFESSIONAL : "based at (optional)"
     LOCATION ||--o{ APPOINTMENT : "booked at (optional)"
@@ -298,6 +368,7 @@ erDiagram
     PROFESSIONAL ||--o{ BUSINESS_HOURS : "scoped to (optional)"
     PROFESSIONAL ||--o{ TIME_OFF : "scoped to (optional)"
     PROFESSIONAL ||--o{ APPOINTMENT : "booked with (optional)"
+    PROFESSIONAL ||--o{ SLOT_HOLD : "held for (R250)"
 
     SERVICE ||--o{ SERVICE_PROFESSIONAL : "offered by"
     SERVICE ||--o{ APPOINTMENT_SERVICE : "booked as"
@@ -311,6 +382,27 @@ erDiagram
         text custom_domain
         timestamptz domain_verified_at
         jsonb config_json
+        smallint max_visit_gap_minutes
+        timestamptz created_at
+    }
+
+    VISIT {
+        uuid id PK
+        uuid tenant_id FK
+        text access_token_hash
+        timestamptz access_token_expires_at
+        timestamptz created_at
+        timestamptz updated_at
+    }
+
+    SLOT_HOLD {
+        uuid id PK
+        uuid tenant_id FK
+        uuid hold_id
+        uuid professional_id FK
+        timestamptz start_at
+        timestamptz end_at
+        timestamptz expires_at
         timestamptz created_at
     }
 
@@ -400,8 +492,7 @@ erDiagram
         timestamptz end_at
         numeric price
         text status
-        text access_token_hash
-        timestamptz access_token_expires_at
+        uuid visit_id FK
         timestamptz created_at
         timestamptz updated_at
     }
@@ -457,13 +548,11 @@ persistence and the CMS contract changed.
 
 Still open:
 
-- **Per-line professional.** All the services on an appointment are performed by one
-  professional, back to back. A salon where the colourist doesn't cut hair can't book
-  "colour + cut" as a single appointment; today that is two appointments. Supporting it
-  would mean per-segment availability, a conflict response that can say *which* service
-  collided, and an answer to what "this professional's own appointments" (R20) means for
-  an appointment with two of them. `AppointmentService` is shaped so a nullable
-  `professional_id` and `start_at` could be added to it without a rewrite.
+- ~~**Per-line professional.**~~ **Resolved by R200–R240:** a booking that needs several
+  professionals is a `Visit` of ordinary single-professional appointments rather than one
+  appointment with per-line professionals. That keeps R20 meaning what it did (each
+  professional owns their segment), lets conflicts and statuses stay per appointment, and
+  reuses the single-professional availability check per segment.
 - **Same service twice on one appointment.** Rejected with a 400 for now rather than
   modelled as a quantity; the surrogate PK means allowing it later is a validation
   change, not a migration.

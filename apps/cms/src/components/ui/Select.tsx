@@ -1,7 +1,6 @@
 import { useEffect, useId, useRef, useState, type KeyboardEvent } from "react";
 import { Icon } from "./Icon.js";
 import { cx } from "../../lib/cx.js";
-import styles from "./Select.module.css";
 
 export interface SelectOption {
   value: string;
@@ -178,7 +177,7 @@ export function Select({
   }
 
   return (
-    <div className={cx(styles.root, className)} ref={rootRef}>
+    <div className={cx("relative", className)} ref={rootRef}>
       <button
         type="button"
         id={id}
@@ -190,16 +189,25 @@ export function Select({
         aria-controls={listboxId}
         aria-activedescendant={open && options.length > 0 ? optionId(activeIndex) : undefined}
         disabled={disabled}
-        className={cx(styles.trigger, size === "sm" && styles.sm)}
+        className={cx(
+          "input w-full cursor-pointer justify-between gap-2 text-left disabled:cursor-not-allowed",
+          size === "sm" && "input-sm w-auto min-w-28",
+        )}
         onClick={() => (open ? setOpen(false) : openList())}
         onKeyDown={handleKeyDown}
       >
-        <span className={cx(styles.label, !selected && styles.placeholder)}>{selected?.label ?? placeholder ?? ""}</span>
-        <Icon name="expand_more" size={20} className={styles.chevron} />
+        <span className={cx("min-w-0 truncate", !selected && "text-base-content/45")}>{selected?.label ?? placeholder ?? ""}</span>
+        <Icon
+          name="expand_more"
+          size={20}
+          className={cx("text-base-content/50 transition-transform motion-reduce:transition-none", open && "rotate-180")}
+        />
       </button>
 
       {/* Rendered even while closed so `aria-controls` always resolves. */}
-      <ul className={styles.list} id={listboxId} role="listbox" ref={listRef} hidden={!open}>
+      <ul
+        className="absolute top-full right-0 left-0 z-40 mt-1 max-h-64 min-w-max overflow-auto rounded-box border border-base-300 bg-base-100 p-1 shadow-lg"
+        id={listboxId} role="listbox" ref={listRef} hidden={!open}>
         {options.map((option, index) => (
           <li
             key={option.value}
@@ -207,11 +215,15 @@ export function Select({
             data-index={index}
             role="option"
             aria-selected={option.value === value}
-            className={cx(styles.option, index === activeIndex && styles.optionActive)}
+            className={cx(
+              "flex cursor-pointer items-center justify-between gap-3 rounded-field px-3 py-2 text-sm pointer-coarse:py-3",
+              index === activeIndex && "bg-base-200",
+              option.value === value && "font-semibold text-primary",
+            )}
             onMouseEnter={() => setActiveIndex(index)}
             onClick={() => commit(index)}
           >
-            <span className={styles.optionLabel}>{option.label}</span>
+            <span className="truncate">{option.label}</span>
             {option.value === value && <Icon name="check" size={18} />}
           </li>
         ))}
