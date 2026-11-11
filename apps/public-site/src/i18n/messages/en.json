@@ -148,5 +148,9 @@
     "termsTitle": "Terms of use",
     "updated": "Last updated: {date}",
     "footerNav": "Site information"
+  },
+  "notFound": {
+    "title": "Page not found",
+    "body": "Check the address and try again."
   }
 }

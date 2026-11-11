@@ -3,7 +3,8 @@ import type { ReactNode } from "react";
 import Link from "next/link";
 import { PreviewColorListener } from "@/components/PreviewColorListener";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
-import { loadPageContext, resolveCopy } from "@/lib/page-context";
+import { SalonNotFoundDocument } from "@/components/SalonNotFoundDocument";
+import { loadPageContextOrNull, resolveCopy } from "@/lib/page-context";
 import { resolveTenantColors } from "@/lib/tenant-config";
 import { tenantThemeStyle, tenantThemeVars } from "@/lib/tenant-theme";
 import "../theme.css";
@@ -14,7 +15,10 @@ interface LayoutProps {
 }
 
 export async function generateMetadata({ params }: LayoutProps): Promise<Metadata> {
-  const context = await loadPageContext(params.locale);
+  const context = await loadPageContextOrNull(params.locale);
+  if (!context) {
+    return { title: "404", robots: { index: false } };
+  }
   const { title, description } = resolveCopy(context);
   // R170: the tenant's own title and description
 
@@ -22,7 +26,12 @@ export async function generateMetadata({ params }: LayoutProps): Promise<Metadat
 }
 
 export default async function RootLayout({ children, params }: LayoutProps) {
-  const context = await loadPageContext(params.locale);
+  const context = await loadPageContextOrNull(params.locale);
+  if (!context) {
+    // No salon owns this host. The page still renders and calls notFound(),
+    // which sets the 404 status and shows not-found.tsx inside this shell.
+    return <SalonNotFoundDocument lang={params.locale}>{children}</SalonNotFoundDocument>;
+  }
   // resolveTenantColors re-validates every saved value with isValidColor
   // (injection guard); tenantThemeStyle only adds constants and checks again.
   const colors = resolveTenantColors(context.tenant);
