@@ -13,13 +13,15 @@ interface RescheduleDialogProps {
   /** The live token — rotated by an earlier reschedule, so not the URL's. */
   token: string;
   timezone: string;
+  /** R290 */
+  lastDate: string;
   locale: string;
   onConfirm: (date: string, time: string) => Promise<boolean>;
   onClose: () => void;
   t: Translate;
 }
 
-export function RescheduleDialog({ visit, token, timezone, locale, onConfirm, onClose, t }: RescheduleDialogProps) {
+export function RescheduleDialog({ visit, token, timezone, lastDate, locale, onConfirm, onClose, t }: RescheduleDialogProps) {
   const [date, setDate] = useState(() => dateStringInTimezone(new Date(visit.startAt), timezone));
   const [slots, setSlots] = useState<VisitSlot[] | null>(null);
   const [startAt, setStartAt] = useState<string | null>(null);
@@ -99,6 +101,7 @@ export function RescheduleDialog({ visit, token, timezone, locale, onConfirm, on
             type="button"
             className={"btn btn-square btn-ghost text-xl"}
             onClick={() => setDate(addDays(date, 1))}
+            disabled={date >= lastDate}
             aria-label={t("booking.time.nextDay")}
           >
             ›

@@ -42,9 +42,63 @@ export class PrismaService implements OnModuleInit, OnModuleDestroy {
    */
   async forTenant<T>(fn: (tx: Prisma.TransactionClient) => Promise<T>): Promise<T> {
     const { tenantId } = this.tenantContext.current;
-    return this.client.$transaction(async (tx) => {
+    let wrote = false;
+    const result = await this.client.$transaction(async (tx) => {
       await tx.$executeRaw`SELECT set_config('app.tenant_id', ${tenantId}, true)`;
-      return fn(tx);
+      return fn(trackWrites(tx, () => (wrote = true)));
     });
+    // After commit only: a listener told before commit could let a reader
+    // cache the pre-write state under the new version.
+    if (wrote) {
+      for (const listener of this.writeListeners) listener(tenantId);
+    }
+    return result;
   }
+
+  /**
+   * Called after any committed `forTenant` transaction that wrote — e.g. the
+   * availability cache drops the tenant's entries (system_design.md §8).
+   * Listeners must not throw; they run after the write is already durable.
+   */
+  onTenantWrite(listener: (tenantId: string) => void): void {
+    this.writeListeners.push(listener);
+  }
+
+  /** Readiness probe: is Postgres answering? Touches no tenant data. */
+  async ping(): Promise<void> {
+    await this.client.$queryRaw`SELECT 1`;
+  }
+
+  private readonly writeListeners: ((tenantId: string) => void)[] = [];
+}
+
+const WRITE_METHODS = new Set(["create", "createMany", "update", "updateMany", "upsert", "delete", "deleteMany"]);
+
+/**
+ * The transaction client, with every model delegate's write methods reporting
+ * to `onWrite`. Raw SQL isn't tracked: the only raw statements are set_config
+ * and the advisory lock, neither of which changes data.
+ */
+function trackWrites(tx: Prisma.TransactionClient, onWrite: () => void): Prisma.TransactionClient {
+  return new Proxy(tx, {
+    get(target, prop, receiver) {
+      const value = Reflect.get(target, prop, receiver) as unknown;
+      if (typeof value === "function") return value.bind(target);
+      if (typeof prop !== "string" || prop.startsWith("$") || value === null || typeof value !== "object") return value;
+      // A model delegate (tx.appointment, tx.slotHold, …).
+      return new Proxy(value, {
+        get(delegate, method, delegateReceiver) {
+          const member = Reflect.get(delegate, method, delegateReceiver) as unknown;
+          if (typeof member !== "function") return member;
+          if (typeof method === "string" && WRITE_METHODS.has(method)) {
+            return (...args: unknown[]) => {
+              onWrite();
+              return (member as (...a: unknown[]) => unknown).apply(delegate, args);
+            };
+          }
+          return member.bind(delegate);
+        },
+      });
+    },
+  });
 }

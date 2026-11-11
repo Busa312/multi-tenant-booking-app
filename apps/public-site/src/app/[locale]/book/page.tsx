@@ -50,6 +50,7 @@ export default async function BookPage({
       preselectedServiceIds={preselected}
       preselectedLocationId={preselectedLocationId}
       timezone={context.tenant.timezone}
+      maxAdvanceDays={context.tenant.maxBookingAdvanceDays}
       locale={context.locale}
       defaultLocale={context.defaultLocale}
       messages={getMessages(context.locale)}

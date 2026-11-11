@@ -1,19 +1,4 @@
-import {
-  Body,
-  Controller,
-  Delete,
-  Get,
-  Headers,
-  HttpCode,
-  HttpException,
-  HttpStatus,
-  Param,
-  Patch,
-  Post,
-  Query,
-  Req,
-} from "@nestjs/common";
-import type { FastifyRequest } from "fastify";
+import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, Query } from "@nestjs/common";
 import { ApiBody, ApiOkResponse, ApiParam, ApiQuery, ApiTags } from "@nestjs/swagger";
 import type {
   AvailabilityQuery,
@@ -37,7 +22,9 @@ import type {
 } from "@booking/shared-types";
 import { PrismaService } from "../prisma/prisma.service.js";
 import { TenantContextService } from "../tenant/tenant-context.service.js";
-import { RedisService } from "../redis/redis.service.js";
+import { RateLimitService } from "../rate-limit/rate-limit.service.js";
+import { RateLimit } from "../rate-limit/rate-limit.decorator.js";
+import { tooManyRequests } from "../rate-limit/rate-limit.guard.js";
 import {
   serializeLocation,
   serializePublicProfessional,
@@ -71,6 +58,9 @@ import { AvailabilityService } from "../booking/availability.service.js";
 import { hashToken } from "../booking/magic-link.js";
 import { ANY_PROFESSIONAL, HoldLimitError, VisitService } from "../booking/visit.service.js";
 import { HOLD_MAX_PER_VISITOR, HOLD_VISITOR_WINDOW_SECONDS, parseHoldId } from "../booking/slot-hold.js";
+
+// R330: per client address. Generous for a person, tight for a script.
+const LIMIT_READ = { max: 120, windowSeconds: 60 };
 import { NotificationService } from "../notifications/notification.service.js";
 import { VerificationService } from "./verification.service.js";
 
@@ -87,7 +77,7 @@ export class PublicController {
     private readonly availability: AvailabilityService,
     private readonly visits: VisitService,
     private readonly notifications: NotificationService,
-    private readonly redis: RedisService,
+    private readonly limits: RateLimitService,
     private readonly verification: VerificationService,
   ) {}
 
@@ -161,6 +151,8 @@ export class PublicController {
   @ApiQuery({ name: "date", description: "YYYY-MM-DD, in tenant timezone" })
   @ApiQuery({ name: "holdId", required: false, description: "R250: the asker's own hold, so its time stays listed" })
   @ApiOkResponse({ type: [VisitSlotDto] })
+  // R330: the planner is the most expensive thing an anonymous caller can run
+  @RateLimit({ name: "availability", ...LIMIT_READ })
   getAvailability(@Query() query: AvailabilityQuery): Promise<VisitSlot[]> {
     const serviceIds = parseIdList(query.serviceIds);
     // Parsed by hand rather than with parseIdList: positions matter here, so
@@ -190,18 +182,10 @@ export class PublicController {
    * 429 = a hold limit was hit, and the customer simply carries on without one.
    */
   @Post("holds")
+  @RateLimit({ name: "hold", max: HOLD_MAX_PER_VISITOR, windowSeconds: HOLD_VISITOR_WINDOW_SECONDS })
   @ApiBody({ type: HoldSlotRequestDto })
   @ApiOkResponse({ type: HoldSlotResponseDto })
-  async holdSlot(
-    @Body() body: HoldSlotRequest,
-    @Headers("x-forwarded-for") forwardedFor: string | undefined,
-    @Req() req: FastifyRequest,
-  ): Promise<HoldSlotResponse> {
-    const { tenantId } = this.tenantContext.current;
-    if (!(await this.withinHoldLimit(tenantId, visitorIp(forwardedFor, req.ip)))) {
-      throw new HttpException({ code: "hold_limit" }, HttpStatus.TOO_MANY_REQUESTS);
-    }
-
+  async holdSlot(@Body() body: HoldSlotRequest): Promise<HoldSlotResponse> {
     try {
       const { holdId, expiresAt, slot } = await this.visits.hold({
         serviceIds: parseIdList(body.serviceIds),
@@ -214,7 +198,7 @@ export class PublicController {
       return { holdId, expiresAt: expiresAt.toISOString(), slot };
     } catch (error) {
       if (error instanceof HoldLimitError) {
-        throw new HttpException({ code: "hold_limit" }, HttpStatus.TOO_MANY_REQUESTS);
+        throw tooManyRequests(HOLD_VISITOR_WINDOW_SECONDS);
       }
       throw error;
     }
@@ -224,6 +208,7 @@ export class PublicController {
   // hold is already released.
   @Delete("holds/:holdId")
   @HttpCode(204)
+  @RateLimit({ name: "hold-release", ...LIMIT_READ })
   @ApiParam({ name: "holdId" })
   async releaseHold(@Param("holdId") holdId: string): Promise<void> {
     const id = parseHoldId(holdId);
@@ -240,6 +225,8 @@ export class PublicController {
    * no provider is wired in. `sendOtp` returning true is what makes that stop.
    */
   @Post("verification/start")
+  // R330: per address, on top of the per-phone and per-tenant limits inside
+  @RateLimit({ name: "otp-start", max: 10, windowSeconds: 60 * 60 })
   @ApiBody({ type: StartVerificationRequestDto })
   @ApiOkResponse({ type: StartVerificationResponseDto })
   async startVerification(@Body() body: StartVerificationRequest): Promise<StartVerificationResponse> {
@@ -252,6 +239,7 @@ export class PublicController {
   }
 
   @Post("verification/verify")
+  @RateLimit({ name: "otp-verify", max: 30, windowSeconds: 10 * 60 })
   @ApiBody({ type: VerifyPhoneRequestDto })
   @ApiOkResponse({ type: VerifyPhoneResponseDto })
   async verifyPhone(@Body() body: VerifyPhoneRequest): Promise<VerifyPhoneResponse> {
@@ -259,20 +247,17 @@ export class PublicController {
   }
 
   @Post("appointments")
+  @RateLimit({ name: "book", max: 20, windowSeconds: 60 * 60 })
   @ApiBody({ type: CreateAppointmentRequestDto })
   @ApiOkResponse({ type: CreateAppointmentResponseDto })
   async createAppointment(@Body() body: CreateAppointmentRequest): Promise<CreateAppointmentResponse> {
-    // R30: optional, exactly as a staff-taken phone booking is. The magic link
-    // is minted either way and comes back on the response, so a customer who
-    // gives no address still reaches their booking — they just have the link
-    // itself as the only copy, and no way to have it re-sent.
-    const email = typeof body.email === "string" ? body.email.trim() : "";
-
     // Consumed before anything is written: the token proves this phone number
     // was verified, is single-use, and is bound to the number being booked —
     // so verifying one number can't authorize a booking under another.
     await this.verification.consume(body.phoneNumber, body.verificationToken);
 
+    // R270: no email — the link goes to the verified phone, and comes back on
+    // the response either way so the confirmation screen can show it.
     const { visit, magicLinkToken } = await this.visits.create({
       serviceIds: parseIdList(body.serviceIds),
       professionalIds: Array.isArray(body.professionalIds) ? body.professionalIds : [],
@@ -281,19 +266,16 @@ export class PublicController {
       time: body.time,
       userName: body.userName,
       phoneNumber: body.phoneNumber,
-      email,
       holdId: parseHoldId(body.holdId),
     });
 
     const url = this.buildManageUrl(magicLinkToken);
-    if (email) {
-      await this.sendLink(visit, email, url);
-    }
-
-    return { visit: serializeVisit(visit), manageUrl: url };
+    const linkTexted = await this.sendLink(visit, url);
+    return { visit: serializeVisit(visit), manageUrl: url, linkTexted };
   }
 
   @Get("manage/:token")
+  @RateLimit({ name: "manage-read", ...LIMIT_READ })
   @ApiParam({ name: "token" })
   @ApiOkResponse({ type: VisitDto })
   async getAppointmentByToken(@Param("token") token: string): Promise<Visit> {
@@ -310,6 +292,7 @@ export class PublicController {
    * caller owns this one, so the visit is derived from it.
    */
   @Get("manage/:token/availability")
+  @RateLimit({ name: "manage-read", ...LIMIT_READ })
   @ApiParam({ name: "token" })
   @ApiQuery({ name: "date", description: "YYYY-MM-DD, in tenant timezone" })
   @ApiOkResponse({ type: [VisitSlotDto] })
@@ -319,6 +302,7 @@ export class PublicController {
 
   // R110: rescheduling rotates the token; R230: the whole visit moves
   @Patch("manage/:token/reschedule")
+  @RateLimit({ name: "manage-write", max: 30, windowSeconds: 60 * 60 })
   @ApiParam({ name: "token" })
   @ApiBody({ type: RescheduleAppointmentRequestDto })
   @ApiOkResponse({ type: RescheduleVisitResponseDto })
@@ -329,19 +313,17 @@ export class PublicController {
     const { visit, magicLinkToken } = await this.visits.reschedule(token, body.date, body.time);
 
     const manageUrl = this.buildManageUrl(magicLinkToken);
-    const email = this.contactEmail(visit);
-    if (email) {
-      await this.sendLink(visit, email, manageUrl);
-    }
+    const linkTexted = await this.sendLink(visit, manageUrl);
 
     // R110: the token the caller arrived with is dead now, so the replacement
-    // goes back in the response as well as by email — the customer must not be
+    // goes back in the response as well as by SMS — the customer must not be
     // locked out of their own booking by the act of moving it.
-    return { visit: serializeVisit(visit), manageUrl };
+    return { visit: serializeVisit(visit), manageUrl, linkTexted };
   }
 
   // R230: the customer cancels the whole visit; R90: rows stay as history
   @Post("manage/:token/cancel")
+  @RateLimit({ name: "manage-write", max: 30, windowSeconds: 60 * 60 })
   @ApiParam({ name: "token" })
   @ApiOkResponse({ type: VisitDto })
   async cancelAppointment(@Param("token") token: string): Promise<Visit> {
@@ -350,6 +332,7 @@ export class PublicController {
 
   @Post("manage/resend")
   @HttpCode(204)
+  @RateLimit({ name: "resend", max: 10, windowSeconds: 60 * 60 })
   @ApiBody({ type: ResendMagicLinkRequestDto })
   async resendMagicLink(@Body() body: ResendMagicLinkRequest): Promise<void> {
     const { tenantId } = this.tenantContext.current;
@@ -361,32 +344,30 @@ export class PublicController {
       return;
     }
 
-    // Nothing to re-send to when the customer gave no address (R30) — the
-    // lookup only returns visits with an email on an upcoming segment.
+    // R270: texted to the number asked about — never shown to the caller, who
+    // hasn't proved they own it. Re-sending *replaces* each link, so while
+    // texts can't be delivered it must do nothing at all: otherwise anyone
+    // knowing a customer's number could kill the only link they have.
+    if (!this.notifications.canDeliverSms()) {
+      return;
+    }
     const visits = await this.visits.findResendable(phoneNumber);
-
     for (const visit of visits) {
-      const email = this.contactEmail(visit);
       const magicLinkToken = await this.visits.reissue(visit.id);
-      if (!magicLinkToken || !email) {
+      if (!magicLinkToken) {
         continue;
       }
-      await this.sendLink(visit, email, this.buildManageUrl(magicLinkToken));
+      await this.sendLink(visit, this.buildManageUrl(magicLinkToken));
     }
   }
 
-  /** Every segment carries the same contact details; the first live one speaks for the visit. */
-  private contactEmail(visit: PrismaVisit): string {
-    const live = visit.appointments.find((appointment) => appointment.status !== "cancelled");
-    return (live ?? visit.appointments[0])?.email ?? "";
-  }
-
-  private async sendLink(visit: PrismaVisit, email: string, manageUrl: string): Promise<void> {
+  /** R270: the link, by SMS to the visit's verified phone. True when actually delivered. */
+  private async sendLink(visit: PrismaVisit, manageUrl: string): Promise<boolean> {
     const live = visit.appointments.filter((appointment) => appointment.status !== "cancelled");
     const first = live[0] ?? visit.appointments[0];
-    if (!first) return;
-    await this.notifications.sendMagicLink({
-      email,
+    if (!first) return false;
+    return this.notifications.sendMagicLink({
+      phoneNumber: first.phoneNumber,
       userName: first.userName,
       manageUrl,
       startAt: first.startAt,
@@ -408,50 +389,16 @@ export class PublicController {
    * Rotating numbers is still caught: each fresh number passes its own counter
    * and then climbs the tenant one, which is what that counter is for.
    *
-   * Redis being down must not take booking recovery offline (system_design.md
-   * §8), so a failure here lets the request through rather than blocking it.
+   * Fails open (RateLimitService) — Redis being down must not take booking
+   * recovery offline.
    */
   private async withinResendLimits(tenantId: string, phoneNumber: string): Promise<boolean> {
-    try {
-      if ((await this.bumpCounter(`resend:${tenantId}:${hashToken(phoneNumber)}`)) > RESEND_MAX_PER_PHONE) {
-        return false;
-      }
-      return (await this.bumpCounter(`resend:${tenantId}`)) <= RESEND_MAX_PER_TENANT;
-    } catch {
-      return true;
-    }
+    const perPhone = await this.limits.hit(
+      `resend:${tenantId}:${hashToken(phoneNumber)}`,
+      RESEND_MAX_PER_PHONE,
+      RESEND_WINDOW_SECONDS,
+    );
+    if (!perPhone.allowed) return false;
+    return (await this.limits.hit(`resend:${tenantId}`, RESEND_MAX_PER_TENANT, RESEND_WINDOW_SECONDS)).allowed;
   }
-
-  /**
-   * R250: one visitor can't take holds faster than someone deciding would.
-   * Fails open like the resend limits — a Redis outage costs the hold, never
-   * the booking.
-   */
-  private async withinHoldLimit(tenantId: string, ip: string): Promise<boolean> {
-    try {
-      const key = `hold:${tenantId}:${hashToken(ip)}`;
-      return (await this.bumpCounter(key, HOLD_VISITOR_WINDOW_SECONDS)) <= HOLD_MAX_PER_VISITOR;
-    } catch {
-      return true;
-    }
-  }
-
-  private async bumpCounter(key: string, windowSeconds = RESEND_WINDOW_SECONDS): Promise<number> {
-    const count = await this.redis.client.incr(key);
-    if (count === 1) {
-      await this.redis.client.expire(key, windowSeconds);
-    }
-    return count;
-  }
-}
-
-/**
- * The visitor's address. The public site calls this API from its own server,
- * so the socket address is that server's; it forwards the visitor's address as
- * x-forwarded-for, trusted the same way x-forwarded-host already is for tenant
- * resolution (system_design.md §4). First hop only.
- */
-export function visitorIp(forwardedFor: string | undefined, socketIp: string): string {
-  const first = (forwardedFor ?? "").split(",")[0]?.trim();
-  return first || socketIp;
 }

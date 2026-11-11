@@ -7,6 +7,8 @@ import { ErrorBoundary } from "./components/ErrorBoundary.js";
 
 const chunks = {
   setPassword: () => import("./pages/SetPassword.js"),
+  forgotPassword: () => import("./pages/ForgotPassword.js"),
+  resetPassword: () => import("./pages/ResetPassword.js"),
   dashboard: () => import("./pages/Dashboard.js"),
   bookings: () => import("./pages/Bookings.js"),
   branding: () => import("./pages/BrandingSettings.js"),
@@ -18,6 +20,8 @@ const chunks = {
 };
 
 const SetPasswordPage = lazy(() => chunks.setPassword().then((m) => ({ default: m.SetPasswordPage })));
+const ForgotPasswordPage = lazy(() => chunks.forgotPassword().then((m) => ({ default: m.ForgotPasswordPage })));
+const ResetPasswordPage = lazy(() => chunks.resetPassword().then((m) => ({ default: m.ResetPasswordPage })));
 const DashboardPage = lazy(() => chunks.dashboard().then((m) => ({ default: m.DashboardPage })));
 const BookingsPage = lazy(() => chunks.bookings().then((m) => ({ default: m.BookingsPage })));
 const BrandingSettingsPage = lazy(() => chunks.branding().then((m) => ({ default: m.BrandingSettingsPage })));
@@ -41,8 +45,11 @@ const NAV_CHUNKS = [
 ];
 
 function RequireAuth({ children }: { children: React.ReactElement }) {
-  const { token } = useAuth();
-  return token ? children : <Navigate to="/login" replace />;
+  const { status, session } = useAuth();
+  // R320: whether there's a session is only known once /cms/auth/me answers —
+  // redirecting before that would bounce a signed-in user to the login page.
+  if (status === "loading") return <RouteFallback />;
+  return session ? children : <Navigate to="/login" replace />;
 }
 
 function RequireOwner({ children }: { children: React.ReactElement }) {
@@ -51,10 +58,11 @@ function RequireOwner({ children }: { children: React.ReactElement }) {
 }
 
 export function App() {
-  const { token } = useAuth();
+  const { session } = useAuth();
+  const signedIn = session !== null;
 
   useEffect(() => {
-    if (!token) return;
+    if (!signedIn) return;
 
     const warm = () => {
       for (const load of NAV_CHUNKS) void load().catch(() => undefined);
@@ -66,7 +74,7 @@ export function App() {
     }
     const timer = setTimeout(warm, 1_000);
     return () => clearTimeout(timer);
-  }, [token]);
+  }, [signedIn]);
 
   return (
     <ErrorBoundary>
@@ -74,6 +82,8 @@ export function App() {
         <Routes>
           <Route path="/login" element={<LoginPage />} />
           <Route path="/set-password/:tenantId/:token" element={<SetPasswordPage />} />
+          <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+          <Route path="/reset-password/:tenantId/:token" element={<ResetPasswordPage />} />
           <Route
             path="/"
             element={

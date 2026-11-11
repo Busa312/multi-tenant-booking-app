@@ -5,7 +5,7 @@ import { MAX_SERVICES_PER_BOOKING, localized } from "@booking/shared-types";
 import type { Location, PublicProfessional, Service, Visit, VisitSlot } from "@booking/shared-types";
 import { translator, type Locale, type Messages } from "@/i18n/locales";
 import { fetchProfessionals, holdSlot, releaseHold, submitBooking, type FailureReason } from "@/lib/actions";
-import { todayInTimezone, wallClock } from "@/lib/tenant-time";
+import { addDays, todayInTimezone, wallClock } from "@/lib/tenant-time";
 import { isBookable, professionalIdsFromSlot } from "@/lib/visit-booking";
 import { clearWizard, loadWizard, saveWizard, type CodeSent, type WizardState } from "@/lib/wizard-storage";
 import { StepProgress } from "./StepProgress";
@@ -26,6 +26,8 @@ interface BookingWizardProps {
   // R150: the branch a "Book at …" button was pressed on
   preselectedLocationId?: string;
   timezone: string;
+  /** R290: how many days ahead the salon takes online bookings. */
+  maxAdvanceDays: number;
   locale: Locale;
   defaultLocale: string;
   messages: Messages;
@@ -49,13 +51,15 @@ export interface BookingDraft {
 export interface Confirmation {
   visit: Visit;
   manageUrl: string;
-  email: string;
+  /** R270: the link also went to the customer's phone by SMS. */
+  linkTexted: boolean;
+  phoneNumber: string;
 }
 
+// R270: no email — the verified phone is how the customer gets their link
 export interface CustomerDetails {
   userName: string;
   phoneNumber: string;
-  email: string;
 }
 
 // Restoring runs before the first paint, so a language switch doesn't flash
@@ -69,6 +73,7 @@ export function BookingWizard({
   preselectedServiceIds,
   preselectedLocationId,
   timezone,
+  maxAdvanceDays,
   locale,
   defaultLocale,
   messages,
@@ -271,7 +276,7 @@ export function BookingWizard({
   const goBack = () => setStepIndex((index) => Math.max(index - 1, 0));
 
   const confirm = async (
-    collected: { userName: string; phoneNumber: string; email: string },
+    collected: CustomerDetails,
     verificationToken: string,
   ) => {
     const slot = draft.slot;
@@ -301,7 +306,12 @@ export function BookingWizard({
       return;
     }
 
-    setConfirmation({ visit: result.visit, manageUrl: result.manageUrl, email: collected.email });
+    setConfirmation({
+      visit: result.visit,
+      manageUrl: result.manageUrl,
+      linkTexted: result.linkTexted,
+      phoneNumber: collected.phoneNumber,
+    });
   };
 
   if (confirmation) {
@@ -385,6 +395,7 @@ export function BookingWizard({
         <StepDateTime
           draft={draft}
           timezone={timezone}
+          lastDate={addDays(todayInTimezone(timezone), maxAdvanceDays)}
           locale={locale}
           onPickDate={(date) => {
             setSlotTaken(false);

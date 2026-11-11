@@ -78,10 +78,7 @@ export class VerificationService {
     const rejected = new BadRequestException("That code isn't right, or it has expired.");
 
     return this.withRedis(async () => {
-      const attempts = await this.redis.client.incr(this.attemptsKey(tenantId, phone));
-      if (attempts === 1) {
-        await this.redis.client.expire(this.attemptsKey(tenantId, phone), CODE_TTL_SECONDS);
-      }
+      const attempts = await this.redis.incrementInWindow(this.attemptsKey(tenantId, phone), CODE_TTL_SECONDS);
       if (attempts > MAX_ATTEMPTS) {
         // The code is burned rather than left to be guessed at leisure.
         await this.redis.client.del(this.codeKey(tenantId, phone));
@@ -157,11 +154,7 @@ export class VerificationService {
 
   private async bump(key: string): Promise<number> {
     return this.withRedis(async () => {
-      const count = await this.redis.client.incr(key);
-      if (count === 1) {
-        await this.redis.client.expire(key, SEND_WINDOW_SECONDS);
-      }
-      return count;
+      return this.redis.incrementInWindow(key, SEND_WINDOW_SECONDS);
     });
   }
 

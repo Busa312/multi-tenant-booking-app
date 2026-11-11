@@ -39,3 +39,40 @@ jobs:
       - name: Full checks
         if: github.event_name == 'push'
         run: pnpm exec turbo run lint typecheck test build
+
+  # RLS policies and the booking lock (R260), against a real Postgres as the
+  # real runtime role — what the unit tests can't prove.
+  integration:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: booking
+          POSTGRES_PASSWORD: booking
+          POSTGRES_DB: booking
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U booking -d booking"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: postgresql://booking:booking@localhost:5432/booking?schema=public
+      APP_DATABASE_URL: postgresql://booking_app:booking_app@localhost:5432/booking?schema=public
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: ".nvmrc"
+          cache: pnpm
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      # Same runtime role the local docker-compose creates on first boot.
+      - name: Create the RLS-bound runtime role
+        run: psql "postgresql://booking:booking@localhost:5432/booking" -f docker/postgres/init.sql
+      - name: Prisma generate
+        run: pnpm --filter @booking/api prisma:generate
+      - name: Apply migrations
+        run: pnpm --filter @booking/api prisma:deploy
+      - name: Integration tests
+        run: pnpm --filter @booking/api test:integration

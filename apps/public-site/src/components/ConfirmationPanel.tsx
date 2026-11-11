@@ -29,9 +29,10 @@ export function ConfirmationPanel({ confirmation, timezone, locale, t, text, onB
         </div>
         <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">{t("booking.confirmed.heading")}</h1>
         <p className="max-w-xl text-base-content/70">
-          {confirmation.email
-            ? t("booking.confirmed.body", { email: confirmation.email })
-            : t("booking.confirmed.bodyNoEmail")}
+          {/* R270: texted to the verified phone once SMS is live; until then this screen is the copy */}
+          {confirmation.linkTexted
+            ? t("booking.confirmed.bodyTexted", { phone: confirmation.phoneNumber })
+            : t("booking.confirmed.bodyKeepLink")}
         </p>
       </header>
 
@@ -55,7 +56,7 @@ export function ConfirmationPanel({ confirmation, timezone, locale, t, text, onB
         <a className="btn btn-primary" href={confirmation.manageUrl}>
           {t("booking.confirmed.manageNow")}
         </a>
-        <p className="text-sm text-base-content/65">{t("booking.confirmed.noEmailYet")}</p>
+        <p className="text-sm text-base-content/65">{t("booking.confirmed.keepLinkHint")}</p>
       </div>
 
       <button type="button" className="btn btn-ghost self-center" onClick={onBookAnother}>

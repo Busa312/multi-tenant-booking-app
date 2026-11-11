@@ -52,7 +52,6 @@ export function CreateBookingModal({
   const [time, setTime] = useState("");
   const [userName, setUserName] = useState("");
   const [phoneNumber, setPhoneNumber] = useState("");
-  const [email, setEmail] = useState("");
   const [notes, setNotes] = useState("");
   const [conflicts, setConflicts] = useState<BookingConflict[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -129,7 +128,6 @@ export function CreateBookingModal({
         time,
         userName: userName.trim(),
         phoneNumber: phoneNumber.trim(),
-        email: email.trim() || undefined,
         notes: notes.trim() || undefined,
         // R60: only ever true on the second attempt
 
@@ -236,27 +234,17 @@ export function CreateBookingModal({
             required
           />
         </Field>
-        <div className="grid sm:grid-cols-2 sm:gap-3">
-          <Field label={t("bookings.phoneLabel")} htmlFor="booking-phone">
-            <TextInput
-              id="booking-phone"
-              type="tel"
-              value={phoneNumber}
-              onChange={(e) => setPhoneNumber(e.target.value)}
-              placeholder="+995 555 00 00 00"
-              required
-            />
-          </Field>
-          <Field label={t("bookings.emailLabel")} htmlFor="booking-email">
-            <TextInput
-              id="booking-email"
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="client@example.com"
-            />
-          </Field>
-        </div>
+        {/* R270: no email — a phone is all a booking needs */}
+        <Field label={t("bookings.phoneLabel")} htmlFor="booking-phone">
+          <TextInput
+            id="booking-phone"
+            type="tel"
+            value={phoneNumber}
+            onChange={(e) => setPhoneNumber(e.target.value)}
+            placeholder="+995 555 00 00 00"
+            required
+          />
+        </Field>
         <Field label={t("bookings.notesLabel")} htmlFor="booking-notes">
           <Textarea
             id="booking-notes"

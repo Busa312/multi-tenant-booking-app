@@ -13,6 +13,8 @@ import type { BookingDraft } from "./BookingWizard";
 interface StepDateTimeProps {
   draft: BookingDraft;
   timezone: string;
+  /** R290: the last day the salon takes online bookings for. */
+  lastDate: string;
   locale: string;
   onPickDate: (date: string) => void;
   onPickSlot: (slot: VisitSlot) => void;
@@ -34,6 +36,7 @@ const DAY_NAV = "btn btn-square btn-ghost text-xl";
 export function StepDateTime({
   draft,
   timezone,
+  lastDate,
   locale,
   onPickDate,
   onPickSlot,
@@ -108,6 +111,7 @@ export function StepDateTime({
           type="button"
           className={DAY_NAV}
           onClick={() => onPickDate(addDays(draft.date, 1))}
+          disabled={draft.date >= lastDate}
           aria-label={t("booking.time.nextDay")}
         >
           ›

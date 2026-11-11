@@ -57,7 +57,9 @@
     "submit": "Sign in",
     "submitting": "Signing in…",
     "errorInvalid": "Invalid business, email, or password",
-    "sessionExpired": "Your session expired. Please sign in again."
+    "sessionExpired": "Your session expired. Please sign in again.",
+    "forgot": "Forgot password?",
+    "errorLocked": "Too many sign-in attempts. Wait a few minutes and try again."
   },
   "setPassword": {
     "artHeadline": "Welcome to the team.",
@@ -68,10 +70,11 @@
     "confirmLabel": "Confirm password",
     "submit": "Set password & sign in",
     "submitting": "Setting password…",
-    "errTooShort": "Password must be at least 8 characters",
+    "errTooShort": "Password must be at least {min} characters",
     "errMismatch": "Passwords don't match",
     "errInvalidLink": "This link is invalid",
-    "errLinkExpired": "This link is invalid or has expired"
+    "errLinkExpired": "This link is invalid or has expired",
+    "errTooLong": "That password is too long"
   },
   "dashboard": {
     "welcome": "Welcome back",
@@ -169,7 +172,6 @@
     "nameLabel": "Name",
     "namePlaceholder": "e.g. Ana Beridze",
     "phoneLabel": "Phone number",
-    "emailLabel": "Email (optional)",
     "notesLabel": "Notes (optional)",
     "notesPlaceholder": "Regular client, arriving 10 min late…",
     "noNotificationHint": "No confirmation is sent to the customer, and this booking has no self-service link — your team manages it from here.",
@@ -349,14 +351,22 @@
       "Friday",
       "Saturday"
     ],
-    "gapTitle": "Visits with several specialists",
-    "gapHint": "When a customer books services done by different people, the next one can start up to this long after the previous ends. More room means more open times, but more waiting.",
     "gapLabel": "Longest wait between services",
     "gapNone": "Back to back (no wait)",
     "gapMinutes": "Up to {count} min",
-    "gapSave": "Save",
     "gapSaved": "Saved",
-    "gapErr": "Couldn't save. Please try again."
+    "gapErr": "Couldn't save. Please try again.",
+    "policiesTitle": "Online booking rules",
+    "policiesHint": "What customers can do on your booking site. You and your staff aren't limited by these in the CMS.",
+    "noticeLabel": "Minimum notice before a booking",
+    "noticeNone": "None",
+    "advanceLabel": "How far ahead customers can book",
+    "cutoffLabel": "Customers can change or cancel online until",
+    "cutoffNone": "The visit starts",
+    "cutoffHours": "{count} h before",
+    "durationMinutes": "{count} min",
+    "durationHours": "{count} h",
+    "durationDays": "{count} days"
   },
   "branding": {
     "title": "Public website",
@@ -454,5 +464,26 @@
       "en": "English",
       "ka": "Georgian"
     }
+  },
+  "forgotPassword": {
+    "artHeadline": "Locked out? It happens.",
+    "artSub": "We'll email you a link to choose a new password.",
+    "title": "Reset your password",
+    "subtitle": "Enter your salon workspace and the email you sign in with.",
+    "submit": "Send reset link",
+    "submitting": "Sending…",
+    "sent": "If that account exists, we've sent a reset link to its email. The link works for 30 minutes.",
+    "back": "Back to sign in",
+    "errTooMany": "Too many requests. Please wait a while and try again."
+  },
+  "resetPassword": {
+    "artHeadline": "A fresh start.",
+    "artSub": "Choose a new password — you'll be signed out everywhere else.",
+    "title": "Choose a new password",
+    "subtitle": "At least {min} characters.",
+    "submit": "Save password & sign in",
+    "submitting": "Saving…",
+    "errLinkExpired": "This reset link is invalid or has expired.",
+    "requestNew": "Request a new link"
   }
 }

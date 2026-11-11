@@ -27,7 +27,7 @@ import {
 import { enabledLocalesOf, validateLocalizedText, SUPPORTED_CONTENT_LOCALES } from "../common/i18n-validation.js";
 import { RevalidationService } from "./revalidation.service.js";
 import { isValidColor } from "./color-validation.js";
-import { VISIT_GAP_OPTIONS } from "../booking/booking-rules.js";
+import { BOOKING_ADVANCE_OPTIONS, BOOKING_NOTICE_OPTIONS, CHANGE_CUTOFF_OPTIONS, VISIT_GAP_OPTIONS } from "../booking/booking-rules.js";
 
 const COPY_TITLE_MAX = 70;
 const COPY_DESCRIPTION_MAX = 200;
@@ -157,15 +157,31 @@ export class TenantController {
   @ApiBody({ type: UpdateTenantBookingRulesRequestDto })
   @ApiOkResponse({ type: TenantDto })
   async updateBookingRules(@Body() body: UpdateTenantBookingRulesRequest): Promise<Tenant> {
-    const gap = body?.maxVisitGapMinutes;
-    if (typeof gap !== "number" || !VISIT_GAP_OPTIONS.includes(gap)) {
-      throw new BadRequestException(`maxVisitGapMinutes must be one of ${VISIT_GAP_OPTIONS.join(", ")}`);
+    // R220, R280–R300: any subset; each must be one of its offered options.
+    const pick = (field: keyof UpdateTenantBookingRulesRequest, options: readonly number[]): number | undefined => {
+      const value = body?.[field];
+      if (value === undefined) return undefined;
+      if (typeof value !== "number" || !options.includes(value)) {
+        throw new BadRequestException(`${field} must be one of ${options.join(", ")}`);
+      }
+      return value;
+    };
+    const data = {
+      maxVisitGapMinutes: pick("maxVisitGapMinutes", VISIT_GAP_OPTIONS),
+      minBookingNoticeMinutes: pick("minBookingNoticeMinutes", BOOKING_NOTICE_OPTIONS),
+      maxBookingAdvanceDays: pick("maxBookingAdvanceDays", BOOKING_ADVANCE_OPTIONS),
+      changeCutoffHours: pick("changeCutoffHours", CHANGE_CUTOFF_OPTIONS),
+    };
+    if (Object.values(data).every((value) => value === undefined)) {
+      throw new BadRequestException("nothing to update");
     }
     const { tenantId } = this.tenantContext.current;
-    const tenant = await this.prisma.forTenant((tx) =>
-      tx.tenant.update({ where: { id: tenantId }, data: { maxVisitGapMinutes: gap } }),
-    );
-    return serializeTenant(tenant);
+    const tenant = await this.prisma.forTenant((tx) => tx.tenant.update({ where: { id: tenantId }, data }));
+    const serialized = serializeTenant(tenant);
+    // The public site caches tenant settings; R290/R300 shape its pages (the
+    // last bookable day, whether a booking can still be changed online).
+    await this.revalidation.revalidateTenant(serialized);
+    return serialized;
   }
 
   @Patch("copy")

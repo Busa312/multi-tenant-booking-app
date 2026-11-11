@@ -72,12 +72,13 @@
       "heading": "Your details",
       "name": "Name",
       "phone": "Phone number",
-      "email": "Email",
-      "emailHint": "Add one and we'll email you a link to change or cancel this booking. Without it, the link on the next screen is your only copy.",
       "submit": "Continue",
       "submitting": "Booking…",
       "slotTaken": "That time was taken while you were filling this in. Please pick another.",
-      "emailOptional": "Email (optional)"
+      "phoneHint": "We'll text a code to confirm it, and send your booking link to it.",
+      "consentBefore": "By booking you agree to the ",
+      "consentAnd": " and the ",
+      "consentAfter": "."
     },
     "summary": {
       "heading": "Your booking",
@@ -90,11 +91,11 @@
     },
     "confirmed": {
       "heading": "You're booked",
-      "body": "We've emailed {email} a link you can use to change or cancel this appointment.",
       "manageNow": "Manage this booking",
       "bookAnother": "Book another appointment",
-      "noEmailYet": "Keep this link — it's how you get back to this booking.",
-      "bodyNoEmail": "Keep the link below — without an email address, it's the only way back to this booking."
+      "bodyTexted": "We've texted your booking link to {phone}. Use it to change or cancel.",
+      "bodyKeepLink": "Keep the link below — it's how you get back to this booking.",
+      "keepLinkHint": "Keep this link — it's how you get back to this booking."
     },
     "unavailableHeading": "Online booking is unavailable",
     "unavailableBody": "This business's booking settings need attention, so appointments can't be taken online right now. Please contact them directly.",
@@ -124,7 +125,7 @@
     },
     "reschedule": "Change the time",
     "rescheduleHeading": "Pick a new time",
-    "rescheduleNote": "Changing the time replaces this link with a new one, which we'll email you.",
+    "rescheduleNote": "Changing the time replaces this link with a new one, which we'll text you.",
     "cancel": "Cancel this appointment",
     "cancelHeading": "Cancel this appointment?",
     "cancelConfirm": "Yes, cancel it",
@@ -133,12 +134,19 @@
     "lostLink": "Lost your link?",
     "resend": {
       "heading": "Resend your booking link",
-      "hint": "Enter the phone number you booked with and we'll email the link again.",
+      "hint": "Enter the phone number you booked with and we'll text the link again.",
       "phone": "Phone number",
       "submit": "Send the link",
       "submitting": "Sending…",
-      "done": "If that number has an upcoming booking with us, we've just emailed the link."
+      "done": "If that number has an upcoming booking with us, we've just texted the link."
     },
-    "segmentCancelled": "Cancelled by the salon"
+    "segmentCancelled": "Cancelled by the salon",
+    "tooLate": "This booking can no longer be changed online. To change or cancel it, please contact the salon."
+  },
+  "legal": {
+    "privacyTitle": "Privacy policy",
+    "termsTitle": "Terms of use",
+    "updated": "Last updated: {date}",
+    "footerNav": "Site information"
   }
 }

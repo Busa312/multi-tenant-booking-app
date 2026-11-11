@@ -1,71 +1,67 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
-import { jwtDecode } from "jwt-decode";
-import type { JwtClaims, TenantUserRole } from "@booking/shared-types";
-import { SESSION_EXPIRED_EVENT } from "../lib/api.js";
+import type { CmsSession, TenantUserRole } from "@booking/shared-types";
+import { SESSION_EXPIRED_EVENT, cmsApiClient } from "../lib/api.js";
 import { clearCmsCache } from "../lib/cache.js";
 
-const STORAGE_KEY = "booking_cms_token";
+// Where the token used to live before R320. Cleared on start-up so a token
+// left behind by an older build doesn't linger in storage.
+const LEGACY_TOKEN_KEY = "booking_cms_token";
 
 // setTimeout treats delays past ~24.8 days as 0 and fires immediately, so a
-// far-future `exp` (or a clock skewed backwards) is capped rather than trusted.
+// far-future expiry (or a clock skewed backwards) is capped rather than trusted.
 const MAX_TIMEOUT_MS = 2 ** 31 - 1;
 
 interface AuthContextValue {
-  token: string | null;
+  /** "loading" until the API has said whether there's a session — nothing should redirect before then. */
+  status: "loading" | "ready";
+  session: CmsSession | null;
   role: TenantUserRole | null;
   /** Present only for `professional` logins — the calendar they're confined to (R20). */
   professionalId: string | null;
   /** True when the session ended on its own rather than by signing out — lets
    *  the login screen explain why the user is suddenly back there. */
   sessionExpired: boolean;
-  login: (token: string) => void;
-  logout: () => void;
+  /** Called with what login / set-password / reset-password answered. */
+  login: (session: CmsSession) => void;
+  logout: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
-// Decoding client-side (rather than a /cms/auth/me endpoint) is UI-only
-// convenience — hiding owner-only nav/routes for professionals, and knowing
-// when to stop pretending we're signed in. The actual enforcement of R10 stays
-// server-side via RolesGuard regardless of what this returns; a tampered or
-// expired token is rejected by the API either way.
-function decodeClaims(token: string): JwtClaims | null {
-  try {
-    return jwtDecode<JwtClaims>(token);
-  } catch {
-    return null;
-  }
-}
-
-// `exp` is in seconds. Undecodable counts as expired: a token we can't read is
-// one we can't reason about, and the API won't accept it either.
-function isUsable(claims: JwtClaims | null): claims is JwtClaims {
-  return claims !== null && claims.exp * 1000 > Date.now();
-}
-
-interface Session {
-  token: string;
-  claims: JwtClaims;
-}
-
-// Read at startup rather than trusting whatever is in storage: a token left
-// behind from yesterday's 8-hour session must not render a logged-in shell
-// whose every request 401s.
-function restoreSession(): Session | null {
-  const token = localStorage.getItem(STORAGE_KEY);
-  if (!token) return null;
-
-  const claims = decodeClaims(token);
-  if (!isUsable(claims)) {
-    localStorage.removeItem(STORAGE_KEY);
-    return null;
-  }
-  return { token, claims };
-}
-
+/**
+ * R320: the session token lives in an httpOnly cookie this code can't read —
+ * which is the point: a script injected into the page has nothing to steal.
+ * So the CMS asks the API who's signed in (`/cms/auth/me`) instead of decoding
+ * a token. Role and professional id here only shape the UI; the API enforces
+ * them (RolesGuard) on every request regardless.
+ */
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [session, setSession] = useState<Session | null>(restoreSession);
+  const [status, setStatus] = useState<"loading" | "ready">("loading");
+  const [session, setSession] = useState<CmsSession | null>(null);
   const [sessionExpired, setSessionExpired] = useState(false);
+
+  useEffect(() => {
+    try {
+      localStorage.removeItem(LEGACY_TOKEN_KEY);
+    } catch {
+      // Storage unavailable — nothing to clean up.
+    }
+    let cancelled = false;
+    cmsApiClient
+      .me()
+      .then((current) => {
+        if (!cancelled) setSession(current);
+      })
+      .catch(() => {
+        if (!cancelled) setSession(null);
+      })
+      .finally(() => {
+        if (!cancelled) setStatus("ready");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // Every session boundary clears the CMS read cache. It is keyed by resource
   // rather than by tenant or user, so a second sign-in in the same tab would
@@ -73,30 +69,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // sees a narrower slice of those same endpoints than an `owner` (R20), that
   // is a correctness concern, not just a stale-data one.
   const endSession = useCallback(() => {
-    localStorage.removeItem(STORAGE_KEY);
     clearCmsCache();
     setSession(null);
     setSessionExpired(true);
   }, []);
 
-  const login = useCallback((newToken: string) => {
-    const claims = decodeClaims(newToken);
-    localStorage.setItem(STORAGE_KEY, newToken);
+  const login = useCallback((next: CmsSession) => {
     clearCmsCache();
     setSessionExpired(false);
-    setSession(claims ? { token: newToken, claims } : null);
+    setSession(next);
   }, []);
 
-  const logout = useCallback(() => {
-    localStorage.removeItem(STORAGE_KEY);
+  const logout = useCallback(async () => {
+    // R320: the API revokes the session and drops the cookie. Awaited: if the
+    // cookie outlived a "signed out" screen, a reload would quietly sign back in.
+    await cmsApiClient.logout().catch(() => undefined);
     clearCmsCache();
     setSession(null);
     // Signing out deliberately isn't an expiry — no "session expired" notice.
     setSessionExpired(false);
   }, []);
 
-  // The API is the authority on whether a token still works: it may be revoked
-  // or signed with a rotated secret long before `exp` says so.
+  // The API is the authority on whether a session still works: it may be
+  // revoked long before it expires.
   useEffect(() => {
     window.addEventListener(SESSION_EXPIRED_EVENT, endSession);
     return () => window.removeEventListener(SESSION_EXPIRED_EVENT, endSession);
@@ -106,20 +101,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // screen by itself instead of waiting for the next request to fail.
   useEffect(() => {
     if (!session) return undefined;
-    const timer = setTimeout(endSession, Math.min(session.claims.exp * 1000 - Date.now(), MAX_TIMEOUT_MS));
+    const timer = setTimeout(endSession, Math.min(Date.parse(session.expiresAt) - Date.now(), MAX_TIMEOUT_MS));
     return () => clearTimeout(timer);
   }, [session, endSession]);
 
   const value = useMemo(
     () => ({
-      token: session?.token ?? null,
-      role: session?.claims.role ?? null,
-      professionalId: session?.claims.professionalId ?? null,
+      status,
+      session,
+      role: session?.role ?? null,
+      professionalId: session?.professionalId ?? null,
       sessionExpired,
       login,
       logout,
     }),
-    [session, sessionExpired, login, logout],
+    [status, session, sessionExpired, login, logout],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

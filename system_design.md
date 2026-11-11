@@ -68,19 +68,19 @@ Locale resolution deliberately does **not** happen in the API. `apps/api` return
 
 Two separate identity systems, deliberately not unified:
 
-- **CMS (`TenantUser`)**: email + password, JWT-issued. Exactly one `owner` role per tenant (partial unique constraint); any number of `professional` roles, each optionally linked to a `Professional` business record via nullable `professional_id`. `owner` has full CMS access; `professional` is restricted to their own appointments and their own hours/time-off. Role enforcement happens in the API layer, not in Postgres — RLS scopes rows to a tenant, it has no concept of roles within a tenant. Deactivating a `Professional` record does not cascade to disable their login; the owner does that by hand.
+- **CMS (`TenantUser`)**: email + password, JWT-issued as an httpOnly session cookie (R320). Exactly one `owner` role per tenant (partial unique constraint); any number of `professional` roles, each optionally linked to a `Professional` business record via nullable `professional_id`. `owner` has full CMS access; `professional` is restricted to their own appointments and their own hours/time-off. Role enforcement happens in the API layer, not in Postgres — RLS scopes rows to a tenant, it has no concept of roles within a tenant. Deactivating a `Professional` record does not cascade to disable their login; the owner does that by hand.
 - **Public site customers**: no accounts at all. Each customer booking is a `Visit` (one or more single-professional appointments, R200) carrying a hashed, expiring access token; visiting `/manage/{token}` authorizes actions against that one visit only (details below).
 
 ### Magic Link Flow
 
-1. Customer books (name, phone, email — no signup).
+1. Customer books (name and a code-verified phone — no signup, no email, R270).
 2. Server generates a token, stores its hash + expiry (`end of the visit's last segment + 24h`) on the `Visit` row.
-3. Server emails a link to `/manage/{token}`.
+3. Server texts a link to `/manage/{token}` to that phone, and the confirmation screen shows it.
 4. The link scopes access to that single visit — all its segments, moved or cancelled together (R230). It's not a login, and it grants no access to any other booking.
 5. Rescheduling rotates the token (old one invalidated).
-6. Lost-link recovery: customer enters their phone number; server looks up upcoming, non-cancelled appointments for that number and re-sends valid tokens — rate-limited to prevent phone-number enumeration, and answering identically whether or not anything matched.
+6. Lost-link recovery: customer enters their phone number; server looks up upcoming, non-cancelled appointments for that number and texts fresh tokens — rate-limited to prevent phone-number enumeration, and answering identically whether or not anything matched. Re-sending replaces each link, so **while SMS delivery is stubbed it does nothing**: issuing a new link nobody receives would only destroy the customer's working one.
 
-**Delivery is stubbed.** The `NOTIFY` box in §2 is an interface with a log-only implementation; no mail provider is integrated. Until one is, `POST /public/appointments` returns the manage URL in its response so the flow is complete and testable end to end — the same approach already taken for professional invites (`InviteProfessionalResponse`). Swapping in a real provider is one class, not a refactor. Token generation, hashing, expiry and rotation are real regardless of how the link is delivered.
+**Delivery is stubbed.** The `NOTIFY` box in §2 is an interface with a log-only implementation; no SMS or mail provider is integrated. Until one is, `POST /public/appointments` returns the manage URL in its response (it always does — the confirmation screen shows it) so the flow is complete and testable end to end — the same approach already taken for professional invites (`InviteProfessionalResponse`). Swapping in a real provider is one class, not a refactor. Token generation, hashing, expiry and rotation are real regardless of how the link is delivered.
 
 ## 7. Domain & Tenant Routing
 
@@ -91,7 +91,7 @@ Two separate identity systems, deliberately not unified:
 ## 8. Caching Strategy (Redis)
 
 - **Domain → tenant_id resolution**: on the hot path for every public-site request; short TTL or explicit invalidation on tenant domain changes.
-- **Computed availability**: short-TTL cache per tenant/professional/day, since slots shift with every booking — not a substitute for the source-of-truth query, just load-shedding.
+- **Computed availability**: the public visit-slot answer is cached for 60s per tenant and query, under a per-tenant version that every committed tenant-scoped write bumps (`PrismaService.forTenant` reports writes; nothing has to remember to invalidate). A stale entry can only ever show a slot that a booking then re-checks (R260) — never write anything. Cached slots are re-filtered by the clock on read.
 - Redis is not used as a system of record anywhere — losing it degrades latency (falls back to Postgres) rather than losing data.
 
 ## 9. Onboarding (current, manual)
@@ -131,6 +131,14 @@ The shared-tables-plus-RLS decision doesn't change at any of these points — wh
 | P95 < 300ms | Redis-cached domain resolution on the hot path; flagged as an aggressive target worth validating against cold-cache/custom-domain cases early |
 | Mobile-first | `public-site` design constraint, not an infra concern |
 | Every table tenant-scoped | Postgres RLS on every table, enforced via `TenantContextService`, no exceptions |
+
+## 12a. Operations & Security
+
+- **Health**: `GET /health` (process up) and `GET /health/ready` (Postgres and Redis reachable) — the platform's health check uses the latter.
+- **Error tracking**: Sentry in all three apps, enabled by a DSN env var and silent without one. Server-side only 5xx and unexpected errors are reported, tagged with the tenant. Every event and breadcrumb passes through `scrubEvent` first, which strips the credentials that ride in URLs (manage, reset and invite tokens, hold ids).
+- **Rate limits (R330)**: fixed windows in Redis (one atomic INCR + EXPIRE NX), keyed by salon and client address and, where it matters, by account or phone. The client address is Fastify's `request.ip` with `trustProxy` set to exactly the platform's proxy hop (`TRUST_PROXY`, never blanket trust — a client could otherwise pick its own address); for public calls, which the public site's server makes on a visitor's behalf, the visitor is named in `X-Visitor-IP` and believed only alongside the shared `PUBLIC_SITE_API_KEY`. Like the other Redis uses, a Redis outage fails open rather than taking booking offline — and fails fast: Redis commands time out after 1s with no offline queue, so 'open' never means 'hung'.
+- **Sessions (R320)**: the JWT travels only in an httpOnly, SameSite=Strict, Secure (in production) cookie scoped to `/cms`, so an injected script has no token to steal; the CMS learns who is signed in from `GET /cms/auth/me`. JWTs carry a session id and the user's session version; the guard rejects a revoked session id (Redis, until the token's own expiry) or a stale version (Postgres) on every request. CSRF: SameSite=Strict, plus every non-GET `/cms` request must send `X-Requested-With: booking-cms`, which a cross-site form can't and a cross-origin script can't without a CORS preflight that only the CMS origin passes. **Deployment constraint:** the CMS and the API must share a registrable domain (e.g. `cms.example.com` and `api.example.com`), or the browser won't send a Strict cookie.
+- **Headers**: the API sends security headers (Helmet); the public site sets them in `next.config`; the CMS ships a Content-Security-Policy in its HTML. Swagger (`/docs`) is off in production.
 
 ## 13. Open Items
 

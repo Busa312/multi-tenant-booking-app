@@ -330,12 +330,13 @@ describe("BookingService.create", () => {
       expect(createdData(tx).email).toBe("");
     });
 
-    it("trims a supplied email", async () => {
+    // R270: not collected any more, even if a client still sends one
+    it("never stores an email", async () => {
       const { service, tx } = setup();
 
-      await service.create(createInput({ email: " nino@example.com " }));
+      await service.create(createInput({ email: "nino@example.com" }));
 
-      expect(createdData(tx).email).toBe("nino@example.com");
+      expect(createdData(tx).email).toBe("");
     });
 
     it("normalises blank notes to null", async () => {

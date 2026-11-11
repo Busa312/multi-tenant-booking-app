@@ -5,6 +5,7 @@ import { AuthProvider } from "./auth/AuthContext.js";
 import { I18nProvider } from "./i18n/I18nContext.js";
 import { App } from "./App.js";
 import { applyStoredTheme } from "./lib/theme.js";
+import { initSentry } from "./lib/sentry.js";
 import "./index.css";
 
 const RELOAD_KEY = "booking_cms_chunk_reload";
@@ -37,6 +38,7 @@ window.addEventListener("vite:preloadError", (event) => {
   window.location.reload();
 });
 
+initSentry();
 applyStoredTheme();
 
 createRoot(document.getElementById("root")!).render(

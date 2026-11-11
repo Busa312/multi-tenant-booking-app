@@ -1,5 +1,6 @@
 import { Component, type ErrorInfo, type ReactNode } from "react";
 import { ErrorScreen, type ErrorKind } from "./ErrorScreen.js";
+import { reportError } from "../lib/sentry.js";
 
 /**
  * Lowercased substrings of the message browsers use when a dynamic `import()`
@@ -58,9 +59,10 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
   }
 
   override componentDidCatch(error: Error, info: ErrorInfo): void {
-    // No error reporting service is wired up yet; the console is what a
-    // developer reproducing a report has to work with.
     console.error("Unhandled error in the route tree:", error, info.componentStack);
+    // A stale tab (a chunk from before a deploy) is expected and fixed by the
+    // reload this screen offers — not worth an alert.
+    if (classify(error) === "crash") reportError(error, info.componentStack);
   }
 
   override render(): ReactNode {

@@ -45,6 +45,9 @@ export class TenantDto {
   @ApiProperty({ type: TenantConfigDto }) configJson!: TenantConfigDto;
   @ApiProperty({ description: "R220: longest gap in minutes between consecutive visit segments (0–60)" })
   maxVisitGapMinutes!: number;
+  @ApiProperty({ description: "R280: minutes" }) minBookingNoticeMinutes!: number;
+  @ApiProperty({ description: "R290: days" }) maxBookingAdvanceDays!: number;
+  @ApiProperty({ description: "R300: hours" }) changeCutoffHours!: number;
   @ApiProperty() createdAt!: string;
 }
 
@@ -150,6 +153,17 @@ export class SetPasswordRequestDto {
   @ApiProperty() tenantId!: string;
   @ApiProperty() token!: string;
   @ApiProperty() password!: string;
+}
+
+export class ForgotPasswordRequestDto {
+  @ApiProperty() subdomain!: string;
+  @ApiProperty() email!: string;
+}
+
+export class ResetPasswordRequestDto {
+  @ApiProperty() tenantId!: string;
+  @ApiProperty() token!: string;
+  @ApiProperty({ description: "R310: at least 10 characters, at most 72 bytes" }) password!: string;
 }
 
 export class ServiceDto {
@@ -314,7 +328,6 @@ export class CreateCmsAppointmentRequestDto {
   @ApiProperty({ example: "14:00", description: "HH:mm, tenant timezone" }) time!: string;
   @ApiProperty() userName!: string;
   @ApiProperty() phoneNumber!: string;
-  @ApiPropertyOptional() email?: string;
   @ApiPropertyOptional() notes?: string;
   @ApiPropertyOptional({ description: "R60: book despite the conflicts the 409 named" }) override?: boolean;
 }
@@ -393,8 +406,6 @@ export class CreateAppointmentRequestDto {
   @ApiProperty({ example: "14:00", description: "HH:mm, tenant timezone" }) time!: string;
   @ApiProperty() userName!: string;
   @ApiProperty() phoneNumber!: string;
-  @ApiPropertyOptional({ description: "R30: optional — without it the link can't be emailed or re-sent" })
-  email?: string;
   @ApiProperty({ description: "From POST /public/verification/verify" }) verificationToken!: string;
   @ApiPropertyOptional({ description: "R250: the hold from POST /public/holds — optional, used up by the booking" })
   holdId?: string;
@@ -402,10 +413,9 @@ export class CreateAppointmentRequestDto {
 
 export class CreateAppointmentResponseDto {
   @ApiProperty({ type: VisitDto }) visit!: VisitDto;
-  @ApiProperty({
-    description: "The customer's magic link — returned because email delivery is stubbed (no provider wired in)",
-  })
+  @ApiProperty({ description: "The customer's magic link — always returned, so the confirmation screen can show it" })
   manageUrl!: string;
+  @ApiProperty({ description: "R270: also texted to the verified phone (false while SMS is mocked)" }) linkTexted!: boolean;
 }
 
 export class RescheduleAppointmentRequestDto {
@@ -460,11 +470,15 @@ export class HoldSlotResponseDto {
 export class RescheduleVisitResponseDto {
   @ApiProperty({ type: VisitDto }) visit!: VisitDto;
   @ApiProperty({ description: "R110: the rotated link — the one the caller used is dead now" }) manageUrl!: string;
+  @ApiProperty({ description: "R270" }) linkTexted!: boolean;
 }
 
 export class UpdateTenantBookingRulesRequestDto {
-  @ApiProperty({ enum: [0, 5, 10, 15, 20, 30, 45, 60], description: "R220: longest gap between visit segments" })
-  maxVisitGapMinutes!: number;
+  @ApiPropertyOptional({ enum: [0, 5, 10, 15, 20, 30, 45, 60], description: "R220: longest gap between visit segments" })
+  maxVisitGapMinutes?: number;
+  @ApiPropertyOptional({ description: "R280: minutes; one of BOOKING_NOTICE_OPTIONS" }) minBookingNoticeMinutes?: number;
+  @ApiPropertyOptional({ description: "R290: days; one of BOOKING_ADVANCE_OPTIONS" }) maxBookingAdvanceDays?: number;
+  @ApiPropertyOptional({ description: "R300: hours; one of CHANGE_CUTOFF_OPTIONS" }) changeCutoffHours?: number;
 }
 
 export class LoginRequestDto {
@@ -473,8 +487,13 @@ export class LoginRequestDto {
   @ApiProperty() password!: string;
 }
 
-export class LoginResponseDto {
-  @ApiProperty() accessToken!: string;
+// R320: the session's description — the token itself is only ever in the cookie
+export class CmsSessionDto {
+  @ApiProperty() userId!: string;
+  @ApiProperty() tenantId!: string;
+  @ApiProperty({ enum: ["owner", "professional"] }) role!: "owner" | "professional";
+  @ApiProperty({ nullable: true, type: String }) professionalId!: string | null;
+  @ApiProperty() expiresAt!: string;
 }
 
 export class UpdateTenantConfigRequestDto {

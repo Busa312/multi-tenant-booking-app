@@ -34,7 +34,6 @@ export interface CreateBookingInput {
   time: string;
   userName: string;
   phoneNumber: string;
-  email?: string | null;
   notes?: string | null;
 
   createdByUserId: string | null;
@@ -110,7 +109,8 @@ export class BookingService {
           locationId,
           userName,
           phoneNumber,
-          email: input.email?.trim() ?? "",
+          // R270: no longer collected; the column stays for older bookings
+          email: "",
           startAt,
           // R40: derived from the summed service durations
 

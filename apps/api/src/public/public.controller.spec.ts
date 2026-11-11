@@ -1,13 +1,12 @@
 import { BadRequestException, ConflictException, HttpException } from "@nestjs/common";
-import type { FastifyRequest } from "fastify";
 import { Prisma } from "../../generated/prisma/index.js";
-import { PublicController, visitorIp } from "./public.controller.js";
+import { PublicController } from "./public.controller.js";
 import { HoldLimitError } from "../booking/visit.service.js";
 import type { AvailabilityService } from "../booking/availability.service.js";
 import type { VisitService } from "../booking/visit.service.js";
 import type { NotificationService } from "../notifications/notification.service.js";
 import type { PrismaService } from "../prisma/prisma.service.js";
-import type { RedisService } from "../redis/redis.service.js";
+import type { RateLimitService } from "../rate-limit/rate-limit.service.js";
 import type { VerificationService } from "./verification.service.js";
 import type { TenantContextService } from "../tenant/tenant-context.service.js";
 
@@ -25,7 +24,9 @@ const NOW = new Date("2026-08-05T00:00:00.000Z");
 const FUTURE = new Date("2026-08-06T00:00:00.000Z");
 
 interface Overrides {
-  counters?: number[];
+  /** RateLimitService verdicts, in call order. */
+  limits?: boolean[];
+  smsWorks?: boolean;
   resendable?: unknown[];
   reissued?: string | null;
 }
@@ -84,7 +85,10 @@ const setup = (overrides: Overrides = {}) => {
     release: jest.fn().mockResolvedValue(undefined),
   };
   const notifications = {
-    sendMagicLink: jest.fn().mockResolvedValue(undefined),
+    // Mocked delivery, as in production today: not sent.
+    sendMagicLink: jest.fn().mockResolvedValue(false),
+    // Resend tests assume a working provider unless they say otherwise.
+    canDeliverSms: jest.fn().mockReturnValue(overrides.smsWorks ?? true),
     // Mocked delivery: false means "not sent", which is what makes the
     // controller hand the code back on the response.
     sendOtp: jest.fn().mockResolvedValue(false),
@@ -95,14 +99,12 @@ const setup = (overrides: Overrides = {}) => {
     consume: jest.fn().mockResolvedValue(undefined),
   };
 
-  const counters = overrides.counters ?? [];
+  // R330: each call answers the next scripted verdict (allowed unless told otherwise)
+  const verdicts = overrides.limits ?? [];
   let call = 0;
-  const redis = {
-    client: {
-      incr: jest.fn(() => Promise.resolve(counters[call++] ?? 1)),
-      expire: jest.fn().mockResolvedValue(1),
-    },
-  } as unknown as RedisService;
+  const limits = {
+    hit: jest.fn(() => Promise.resolve({ allowed: verdicts[call++] ?? true, retryAfterSeconds: 0 })),
+  };
 
   const controller = new PublicController(
     prisma,
@@ -110,11 +112,11 @@ const setup = (overrides: Overrides = {}) => {
     availability as unknown as AvailabilityService,
     visits as unknown as VisitService,
     notifications as unknown as NotificationService,
-    redis,
+    limits as unknown as RateLimitService,
     verification as unknown as VerificationService,
   );
 
-  return { controller, availability, visits, notifications, redis, verification };
+  return { controller, availability, visits, notifications, limits, verification };
 };
 
 const bookingInput = (overrides: Record<string, unknown> = {}) => ({
@@ -180,7 +182,7 @@ describe("manage", () => {
 
     expect(result.manageUrl).toBe("https://acme.platform.ge/manage/rotated");
     expect(notifications.sendMagicLink).toHaveBeenCalledWith(
-      expect.objectContaining({ email: "nino@example.com", manageUrl: "https://acme.platform.ge/manage/rotated" }),
+      expect.objectContaining({ phoneNumber: "+995555123456", manageUrl: "https://acme.platform.ge/manage/rotated" }),
     );
   });
 
@@ -225,7 +227,7 @@ describe("resend", () => {
   });
 
   it("stops sending past the per-phone limit, still without saying so", async () => {
-    const { controller, notifications } = setup({ counters: [4, 4], resendable });
+    const { controller, notifications } = setup({ limits: [false], resendable });
 
     await expect(controller.resendMagicLink({ phoneNumber: "+995555123456" })).resolves.toBeUndefined();
     expect(notifications.sendMagicLink).not.toHaveBeenCalled();
@@ -234,80 +236,79 @@ describe("resend", () => {
   it("does not spend the tenant budget on a number that is already blocked", async () => {
     // Otherwise one caller hammering a single number exhausts the hourly tenant
     // allowance and locks every other customer out of link recovery.
-    const { controller, redis } = setup({ counters: [4], resendable });
+    const { controller, limits } = setup({ limits: [false], resendable });
 
     await controller.resendMagicLink({ phoneNumber: "+995555123456" });
 
-    expect(redis.client.incr).toHaveBeenCalledTimes(1);
+    expect(limits.hit).toHaveBeenCalledTimes(1);
   });
 
   it("stops on the per-tenant limit even when each number is fresh", async () => {
-    const { controller, notifications } = setup({ counters: [1, 31], resendable });
+    const { controller, notifications } = setup({ limits: [true, false], resendable });
 
     await controller.resendMagicLink({ phoneNumber: "+995555000001" });
 
     expect(notifications.sendMagicLink).not.toHaveBeenCalled();
   });
 
-  it("expires the counter only on first use, so the window can't be held open", async () => {
-    const { controller, redis } = setup({ counters: [1, 2] });
+  // R270: to the number asked about — the caller never sees the link
+  it("texts the fresh link to the phone the visit was booked with", async () => {
+    const { controller, notifications } = setup({ resendable });
 
     await controller.resendMagicLink({ phoneNumber: "+995555123456" });
 
-    expect(redis.client.expire).toHaveBeenCalledTimes(1);
+    expect(notifications.sendMagicLink).toHaveBeenCalledWith(
+      expect.objectContaining({ phoneNumber: "+995555123456", manageUrl: "https://acme.platform.ge/manage/fresh" }),
+    );
   });
 
-  it("lets requests through when Redis is down rather than breaking recovery", async () => {
-    const { controller, notifications, redis } = setup({ resendable });
-    (redis.client.incr as jest.Mock).mockRejectedValue(new Error("connection refused"));
+  // The review's case: with texts going nowhere, re-sending would only kill the customer's link
+  it("does nothing at all while texts can't be delivered — never replaces a link it can't send", async () => {
+    const { controller, visits } = setup({ smsWorks: false, resendable });
 
-    await controller.resendMagicLink({ phoneNumber: "+995555123456" });
+    await expect(controller.resendMagicLink({ phoneNumber: "+995555123456" })).resolves.toBeUndefined();
 
-    expect(notifications.sendMagicLink).toHaveBeenCalled();
+    expect(visits.findResendable).not.toHaveBeenCalled();
+    expect(visits.reissue).not.toHaveBeenCalled();
   });
 
-  it("ignores a blank phone number without touching Redis or the database", async () => {
-    const { controller, visits, redis } = setup();
+  it("ignores a blank phone number without counting it or touching the database", async () => {
+    const { controller, visits, limits } = setup();
 
     await controller.resendMagicLink({ phoneNumber: "   " });
 
-    expect(redis.client.incr).not.toHaveBeenCalled();
+    expect(limits.hit).not.toHaveBeenCalled();
     expect(visits.findResendable).not.toHaveBeenCalled();
   });
 });
 
-/**
- * R30: an email is optional on the public form, exactly as it is for a booking
- * staff take by phone. The rule these pin is that the booking always succeeds
- * and always yields a link — only the *delivery* depends on an address.
- */
-describe("booking without an email", () => {
-  it("books with no email at all and still returns the link", async () => {
-    const { controller, notifications } = setup();
+// R270: no email anywhere — the link goes to the verified phone
+describe("the manage link", () => {
+  it("is always returned, so the confirmation screen can show it", async () => {
+    const { controller } = setup();
 
     const result = await controller.createAppointment(bookingInput());
 
     expect(result.manageUrl).toBe("https://acme.platform.ge/manage/issued");
-    expect(notifications.sendMagicLink).not.toHaveBeenCalled();
   });
 
-  it("treats a blank email as absent rather than mailing nowhere", async () => {
-    const { controller, notifications, visits } = setup();
-
-    await controller.createAppointment(bookingInput({ email: "   " }));
-
-    expect(visits.create).toHaveBeenCalledWith(expect.objectContaining({ email: "" }));
-    expect(notifications.sendMagicLink).not.toHaveBeenCalled();
-  });
-
-  it("still emails the link when an address is given", async () => {
+  it("is texted to the verified phone, and says whether that actually happened", async () => {
     const { controller, notifications } = setup();
 
-    await controller.createAppointment(bookingInput({ email: " nino@example.com " }));
+    const result = await controller.createAppointment(bookingInput());
 
     expect(notifications.sendMagicLink).toHaveBeenCalledWith(
-      expect.objectContaining({ email: "nino@example.com", manageUrl: "https://acme.platform.ge/manage/issued" }),
+      expect.objectContaining({ phoneNumber: "+995555123456", manageUrl: "https://acme.platform.ge/manage/issued" }),
     );
+    expect(result.linkTexted).toBe(false);
+  });
+
+  it("never passes an email on, even if a client still sends one", async () => {
+    const { controller, visits } = setup();
+
+    await controller.createAppointment(bookingInput({ email: "nino@example.com" }));
+
+    expect(visits.create.mock.calls[0]?.[0]).not.toHaveProperty("email");
   });
 });
 
@@ -333,7 +334,6 @@ describe("creating a visit", () => {
 
 // R250
 describe("holds", () => {
-  const req = { ip: "10.0.0.5" } as FastifyRequest;
   const holdInput = (overrides: Record<string, unknown> = {}) => ({
     serviceIds: ["s1"],
     professionalIds: ["any"],
@@ -346,7 +346,7 @@ describe("holds", () => {
   it("answers with the hold's id, expiry and the plan actually held", async () => {
     const { controller } = setup();
 
-    await expect(controller.holdSlot(holdInput(), undefined, req)).resolves.toEqual({
+    await expect(controller.holdSlot(holdInput())).resolves.toEqual({
       holdId: HOLD,
       expiresAt: FUTURE.toISOString(),
       slot: { startAt: "x", endAt: "y", segments: [] },
@@ -356,8 +356,8 @@ describe("holds", () => {
   it("passes a previous hold on to be replaced, and drops one that isn't a hold id", async () => {
     const { controller, visits } = setup();
 
-    await controller.holdSlot(holdInput({ replaceHoldId: HOLD }), undefined, req);
-    await controller.holdSlot(holdInput({ replaceHoldId: "'; drop table" }), undefined, req);
+    await controller.holdSlot(holdInput({ replaceHoldId: HOLD }));
+    await controller.holdSlot(holdInput({ replaceHoldId: "'; drop table" }));
 
     expect(visits.hold.mock.calls.map(([input]) => input.replaceHoldId)).toEqual([HOLD, null]);
   });
@@ -366,48 +366,20 @@ describe("holds", () => {
     const { controller, visits } = setup();
     visits.hold.mockRejectedValue(new ConflictException({ code: "booking_conflict", conflicts: [] }));
 
-    await expect(controller.holdSlot(holdInput(), undefined, req)).rejects.toThrow(ConflictException);
+    await expect(controller.holdSlot(holdInput())).rejects.toThrow(ConflictException);
   });
 
-  it("answers 429 past the per-visitor limit, without planning anything", async () => {
-    const { controller, visits } = setup({ counters: [21] });
-
-    const error = await controller.holdSlot(holdInput(), undefined, req).catch((e: unknown) => e);
-
-    expect(error).toBeInstanceOf(HttpException);
-    expect((error as HttpException).getStatus()).toBe(429);
-    expect(visits.hold).not.toHaveBeenCalled();
-  });
 
   it("answers 429 when the tenant's live-hold cap is hit", async () => {
     const { controller, visits } = setup();
     visits.hold.mockRejectedValue(new HoldLimitError("cap"));
 
-    const error = await controller.holdSlot(holdInput(), undefined, req).catch((e: unknown) => e);
+    const error = await controller.holdSlot(holdInput()).catch((e: unknown) => e);
 
     expect((error as HttpException).getStatus()).toBe(429);
   });
 
-  it("counts per visitor, by the address the public site forwards", async () => {
-    const { controller, redis } = setup();
 
-    await controller.holdSlot(holdInput(), "203.0.113.7, 10.0.0.1", req);
-    await controller.holdSlot(holdInput(), "198.51.100.2", req);
-
-    const keys = (redis.client.incr as jest.Mock).mock.calls.map(([key]) => key as string);
-    expect(keys[0]).toMatch(new RegExp(`^hold:${TENANT_ID}:`));
-    expect(keys[0]).not.toBe(keys[1]);
-    expect(keys.join()).not.toContain("203.0.113.7");
-  });
-
-  it("still holds when Redis is down — the limit fails open", async () => {
-    const { controller, redis, visits } = setup();
-    (redis.client.incr as jest.Mock).mockRejectedValue(new Error("down"));
-
-    await controller.holdSlot(holdInput(), undefined, req);
-
-    expect(visits.hold).toHaveBeenCalled();
-  });
 
   it("releases a hold, and quietly ignores anything that isn't a hold id", async () => {
     const { controller, visits } = setup();
@@ -435,11 +407,6 @@ describe("holds", () => {
     expect(availability.computeVisitSlots).toHaveBeenCalledWith(expect.objectContaining({ holdId: HOLD }));
   });
 
-  it("reads the first hop of x-forwarded-for, falling back to the socket", () => {
-    expect(visitorIp("203.0.113.7, 10.0.0.1", "10.0.0.5")).toBe("203.0.113.7");
-    expect(visitorIp(undefined, "10.0.0.5")).toBe("10.0.0.5");
-    expect(visitorIp("  ", "10.0.0.5")).toBe("10.0.0.5");
-  });
 });
 
 describe("phone verification gate", () => {

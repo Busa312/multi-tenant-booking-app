@@ -1,9 +1,11 @@
 import { useState, type FormEvent } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+import { MIN_PASSWORD_LENGTH } from "@booking/shared-types";
 import { ApiError } from "@booking/api-client";
 import { useAuth } from "../auth/AuthContext.js";
 import { useI18n } from "../i18n/I18nContext.js";
 import { cmsApiClient } from "../lib/api.js";
+import { passwordProblem } from "../lib/passwordRules.js";
 import { AuthLayout } from "../components/AuthLayout.js";
 import { Alert, Button, Field, TextInput } from "../components/ui/index.js";
 
@@ -24,12 +26,10 @@ export function SetPasswordPage() {
     e.preventDefault();
     setError(null);
 
-    if (password.length < 8) {
-      setError(t("setPassword.errTooShort"));
-      return;
-    }
-    if (password !== confirm) {
-      setError(t("setPassword.errMismatch"));
+    // R310: the same rules the API enforces
+    const problem = passwordProblem(password, confirm);
+    if (problem) {
+      setError(t(problem, { min: MIN_PASSWORD_LENGTH }));
       return;
     }
     if (!tenantId || !token) {
@@ -39,11 +39,21 @@ export function SetPasswordPage() {
 
     setSubmitting(true);
     try {
-      const { accessToken } = await cmsApiClient.setPassword({ tenantId, token, password });
-      login(accessToken);
+      login(await cmsApiClient.setPassword({ tenantId, token, password }));
       navigate("/");
     } catch (err) {
-      setError(t(err instanceof ApiError ? "setPassword.errLinkExpired" : "common.somethingWrong"));
+      setError(
+        t(
+          err instanceof ApiError
+            ? err.status === 429
+              ? "forgotPassword.errTooMany"
+              : err.status === 400
+                ? "setPassword.errTooShort"
+                : "setPassword.errLinkExpired"
+            : "common.somethingWrong",
+          { min: MIN_PASSWORD_LENGTH },
+        ),
+      );
     } finally {
       setSubmitting(false);
     }

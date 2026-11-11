@@ -13,6 +13,7 @@ import {
 } from "../common/timezone.js";
 import { resolveServiceLines, totalDurationMinutes, validateServiceIds } from "./service-lines.js";
 import { VISIT_GAP_STEP_MINUTES } from "./booking-rules.js";
+import { AvailabilityCacheService } from "./availability-cache.service.js";
 import {
   groupPlannedUnits,
   planVisitAt,
@@ -112,6 +113,7 @@ export class AvailabilityService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly tenantContext: TenantContextService,
+    private readonly cache: AvailabilityCacheService,
   ) {}
 
   async computeSlots(input: AvailabilityInput): Promise<AvailabilitySlot[]> {
@@ -324,6 +326,11 @@ export class AvailabilityService {
       throw new BadRequestException("professionalIds must have one entry per service");
     }
 
+    // Load-shedding (system_design.md §8); see AvailabilityCacheService. The
+    // key is fixed here, before anything is read, and reused to store.
+    const cached = await this.cache.lookup(tenantId, query);
+    if (cached.slots) return cached.slots;
+
     return this.prisma.forTenant(async (tx) => {
       // R120: a deactivated (or unknown) service is refused here
       const lines = await resolveServiceLines(tx, tenantId, query.serviceIds);
@@ -332,13 +339,16 @@ export class AvailabilityService {
         serviceIds: [line.serviceId],
         professionalId: query.professionalIds[index] ?? null,
       }));
-      const plans = await this.visitPlansIn(tx, {
+      // The planner's load already read the tenant's notice; reused for the cache.
+      const { planner, starts, noticeMs } = await this.loadVisitPlanner(tx, {
         units,
         locationId: query.locationId,
         date: query.date,
         excludeHoldId: query.holdId ?? null,
       });
-      return AvailabilityService.toVisitSlots(plans, units);
+      const slots = AvailabilityService.toVisitSlots(planVisits(planner, starts), units);
+      await this.cache.store(cached.key, { noticeMs, slots });
+      return slots;
     });
   }
 
@@ -379,26 +389,35 @@ export class AvailabilityService {
   private async loadVisitPlanner(
     tx: Prisma.TransactionClient,
     input: VisitPlanInput,
-  ): Promise<{ planner: PlannerInput; starts: number[] }> {
+  ): Promise<{ planner: PlannerInput; starts: number[]; noticeMs: number }> {
     const { tenantId } = this.tenantContext.current;
     const date = this.validateDate(input.date);
 
-    const { timezone, maxVisitGapMinutes } = await tx.tenant.findUniqueOrThrow({
-      where: { id: tenantId },
-      select: { timezone: true, maxVisitGapMinutes: true },
-    });
+    const { timezone, maxVisitGapMinutes, minBookingNoticeMinutes, maxBookingAdvanceDays } =
+      await tx.tenant.findUniqueOrThrow({
+        where: { id: tenantId },
+        select: { timezone: true, maxVisitGapMinutes: true, minBookingNoticeMinutes: true, maxBookingAdvanceDays: true },
+      });
 
-    const candidates = await this.visitCandidates(tx, tenantId, input);
+    const noticeMs = minBookingNoticeMinutes * 60_000;
     const emptyPlanner: PlannerInput = {
       units: [],
       schedules: new Map(),
       maxGapMinutes: maxVisitGapMinutes,
       gapStepMinutes: VISIT_GAP_STEP_MINUTES,
-      notBefore: Date.now(),
+      // R280: nothing starts sooner than the salon's notice
+      notBefore: Date.now() + noticeMs,
     };
+    // R290: nothing on a day past the salon's horizon (counted from today on its clock)
+    const lastBookableDate = addDaysToDateString(zonedDateString(new Date(), timezone), maxBookingAdvanceDays);
+    if (date > lastBookableDate) {
+      return { planner: emptyPlanner, starts: [], noticeMs };
+    }
+
+    const candidates = await this.visitCandidates(tx, tenantId, input);
     // R240: a unit nobody can perform means the visit can't be planned at all.
     if (candidates.some((list) => list.length === 0)) {
-      return { planner: emptyPlanner, starts: [] };
+      return { planner: emptyPlanner, starts: [], noticeMs };
     }
 
     const ids = unique(candidates.flat());
@@ -460,6 +479,7 @@ export class AvailabilityService {
         schedules,
       },
       starts,
+      noticeMs,
     };
   }
 

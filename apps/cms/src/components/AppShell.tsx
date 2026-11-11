@@ -132,7 +132,7 @@ export function AppShell({ title, subtitle, tenantSubdomain, children }: AppShel
               </div>
               <button
                 type="button"
-                onClick={logout}
+                onClick={() => void logout()}
                 className="text-xs font-medium text-base-content/60 hover:text-primary"
               >
                 {t("shell.signOut")}

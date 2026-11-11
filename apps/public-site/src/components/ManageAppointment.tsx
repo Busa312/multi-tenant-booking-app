@@ -5,7 +5,7 @@ import { localized } from "@booking/shared-types";
 import type { Visit } from "@booking/shared-types";
 import { translator, type Locale, type Messages } from "@/i18n/locales";
 import { cancelBooking, rescheduleBooking } from "@/lib/actions";
-import { formatInstant } from "@/lib/tenant-time";
+import { addDays, formatInstant, todayInTimezone } from "@/lib/tenant-time";
 import { RescheduleDialog } from "./RescheduleDialog";
 import { VisitPlan } from "./VisitPlan";
 import { CancelDialog } from "./CancelDialog";
@@ -18,9 +18,22 @@ interface ManageAppointmentProps {
   locale: Locale;
   defaultLocale: string;
   messages: Messages;
+  /** R300: online changes stop this many hours before the visit. */
+  changeCutoffHours: number;
+  /** R290 */
+  maxAdvanceDays: number;
 }
 
-export function ManageAppointment({ visit, token, timezone, locale, defaultLocale, messages }: ManageAppointmentProps) {
+export function ManageAppointment({
+  visit,
+  token,
+  timezone,
+  locale,
+  defaultLocale,
+  messages,
+  changeCutoffHours,
+  maxAdvanceDays,
+}: ManageAppointmentProps) {
   const t = useMemo(() => translator(messages), [messages]);
   // R160: service, branch and specialist names in the visitor's language
   const text = useCallback(
@@ -38,10 +51,20 @@ export function ManageAppointment({ visit, token, timezone, locale, defaultLocal
   const isCancelled = current.status === "cancelled";
 
   const isActionable = current.status === "booked" && new Date(current.startAt) > new Date();
+  // R300: the API decides; this only spares the customer a dialog that would
+  // be refused. `locked` catches a 403 from a page left open past the cutoff.
+  const [locked, setLocked] = useState(false);
+  const pastCutoff = Date.now() >= new Date(current.startAt).getTime() - changeCutoffHours * 3_600_000;
+  const canChange = isActionable && !pastCutoff && !locked;
 
   const reschedule = async (date: string, time: string) => {
     const result = await rescheduleBooking(activeToken, date, time);
     if (!result.ok) {
+      if (result.reason === "tooLate") {
+        setLocked(true);
+        setDialog(null);
+        return false;
+      }
       setError(result.reason === "conflict" ? t("booking.details.slotTaken") : t("common.somethingWrong"));
       return false;
     }
@@ -59,6 +82,11 @@ export function ManageAppointment({ visit, token, timezone, locale, defaultLocal
   const cancel = async () => {
     const result = await cancelBooking(activeToken);
     if (!result.ok) {
+      if (result.reason === "tooLate") {
+        setLocked(true);
+        setDialog(null);
+        return;
+      }
       setError(t("common.somethingWrong"));
       return;
     }
@@ -117,7 +145,13 @@ export function ManageAppointment({ visit, token, timezone, locale, defaultLocal
         </p>
       )}
 
-      {isActionable && (
+      {isActionable && !canChange && (
+        <p className="alert alert-soft alert-info" role="status">
+          {t("manage.tooLate")}
+        </p>
+      )}
+
+      {canChange && (
         <div className="flex flex-col gap-3 sm:flex-row">
           <button type="button" className="btn btn-primary" onClick={() => setDialog("reschedule")}>
             {t("manage.reschedule")}
@@ -133,6 +167,7 @@ export function ManageAppointment({ visit, token, timezone, locale, defaultLocal
           visit={current}
           token={activeToken}
           timezone={timezone}
+          lastDate={addDays(todayInTimezone(timezone), maxAdvanceDays)}
           locale={locale}
           onConfirm={reschedule}
           onClose={() => setDialog(null)}

@@ -17,6 +17,10 @@ export interface Tenant {
   configJson: TenantConfig;
   // R220: longest gap, in minutes, between consecutive segments of a visit
   maxVisitGapMinutes: number;
+  // R280–R300: what customers may do online
+  minBookingNoticeMinutes: number;
+  maxBookingAdvanceDays: number;
+  changeCutoffHours: number;
   createdAt: string;
 }
 

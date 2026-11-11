@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { ApiError } from "@booking/api-client";
 import { useAuth } from "../auth/AuthContext.js";
 import { useI18n } from "../i18n/I18nContext.js";
@@ -24,11 +24,19 @@ export function LoginPage() {
     setError(null);
     setSubmitting(true);
     try {
-      const { accessToken } = await cmsApiClient.login({ subdomain, email, password });
-      login(accessToken);
+      login(await cmsApiClient.login({ subdomain, email, password }));
       navigate("/");
     } catch (err) {
-      setError(t(err instanceof ApiError ? "login.errorInvalid" : "common.somethingWrong"));
+      // R330: a locked account (too many failures) says so, rather than "wrong password" forever
+      setError(
+        t(
+          err instanceof ApiError
+            ? err.status === 429
+              ? "login.errorLocked"
+              : "login.errorInvalid"
+            : "common.somethingWrong",
+        ),
+      );
     } finally {
       setSubmitting(false);
     }
@@ -72,9 +80,16 @@ export function LoginPage() {
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           placeholder={t("common.passwordPlaceholder")}
+          autoComplete="current-password"
           required
         />
       </Field>
+      {/* R310 */}
+      <div className="-mt-2 mb-4 text-right">
+        <Link to="/forgot-password" className="link link-hover text-sm">
+          {t("login.forgot")}
+        </Link>
+      </div>
 
       {/* Says why they're back here, rather than leaving a timed-out session
           looking like the app forgot them. A live credential error wins. */}

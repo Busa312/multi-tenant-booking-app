@@ -6,12 +6,14 @@ import { getPublicApiClient } from "./api";
 
 export type ActionResult<T> = ({ ok: true } & T) | { ok: false; reason: FailureReason };
 
-export type FailureReason = "conflict" | "invalid" | "notFound" | "limit" | "unknown";
+// tooLate (R300): inside the salon's cutoff — changes go through the salon now
+export type FailureReason = "conflict" | "invalid" | "notFound" | "limit" | "tooLate" | "unknown";
 
 function toFailure(error: unknown): { ok: false; reason: FailureReason } {
   if (error instanceof ApiError) {
     if (error.status === 409) return { ok: false, reason: "conflict" };
     if (error.status === 429) return { ok: false, reason: "limit" };
+    if (error.status === 403) return { ok: false, reason: "tooLate" };
     if (error.status === 404) return { ok: false, reason: "notFound" };
     if (error.status === 400) return { ok: false, reason: "invalid" };
   }
@@ -88,7 +90,6 @@ export interface BookingRequest {
   time: string;
   userName: string;
   phoneNumber: string;
-  email?: string;
   verificationToken: string;
   // R250: the hold taken when the time was picked, used up by the booking
   holdId?: string;
@@ -129,7 +130,7 @@ export async function releaseHold(holdId: string): Promise<{ ok: true }> {
 
 export async function submitBooking(
   request: BookingRequest,
-): Promise<ActionResult<{ visit: Visit; manageUrl: string }>> {
+): Promise<ActionResult<{ visit: Visit; manageUrl: string; linkTexted: boolean }>> {
   try {
     const response = await getPublicApiClient().createAppointment(request);
     return { ok: true, ...response };

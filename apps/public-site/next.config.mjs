@@ -1,7 +1,65 @@
+import { withSentryConfig } from "@sentry/nextjs";
+
+const production = process.env.NODE_ENV === "production";
+// The CMS embeds this site in an iframe for its live colour preview, so it —
+// and only it — may frame these pages.
+const cmsOrigin = process.env.NEXT_PUBLIC_CMS_ORIGIN ?? "";
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   // shared-types/api-client are unbuilt TS workspace packages — Next needs to transpile them itself.
   transpilePackages: ["@booking/api-client", "@booking/shared-types"],
+  // Lets a production build run beside `next dev` without sharing .next
+  // (the two clobber each other). Unset everywhere but that case.
+  distDir: process.env.NEXT_DIST_DIR || ".next",
+  experimental: {
+    // Loads src/instrumentation.ts — server-side Sentry (system_design.md §12a).
+    instrumentationHook: true,
+    // Server-side Sentry pulls in OpenTelemetry, which webpack can't bundle
+    // cleanly; loaded from node_modules at runtime instead.
+    serverComponentsExternalPackages: ["@sentry/nextjs", "@sentry/node", "@sentry/opentelemetry"],
+  },
+  async headers() {
+    return [
+      {
+        source: "/:path*",
+        headers: [
+          { key: "X-Content-Type-Options", value: "nosniff" },
+          { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+          { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=(), payment=()" },
+          { key: "Content-Security-Policy", value: `frame-ancestors 'self' ${cmsOrigin}`.trim() },
+          ...(production ? [{ key: "Strict-Transport-Security", value: "max-age=63072000; includeSubDomains" }] : []),
+        ],
+      },
+      {
+        // The manage link *is* the credential; it must never leave in a Referer.
+        source: "/manage/:path*",
+        headers: [{ key: "Referrer-Policy", value: "no-referrer" }],
+      },
+    ];
+  },
 };
 
-export default nextConfig;
+// Error tracking. Only wired in when a browser DSN is configured: the SDK costs
+// every page ~40 kB of JavaScript, which a deployment that doesn't report
+// shouldn't pay. Source maps upload only with SENTRY_AUTH_TOKEN (CI).
+const sentryOptions = {
+  silent: true,
+  telemetry: false,
+  disableLogger: true,
+  org: process.env.SENTRY_ORG,
+  project: process.env.SENTRY_PROJECT,
+  authToken: process.env.SENTRY_AUTH_TOKEN,
+  sourcemaps: { disable: !process.env.SENTRY_AUTH_TOKEN },
+  // Errors only: keep tracing, replay and debug code out of every page's
+  // JavaScript (the public site's P95 < 300ms target).
+  bundleSizeOptimizations: {
+    excludeDebugStatements: true,
+    excludeTracing: true,
+    excludeReplayIframe: true,
+    excludeReplayShadowDom: true,
+    excludeReplayWorker: true,
+  },
+};
+
+export default process.env.NEXT_PUBLIC_SENTRY_DSN ? withSentryConfig(nextConfig, sentryOptions) : nextConfig;

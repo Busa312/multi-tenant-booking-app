@@ -57,6 +57,14 @@ as those code comments — they are not written down here yet, and back-filling 
 | R240 | The public site never books a segment with no professional. A service nobody performs (at the chosen location) can't be selected online; the old "unassigned" fallback applies only to staff bookings in the CMS. |
 | R250 | When a customer picks a time on the public site, the professionals in that plan are **held** for 10 minutes: nobody else is offered that time or can book it. One hold per customer — picking another time replaces it. A hold that has expired doesn't stop the booking while the time is still free. If someone else got there first, the customer is told and shown the times that are still open. In the CMS a hold is a conflict warning like any other (R60). |
 | R260 | Two bookings can't both be written for the same time by arriving together. Every write that can create a conflict — a customer booking, a hold, a reschedule, a CMS create or move — is serialized per tenant and local day, and checks availability only once it holds that turn. Staff override (R60) skips the check, not the queue. |
+| R270 | No email address is asked for when booking — not on the public site, not in the CMS. The customer's phone is verified by code, and the magic link goes to that phone by SMS (and is shown on the confirmation screen). This supersedes the optional email of R30. |
+| R280 | `tenant.min_booking_notice_minutes`: online bookings and reschedules must start at least this long from now (default 0). |
+| R290 | `tenant.max_booking_advance_days`: online bookings and reschedules can't start more than this many days ahead (default 365). |
+| R300 | `tenant.change_cutoff_hours`: a customer can reschedule or cancel online only until this many hours before the visit starts (default 0); after that the manage page says to contact the salon. Staff in the CMS are bound by none of R280–R300. |
+| R310 | A CMS user who forgot their password requests a reset link by business and email. The answer never reveals whether the account exists; the link is single-use, expires in 30 minutes, and using it ends every session of that user. |
+| R320 | CMS sessions can be ended server-side: logging out revokes that session's token, and a password change, a reset or deactivating the login ends all of that user's sessions immediately. The session token lives only in an httpOnly, SameSite=Strict cookie — the CMS's own JavaScript never sees it — and every state-changing CMS request must carry a header a cross-site form can't send. |
+| R330 | Every endpoint that can be called without a login, or that guards one (login, password reset, code verification, availability, holds, booking, manage-link actions), is rate limited per client address, and the sensitive ones per account or phone as well. Hitting a limit answers 429. |
+| R340 | The public site publishes a privacy policy and terms of use, linked from every page and from the booking form. |
 
 ## Booking Access — Magic Link
 
@@ -64,13 +72,13 @@ Resolves the open question "should User log in to book an appointment?" — deci
 
 **Flow**
 
-1. Customer books an appointment (name + phone number, no account creation).
+1. Customer books an appointment (name + a verified phone number — no account, no email, R270).
 2. Server generates a random, high-entropy token, stores its hash on the `Visit` row, and sets an expiry (end of the visit's last segment + 24h grace period).
-3. Server sends an email to `email` with a link: `https://{tenant-domain}/manage/{token}`.
+3. Server texts the link to the verified phone (`https://{tenant-domain}/manage/{token}`) and shows it on the confirmation screen.
 4. Visiting that link authorizes read/reschedule/cancel actions against that one visit only (all of its segments, together — R230) — it does not authenticate a customer identity or grant access to other bookings.
 5. Rescheduling issues a new token (old one invalidated) so a leaked/expired link can't be reused after the visit moves. Staff moving one segment of a visit in the CMS rotates the visit's token too.
 
-**Recovering a lost link**: customer enters their phone number on a "resend link" page; server looks up upcoming, non-cancelled appointments for that phone number and re-sends valid tokens. Rate-limit this endpoint (phone-number enumeration risk).
+**Recovering a lost link**: customer enters their phone number on a "resend link" page; server looks up upcoming, non-cancelled appointments for that phone number and texts fresh tokens to that number. Rate-limit this endpoint (phone-number enumeration risk).
 
 ## CMS Access & Roles
 
@@ -83,7 +91,7 @@ Deactivating a `Professional` (business record) does not automatically disable t
 
 Login identity is separated from the business-facing `Professional` record (a `Professional` can exist without ever logging in — e.g. a stylist whose schedule the owner manages directly). `TenantUser` holds credentials + role and optionally links to a `Professional` row when role is `professional`.
 
-JWT claims: `sub` (user id), `tenant_id`, `role`, `professional_id` (present only for `professional` role) — the CMS enforces role-based feature access at the API layer, separate from and in addition to Postgres RLS (RLS scopes rows to a tenant; it doesn't know about roles within a tenant, so professional-vs-owner restrictions must be enforced in application logic).
+JWT claims: `sub` (user id), `tenant_id`, `role`, `professional_id` (present only for `professional` role), `jti` (this session) and `sv` (the user's `session_version`, R320) — the CMS enforces role-based feature access at the API layer, separate from and in addition to Postgres RLS (RLS scopes rows to a tenant; it doesn't know about roles within a tenant, so professional-vs-owner restrictions must be enforced in application logic).
 
 ## Non-Functional Requirements
 
@@ -97,7 +105,6 @@ JWT claims: `sub` (user id), `tenant_id`, `role`, `professional_id` (present onl
 - In-app booking payment collection (see note below)
 - Customer accounts / login
 - Client-side template/layout customization by tenant. The tenant controls colors, logo, title and description (all via `config_json`) — the layout itself is fixed.
-- Magic-link SMS delivery (email only, until SMS capture exists)
 
 **Note on payment (confirmed)**: the website is reservation-only. The customer pays in person at the salon after the appointment; no online checkout happens during booking, and `Appointment` carries no payment-status or payment-session fields. Online payment (gateway integration, adapters, etc.) is out of scope for now — not designed here, revisit if/when that work is scheduled.
 
@@ -122,6 +129,9 @@ All tables include `tenant_id uuid` + RLS policy scoping to the current tenant, 
 | `domain_verified_at` | timestamptz, nullable | null until DNS TXT verification passes |
 | `config_json` | jsonb | theme/presentation config (colors, logo, copy) |
 | `max_visit_gap_minutes` | smallint, default 0 | R220: longest gap between visit segments, 0–60. A booking rule, so a column rather than `config_json` |
+| `min_booking_notice_minutes` | smallint, default 0 | R280: 0–2880 |
+| `max_booking_advance_days` | smallint, default 365 | R290: 1–365 |
+| `change_cutoff_hours` | smallint, default 0 | R300: 0–168 |
 | `created_at` | timestamptz | |
 
 ### Localized content (convention)
@@ -203,7 +213,10 @@ every professional at null, which is why adding locations does not disturb exist
 | `email` | text, unique per tenant | login identifier |
 | `password_hash` | text | email+password login |
 | `role` | text | `owner` \| `professional` — exactly one `owner` row per `tenant_id` (partial unique constraint) |
-| `is_active` | boolean, default true | manually toggled by the owner; not auto-linked to `Professional` deactivation |
+| `is_active` | boolean, default true | manually toggled by the owner; not auto-linked to `Professional` deactivation. Turning it off ends the user's sessions (R320) |
+| `session_version` | int, default 0 | R320: carried in every JWT; bumping it (password change/reset, deactivation) invalidates all of the user's tokens at once |
+| `password_reset_token_hash` | text, unique, nullable | R310: sha256 of the reset token; cleared when used |
+| `password_reset_expires_at` | timestamptz, nullable | R310: issue + 30 min |
 | `created_at` | timestamptz | |
 | `last_login_at` | timestamptz, nullable | |
 
@@ -259,7 +272,7 @@ Composite PK on (`service_id`, `professional_id`).
 | `location_id`             | uuid, FK, nullable     | R150: the branch booked. null = the tenant has no locations. **Restrict** on delete — deleting a branch must not erase where past appointments happened, which is why locations deactivate instead (R190) |
 | `user_name`               | text                   |                                                                                         |
 | `phone_number`            | text                   |                                                                                         |
-| `email`                   | text                   |                                                                                         |
+| `email`                   | text                   | legacy: no longer collected (R270); kept for history, written as an empty string |
 | `start_at`                | timestamptz            |                                                                                         |
 | `end_at`                  | timestamptz            | derived from `start_at` + the summed durations of its `AppointmentService` rows at booking time, stored for query simplicity |
 | `price`                   | numeric                | sum of its `AppointmentService` prices, each snapshotted when that service was added    |

@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState, type FormEvent } from "react";
 import type { Location, Service, VisitSlot } from "@booking/shared-types";
 import type { Translate } from "@/i18n/locales";
@@ -48,16 +49,15 @@ export function StepDetails({
 }: StepDetailsProps) {
   const [userName, setUserName] = useState(initial?.userName ?? "");
   const [phoneNumber, setPhoneNumber] = useState(initial?.phoneNumber ?? "");
-  const [email, setEmail] = useState(initial?.email ?? "");
 
   useEffect(() => {
-    onChange({ userName, phoneNumber, email });
+    onChange({ userName, phoneNumber });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [userName, phoneNumber, email]);
+  }, [userName, phoneNumber]);
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
-    onSubmit({ userName: userName.trim(), phoneNumber: phoneNumber.trim(), email: email.trim() });
+    onSubmit({ userName: userName.trim(), phoneNumber: phoneNumber.trim() });
   };
 
   return (
@@ -109,23 +109,26 @@ export function StepDetails({
           />
         </label>
 
-        <label className={FIELD}>
-          <span className={LABEL}>{t("booking.details.emailOptional")}</span>
-          <input
-            className={INPUT}
-            type="email"
-            value={email}
-            onChange={(event) => setEmail(event.target.value)}
-            autoComplete="email"
-          />
-          <span className="text-xs text-base-content/60">{t("booking.details.emailHint")}</span>
-        </label>
+        <span className="-mt-2 text-xs text-base-content/60">{t("booking.details.phoneHint")}</span>
 
         {error && (
           <p className="alert alert-soft alert-error" role="alert">
             {t("common.somethingWrong")}
           </p>
         )}
+
+        {/* R340: what booking agrees to, before any data is sent */}
+        <p className="text-xs text-base-content/60">
+          {t("booking.details.consentBefore")}
+          <Link className="link" href="/terms" target="_blank">
+            {t("legal.termsTitle")}
+          </Link>
+          {t("booking.details.consentAnd")}
+          <Link className="link" href="/privacy" target="_blank">
+            {t("legal.privacyTitle")}
+          </Link>
+          {t("booking.details.consentAfter")}
+        </p>
 
         <div className={FOOTER}>
           <button type="button" className={BTN_BACK} onClick={onBack} disabled={isSubmitting}>

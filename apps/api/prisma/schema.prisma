@@ -40,6 +40,11 @@ model Tenant {
   // visit. A booking rule, so a column rather than presentation config_json.
   // The 0–60 range is a CHECK constraint in the migration.
   maxVisitGapMinutes Int     @default(0) @map("max_visit_gap_minutes") @db.SmallInt
+  // R280–R300: what customers may do online (staff aren't bound by them).
+  // Ranges are CHECK constraints in the migration.
+  minBookingNoticeMinutes Int @default(0) @map("min_booking_notice_minutes") @db.SmallInt
+  maxBookingAdvanceDays   Int @default(365) @map("max_booking_advance_days") @db.SmallInt
+  changeCutoffHours       Int @default(0) @map("change_cutoff_hours") @db.SmallInt
   createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz
 
   locations       Location[]
@@ -139,6 +144,11 @@ model TenantUser {
   // low-entropy secret, so bcrypt's deliberate slowness buys nothing here).
   inviteTokenHash      String?        @unique @map("invite_token_hash")
   inviteTokenExpiresAt DateTime?      @map("invite_token_expires_at") @db.Timestamptz
+  // R320: in every JWT; bumping it ends all of this user's sessions at once.
+  sessionVersion       Int            @default(0) @map("session_version")
+  // R310: forgot-password link, hashed like the invite token. Single use.
+  passwordResetTokenHash String?      @unique @map("password_reset_token_hash")
+  passwordResetExpiresAt DateTime?    @map("password_reset_expires_at") @db.Timestamptz
   createdAt            DateTime       @default(now()) @map("created_at") @db.Timestamptz
   lastLoginAt          DateTime?      @map("last_login_at") @db.Timestamptz
 

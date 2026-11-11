@@ -22,6 +22,9 @@ const prismaTenant = (overrides: Partial<Parameters<typeof serializeTenant>[0]> 
   domainVerifiedAt: null,
   configJson: { primaryColor: "#0f172a" } as Prisma.JsonValue,
   maxVisitGapMinutes: 0,
+  minBookingNoticeMinutes: 0,
+  maxBookingAdvanceDays: 365,
+  changeCutoffHours: 0,
   createdAt: new Date("2026-01-02T03:04:05.678Z"),
   ...overrides,
 });

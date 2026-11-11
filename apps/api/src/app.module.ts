@@ -9,12 +9,16 @@ import { AuthModule } from "./auth/auth.module.js";
 import { PublicModule } from "./public/public.module.js";
 import { CmsModule } from "./cms/cms.module.js";
 import { OnboardingModule } from "./internal/onboarding.module.js";
+import { HealthModule } from "./health/health.module.js";
+import { RateLimitModule } from "./rate-limit/rate-limit.module.js";
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
     PrismaModule,
     RedisModule,
+    RateLimitModule,
+    HealthModule,
     TenantModule,
     AuthModule,
     PublicModule,

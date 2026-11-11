@@ -111,18 +111,67 @@ describe("PrismaService", () => {
       expect(executeRaw.mock.calls[0]?.[0]?.at(-1)).toContain("true)");
     });
 
-    it("hands the caller the same transaction client it configured and returns their value", async () => {
+    it("hands the caller the transaction it configured and returns their value", async () => {
+      const findMany = jest.fn().mockResolvedValue([{ id: "a1" }]);
       const { tx } = fakeTx();
+      (tx as unknown as Record<string, unknown>).appointment = { findMany };
       transaction.mockImplementation((fn: (tx: Prisma.TransactionClient) => Promise<unknown>) => fn(tx));
-      const work = jest.fn().mockResolvedValue({ rows: 3 });
 
       const result = await inContext(tenantContext, async () => {
         tenantContext.update({ tenantId: "t1" });
-        return service.forTenant(work);
+        return service.forTenant(async (client) => ({
+          rows: await client.appointment.findMany({ where: { tenantId: "t1" } }),
+        }));
       });
 
-      expect(work).toHaveBeenCalledWith(tx);
-      expect(result).toEqual({ rows: 3 });
+      // Wrapped (to see writes), but every call lands on the configured client.
+      expect(findMany).toHaveBeenCalledWith({ where: { tenantId: "t1" } });
+      expect(result).toEqual({ rows: [{ id: "a1" }] });
+    });
+
+    // system_design.md §8: the availability cache's invalidation hangs off this
+    describe("write reporting", () => {
+      const run = (work: (tx: Prisma.TransactionClient) => Promise<unknown>) => {
+        const { tx } = fakeTx();
+        (tx as unknown as Record<string, unknown>).appointment = {
+          findMany: jest.fn().mockResolvedValue([]),
+          create: jest.fn().mockResolvedValue({ id: "a1" }),
+        };
+        transaction.mockImplementation((fn: (tx: Prisma.TransactionClient) => Promise<unknown>) => fn(tx));
+        const listener = jest.fn();
+        service.onTenantWrite(listener);
+        const result = inContext(tenantContext, async () => {
+          tenantContext.update({ tenantId: "t1" });
+          return service.forTenant(work);
+        });
+        return { result, listener };
+      };
+
+      it("tells listeners which tenant wrote, once the transaction has committed", async () => {
+        const { result, listener } = run((tx) => tx.appointment.create({ data: {} as never }));
+
+        await result;
+
+        expect(listener).toHaveBeenCalledWith("t1");
+      });
+
+      it("stays quiet for a read-only transaction", async () => {
+        const { result, listener } = run((tx) => tx.appointment.findMany());
+
+        await result;
+
+        expect(listener).not.toHaveBeenCalled();
+      });
+
+      it("stays quiet when the transaction fails — nothing was committed", async () => {
+        const { result, listener } = run(async (tx) => {
+          await tx.appointment.create({ data: {} as never });
+          throw new Error("rolled back");
+        });
+
+        await expect(result).rejects.toThrow("rolled back");
+        expect(listener).not.toHaveBeenCalled();
+      });
     });
 
     it("propagates the caller's error so the transaction rolls back", async () => {

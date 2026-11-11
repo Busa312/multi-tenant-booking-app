@@ -9,8 +9,12 @@ export class ApiError extends Error {
 
 export interface ApiClientOptions {
   baseUrl: string;
-  /** Called on every request; return the CMS JWT if the caller is authenticated. */
-  getAuthToken?: () => string | null | undefined;
+  /**
+   * R320: the CMS sends "include" so the browser attaches its httpOnly session
+   * cookie. There is deliberately no way to pass a token in a header — the
+   * client never holds one.
+   */
+  credentials?: RequestCredentials;
   /**
    * Called on every request; used by apps/public-site's server-side fetches to
    * forward the browser's original Host header (as `x-forwarded-host`, since
@@ -41,10 +45,6 @@ export class HttpClient {
       headers.set("Content-Type", "application/json");
     }
 
-    const token = this.options.getAuthToken?.();
-    if (token) {
-      headers.set("Authorization", `Bearer ${token}`);
-    }
 
     const extraHeaders = this.options.getExtraHeaders?.();
     if (extraHeaders) {
@@ -56,6 +56,7 @@ export class HttpClient {
     const res = await fetch(`${this.options.baseUrl}${path}`, {
       ...init,
       headers,
+      ...(this.options.credentials ? { credentials: this.options.credentials } : {}),
     });
 
     if (!res.ok) {

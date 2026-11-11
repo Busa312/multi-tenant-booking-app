@@ -18,7 +18,7 @@ import { AppShell } from "../components/AppShell.js";
 import { HoursScopePicker } from "../components/HoursScopePicker.js";
 import { WeeklyScheduleEditor } from "../components/WeeklyScheduleEditor.js";
 import { TimeOffCard } from "../components/TimeOffCard.js";
-import { VisitGapCard } from "../components/VisitGapCard.js";
+import { BookingPoliciesCard } from "../components/BookingPoliciesCard.js";
 import { AddTimeOffModal } from "../components/AddTimeOffModal.js";
 import { CardSkeleton } from "../components/CardSkeleton.js";
 import { Alert } from "../components/ui/index.js";
@@ -267,7 +267,7 @@ export function HoursPage() {
       {/* R220: an organisation-wide booking rule, so only in organisation scope */}
       {!locked && !professionalId && (
         <div className="mt-4 2xl:mt-5">
-          <VisitGapCard />
+          <BookingPoliciesCard />
         </div>
       )}
 

@@ -59,9 +59,18 @@ export default async function RootLayout({ children, params }: LayoutProps) {
           <footer className="border-t border-base-300">
             <div className="mx-auto flex w-full max-w-3xl flex-wrap items-center justify-between gap-2 px-4 py-5 text-sm text-base-content/60">
               <span className="truncate">{context.tenant.name}</span>
-              <Link className="link link-hover" href="/manage/resend">
-                {context.t("manage.lostLink")}
-              </Link>
+              <nav className="flex flex-wrap items-center gap-x-4 gap-y-1" aria-label={context.t("legal.footerNav")}>
+                {/* R340 */}
+                <Link className="link link-hover" href="/privacy">
+                  {context.t("legal.privacyTitle")}
+                </Link>
+                <Link className="link link-hover" href="/terms">
+                  {context.t("legal.termsTitle")}
+                </Link>
+                <Link className="link link-hover" href="/manage/resend">
+                  {context.t("manage.lostLink")}
+                </Link>
+              </nav>
             </div>
           </footer>
         </div>

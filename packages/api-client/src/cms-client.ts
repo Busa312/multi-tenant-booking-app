@@ -13,7 +13,7 @@ import type {
   InviteProfessionalResponse,
   LocationSummary,
   LoginRequest,
-  LoginResponse,
+  CmsSession,
   ProfessionalSummary,
   UpdateLocationRequest,
   UpdateTenantBookingRulesRequest,
@@ -22,6 +22,8 @@ import type {
   UpdateCmsAppointmentRequest,
   ServiceSummary,
   SetPasswordRequest,
+  ForgotPasswordRequest,
+  ResetPasswordRequest,
   Tenant,
   TenantColors,
   TenantConfig,
@@ -42,11 +44,30 @@ export class CmsApiClient {
   }
 
   login(payload: LoginRequest) {
-    return this.http.post<LoginResponse>("/cms/auth/login", payload);
+    return this.http.post<CmsSession>("/cms/auth/login", payload);
   }
 
   setPassword(payload: SetPasswordRequest) {
-    return this.http.post<LoginResponse>("/cms/auth/set-password", payload);
+    return this.http.post<CmsSession>("/cms/auth/set-password", payload);
+  }
+
+  // R310: resolves the same way whether or not the account exists
+  forgotPassword(payload: ForgotPasswordRequest) {
+    return this.http.post<void>("/cms/auth/forgot-password", payload);
+  }
+
+  resetPassword(payload: ResetPasswordRequest) {
+    return this.http.post<CmsSession>("/cms/auth/reset-password", payload);
+  }
+
+  // R320: who's signed in — the session cookie itself is unreadable here
+  me() {
+    return this.http.get<CmsSession>("/cms/auth/me");
+  }
+
+  // R320: ends this session on the server and drops the cookie
+  logout() {
+    return this.http.post<boolean>("/cms/auth/logout");
   }
 
   getTenant() {

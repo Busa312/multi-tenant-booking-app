@@ -1,6 +1,6 @@
 
 
-import type { AppointmentStatus, Visit, VisitSlot } from "./entities";
+import type { AppointmentStatus, TenantUserRole, Visit, VisitSlot } from "./entities";
 import type { TenantColors } from "./colors";
 import type { LocalizedText } from "./i18n";
 
@@ -22,7 +22,10 @@ export interface UpdateTenantLocalesRequest {
 
 // R220: owner-only booking rules
 export interface UpdateTenantBookingRulesRequest {
-  maxVisitGapMinutes: number;
+  maxVisitGapMinutes?: number;
+  minBookingNoticeMinutes?: number;
+  maxBookingAdvanceDays?: number;
+  changeCutoffHours?: number;
 }
 
 export interface UpdateTenantCopyRequest {
@@ -75,9 +78,6 @@ export interface CreateAppointmentRequest {
   time: string;
   userName: string;
   phoneNumber: string;
-  // R30: optional, as it is for a staff-taken booking. Without one the link
-  // can't be emailed or re-sent, so `manageUrl` is the customer's only copy.
-  email?: string;
   // R250: the hold taken when the time was picked. Optional — a booking without
   // one (or with an expired one) still goes through while the time is free.
   holdId?: string;
@@ -89,6 +89,8 @@ export interface CreateAppointmentResponse {
   visit: Visit;
 
   manageUrl: string;
+  /** R270: the link was texted to the verified phone; false while SMS is mocked. */
+  linkTexted: boolean;
 }
 
 /**
@@ -101,6 +103,8 @@ export interface CreateAppointmentResponse {
 export interface RescheduleAppointmentResponse {
   visit: Visit;
   manageUrl: string;
+  /** R270 */
+  linkTexted: boolean;
 }
 
 export interface RescheduleAppointmentRequest {
@@ -165,7 +169,6 @@ export interface CreateCmsAppointmentRequest {
   time: string;
   userName: string;
   phoneNumber: string;
-  email?: string;
   notes?: string;
   // R60: acknowledge the conflicts a 409 named and book anyway
   override?: boolean;
@@ -220,8 +223,19 @@ export interface LoginRequest {
   password: string;
 }
 
-export interface LoginResponse {
-  accessToken: string;
+/**
+ * R320: what the CMS knows about its own session — never the token, which
+ * lives in an httpOnly cookie its JavaScript can't read. Returned by login,
+ * set-password and reset-password, and by GET /cms/auth/me.
+ */
+export interface CmsSession {
+  userId: string;
+  tenantId: string;
+  role: TenantUserRole;
+  /** Present only for `professional` logins (R20). */
+  professionalId: string | null;
+  /** ISO instant; the session ends then at the latest. */
+  expiresAt: string;
 }
 
 // R160: every `*I18n` map below carries the NON-default locales
@@ -312,6 +326,18 @@ export interface InviteProfessionalResponse {
 }
 
 export interface SetPasswordRequest {
+  tenantId: string;
+  token: string;
+  password: string;
+}
+
+// R310: always answered the same way, whether or not the account exists
+export interface ForgotPasswordRequest {
+  subdomain: string;
+  email: string;
+}
+
+export interface ResetPasswordRequest {
   tenantId: string;
   token: string;
   password: string;

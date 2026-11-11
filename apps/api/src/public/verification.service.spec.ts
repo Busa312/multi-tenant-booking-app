@@ -24,7 +24,9 @@ function fakeRedis() {
     }),
     expire: jest.fn(async () => 1),
   };
-  return { store, service: { client } as unknown as RedisService, client };
+  // RedisService.incrementInWindow — the atomic INCR + EXPIRE NX
+  const incrementInWindow = jest.fn((k: string) => client.incr(k));
+  return { store, service: { client, incrementInWindow } as unknown as RedisService, client };
 }
 
 const setup = () => {

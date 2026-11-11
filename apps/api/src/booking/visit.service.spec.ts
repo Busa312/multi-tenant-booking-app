@@ -1,4 +1,4 @@
-import { BadRequestException, ConflictException, NotFoundException } from "@nestjs/common";
+import { BadRequestException, ConflictException, ForbiddenException, NotFoundException } from "@nestjs/common";
 import { Prisma } from "../../generated/prisma/index.js";
 import { HoldLimitError, VisitService } from "./visit.service.js";
 import { hashToken } from "./magic-link.js";
@@ -59,13 +59,17 @@ interface Overrides {
   assignments?: { professionalId: string; serviceId: string }[];
   /** R250: holds already live for the tenant */
   liveHolds?: number;
+  /** R300 */
+  cutoffHours?: number;
 }
 
 const setup = (overrides: Overrides = {}) => {
   const tx = {
     // R260: lockBookingDay
     $executeRaw: jest.fn().mockResolvedValue(1),
-    tenant: { findUniqueOrThrow: jest.fn().mockResolvedValue({ timezone: "Asia/Tbilisi" }) },
+    tenant: {
+      findUniqueOrThrow: jest.fn().mockResolvedValue({ timezone: "Asia/Tbilisi", changeCutoffHours: overrides.cutoffHours ?? 0 }),
+    },
     service: {
       findMany: jest.fn(({ where }: { where: { id: { in: string[] } } }) =>
         Promise.resolve([colour, cut].filter((service) => where.id.in.includes(service.id))),
@@ -352,6 +356,47 @@ describe("create", () => {
   });
 });
 
+// R300: the visit starts at 10:00 Tbilisi (06:00Z); it's now 04:00 Tbilisi (00:00Z) — six hours before
+describe("the change cutoff", () => {
+  it("lets the customer reschedule and cancel while they're outside it", async () => {
+    const { service } = setup({ cutoffHours: 6 - 1 });
+
+    await expect(service.reschedule(TOKEN, "2026-08-07", "12:00")).resolves.toBeDefined();
+    await expect(service.cancel(TOKEN)).resolves.toBeDefined();
+  });
+
+  it("refuses rescheduling once inside it, writing nothing", async () => {
+    const { service, tx } = setup({ cutoffHours: 6 });
+
+    const error = await service.reschedule(TOKEN, "2026-08-07", "12:00").catch((e: unknown) => e);
+
+    expect((error as ForbiddenException).getStatus()).toBe(403);
+    expect((error as ForbiddenException).getResponse()).toMatchObject({ code: "change_cutoff" });
+    expect(tx.appointment.update).not.toHaveBeenCalled();
+  });
+
+  it("refuses cancelling once inside it", async () => {
+    const { service, tx } = setup({ cutoffHours: 12 });
+
+    await expect(service.cancel(TOKEN)).rejects.toThrow(ForbiddenException);
+    expect(tx.appointment.updateMany).not.toHaveBeenCalled();
+  });
+
+  it("doesn't even offer new times once inside it", async () => {
+    const { service, availability } = setup({ cutoffHours: 12 });
+
+    await expect(service.rescheduleSlots(TOKEN, "2026-08-07")).rejects.toThrow(ForbiddenException);
+    expect(availability.visitPlansIn).not.toHaveBeenCalled();
+  });
+
+  it("with no cutoff, still stops at the visit's start", async () => {
+    jest.setSystemTime(new Date("2026-08-05T06:30:00.000Z"));
+    const { service } = setup({ cutoffHours: 0 });
+
+    await expect(service.cancel(TOKEN)).rejects.toThrow(ForbiddenException);
+  });
+});
+
 // R260
 describe("the day's lock", () => {
   const lockCalls = (tx: { $executeRaw: jest.Mock }) =>
@@ -494,7 +539,7 @@ describe("hold", () => {
 });
 
 describe("resend lookup", () => {
-  it("only considers live links with an upcoming, uncancelled, emailed segment for that number", async () => {
+  it("only considers live links with an upcoming, uncancelled segment for that number", async () => {
     const { service, tx } = setup();
 
     await service.findResendable("+995555123456");
@@ -504,9 +549,8 @@ describe("resend lookup", () => {
       accessTokenHash: { not: null },
       accessTokenExpiresAt: { gt: NOW },
       appointments: {
-        // R30: nothing to re-send to without an address — and minting a fresh
-        // token would replace the customer's only working link.
-        some: { phoneNumber: "+995555123456", status: { not: "cancelled" }, startAt: { gt: NOW }, email: { not: "" } },
+        // R270: the fresh link is texted to this number, so no address is needed
+        some: { phoneNumber: "+995555123456", status: { not: "cancelled" }, startAt: { gt: NOW } },
       },
     });
   });

@@ -145,7 +145,6 @@ export class AppointmentsController {
       time: body.time,
       userName: body.userName,
       phoneNumber: body.phoneNumber,
-      email: body.email,
       notes: body.notes,
       createdByUserId: user.sub,
       override: body.override,

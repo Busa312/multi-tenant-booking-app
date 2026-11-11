@@ -1,6 +1,7 @@
 import { BadRequestException } from "@nestjs/common";
 import { Prisma } from "../../generated/prisma/index.js";
 import { AvailabilityService } from "./availability.service.js";
+import type { AvailabilityCacheService } from "./availability-cache.service.js";
 import type { PrismaService } from "../prisma/prisma.service.js";
 import type { TenantContextService } from "../tenant/tenant-context.service.js";
 
@@ -23,11 +24,23 @@ interface Overrides {
   appointments?: { professionalId: string | null; startAt: Date; endAt: Date; userName?: string }[];
   /** R250: live holds (the stub doesn't filter — pass only the ones the query would return) */
   holds?: { professionalId: string; startAt: Date; endAt: Date }[];
+  /** R280/R290 */
+  noticeMinutes?: number;
+  advanceDays?: number;
+  /** What the availability cache answers (null = miss). */
+  cached?: unknown[] | null;
 }
 
 const setup = (overrides: Overrides = {}) => {
   const tx = {
-    tenant: { findUniqueOrThrow: jest.fn().mockResolvedValue({ timezone: overrides.timezone ?? TZ }) },
+    tenant: {
+      findUniqueOrThrow: jest.fn().mockResolvedValue({
+        timezone: overrides.timezone ?? TZ,
+        maxVisitGapMinutes: 0,
+        minBookingNoticeMinutes: overrides.noticeMinutes ?? 0,
+        maxBookingAdvanceDays: overrides.advanceDays ?? 365,
+      }),
+    },
     service: {
       findMany: jest.fn().mockResolvedValue(
         (overrides.services ?? [{ id: "s1", durationMinutes: 30 }]).map((s) => ({
@@ -67,7 +80,17 @@ const setup = (overrides: Overrides = {}) => {
   } as unknown as PrismaService;
   const tenantContext = { current: { tenantId: TENANT_ID } } as unknown as TenantContextService;
 
-  return { service: new AvailabilityService(prisma, tenantContext), tx, prisma };
+  const cache = {
+    lookup: jest.fn().mockResolvedValue({ key: "avail-key", slots: overrides.cached ?? null }),
+    store: jest.fn().mockResolvedValue(undefined),
+  };
+
+  return {
+    service: new AvailabilityService(prisma, tenantContext, cache as unknown as AvailabilityCacheService),
+    tx,
+    prisma,
+    cache,
+  };
 };
 
 const startTimes = (slots: { startAt: string }[]) => slots.map((slot) => slot.startAt);
@@ -928,6 +951,51 @@ describe("AvailabilityService.computeVisitSlots — holds", () => {
     expect(tx.slotHold.findMany).toHaveBeenCalledWith(
       expect.objectContaining({ where: expect.objectContaining({ holdId: { not: "own-hold" } }) }),
     );
+  });
+
+  // R280: it's 04:00 Tbilisi on the day; hours open at 09:00
+  it("offers nothing sooner than the salon's notice", async () => {
+    jest.setSystemTime(new Date("2026-08-05T05:00:00.000Z")); // 09:00 Tbilisi
+    const { service } = setup({
+      professionals: [{ id: "p1", name: "Levan", isActive: true, locationId: null }] as unknown as Overrides["professionals"],
+      noticeMinutes: 120,
+    });
+
+    const slots = await service.computeVisitSlots(query());
+
+    expect(startTimes(slots)[0]).toBe("2026-08-05T07:00:00.000Z"); // 11:00
+  });
+
+  // R290
+  it("offers nothing past the salon's horizon", async () => {
+    const { service } = setup({
+      professionals: [{ id: "p1", name: "Levan", isActive: true, locationId: null }] as unknown as Overrides["professionals"],
+      advanceDays: 7,
+    });
+
+    await expect(service.computeVisitSlots({ ...query(), date: "2026-08-12" })).resolves.not.toEqual([]);
+    await expect(service.computeVisitSlots({ ...query(), date: "2026-08-13" })).resolves.toEqual([]);
+  });
+
+  // system_design.md §8
+  it("answers from the cache when it can, without opening a transaction", async () => {
+    const cached = [{ startAt: "2026-08-05T09:00:00.000Z", endAt: "2026-08-05T09:30:00.000Z", segments: [] }];
+    const { service, prisma } = setup({ cached });
+
+    await expect(service.computeVisitSlots(query())).resolves.toBe(cached);
+    expect(prisma.forTenant).not.toHaveBeenCalled();
+  });
+
+  it("caches what it computed, with the notice to reapply on read", async () => {
+    const { service, cache } = setup({
+      professionals: [{ id: "p1", name: "Levan", isActive: true, locationId: null }] as unknown as Overrides["professionals"],
+      noticeMinutes: 60,
+    });
+
+    const slots = await service.computeVisitSlots(query());
+
+    // Under the key fixed before the read, with the notice the planner already loaded
+    expect(cache.store).toHaveBeenCalledWith("avail-key", { noticeMs: 3_600_000, slots });
   });
 
   it("filters by nobody's hold when the asker has none", async () => {

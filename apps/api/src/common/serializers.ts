@@ -57,6 +57,9 @@ export const serializeTenant = (t: PrismaTenant): Tenant => ({
   domainVerifiedAt: t.domainVerifiedAt?.toISOString() ?? null,
   configJson: t.configJson as TenantConfig,
   maxVisitGapMinutes: t.maxVisitGapMinutes,
+  minBookingNoticeMinutes: t.minBookingNoticeMinutes,
+  maxBookingAdvanceDays: t.maxBookingAdvanceDays,
+  changeCutoffHours: t.changeCutoffHours,
   createdAt: t.createdAt.toISOString(),
 });
 

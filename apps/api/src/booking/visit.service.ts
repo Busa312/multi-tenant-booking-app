@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { BadRequestException, ConflictException, Injectable, NotFoundException } from "@nestjs/common";
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
 import type { BookingConflictResponse, VisitSlot } from "@booking/shared-types";
 import type { Prisma } from "../../generated/prisma/index.js";
 import { PrismaService } from "../prisma/prisma.service.js";
@@ -29,7 +29,6 @@ export interface VisitChoice {
 export interface CreateVisitInput extends VisitChoice {
   userName: string;
   phoneNumber: string;
-  email: string;
   /** R250: the customer's own hold — it doesn't block them, and is used up by the booking. */
   holdId?: string | null;
 }
@@ -113,7 +112,8 @@ export class VisitService {
             locationId,
             userName,
             phoneNumber,
-            email: input.email,
+            // R270: no longer collected; the column stays for older bookings
+            email: "",
             startAt: new Date(group.start),
             endAt: new Date(group.end),
             // R40: snapshots — a later price change must not rewrite history
@@ -216,6 +216,7 @@ export class VisitService {
   async rescheduleSlots(token: string, date: string): Promise<VisitSlot[]> {
     return this.prisma.forTenant(async (tx) => {
       const visit = await this.findByTokenIn(tx, token);
+      this.assertChangeable(visit, (await this.tenantRules(tx)).changeCutoffHours);
       const { units, locationId } = this.existingUnits(visit);
       if (units.length === 0) {
         return [];
@@ -240,12 +241,14 @@ export class VisitService {
 
     return this.prisma.forTenant(async (tx) => {
       const visit = await this.findByTokenIn(tx, token);
+      // One read for both the cutoff and the clock.
+      const { timezone, changeCutoffHours } = await this.tenantRules(tx);
+      this.assertChangeable(visit, changeCutoffHours);
       const { units, appointments, locationId } = this.existingUnits(visit);
       if (units.length === 0) {
         throw new BadRequestException("a cancelled booking can't be rescheduled");
       }
 
-      const { timezone } = await tx.tenant.findUniqueOrThrow({ where: { id: tenantId }, select: { timezone: true } });
       const startAt = this.booking.resolveStartAt(date, time, timezone);
       // R260: checked behind the day's lock
       await lockBookingDay(tx, tenantId, date);
@@ -294,6 +297,7 @@ export class VisitService {
       if (!visit.appointments.some((appointment) => appointment.status === "booked")) {
         return visit;
       }
+      this.assertChangeable(visit, (await this.tenantRules(tx)).changeCutoffHours);
       await tx.appointment.updateMany({
         where: { tenantId, visitId: visit.id, status: "booked" },
         data: { status: "cancelled" },
@@ -308,8 +312,8 @@ export class VisitService {
 
   /**
    * Visits a lost-link request may re-send: a live link, and at least one
-   * upcoming, uncancelled segment booked under this phone number with an
-   * email to send to (R30).
+   * upcoming, uncancelled segment booked under this phone number — which is
+   * where the fresh link is texted (R270).
    */
   async findResendable(phoneNumber: string): Promise<PrismaVisit[]> {
     const { tenantId } = this.tenantContext.current;
@@ -321,7 +325,7 @@ export class VisitService {
           accessTokenHash: { not: null },
           accessTokenExpiresAt: { gt: now },
           appointments: {
-            some: { phoneNumber, status: { not: "cancelled" }, startAt: { gt: now }, email: { not: "" } },
+            some: { phoneNumber, status: { not: "cancelled" }, startAt: { gt: now } },
           },
         },
         include: VISIT_INCLUDE,
@@ -441,6 +445,31 @@ export class VisitService {
       if (!assignments.some((a) => a.professionalId === id && a.serviceId === line.serviceId)) {
         throw new BadRequestException(`${professional.name} doesn't perform "${line.name}"`);
       }
+    });
+  }
+
+  /**
+   * R300: a customer may change or cancel online only until the salon's cutoff
+   * before the visit starts (at the latest, its start). After that the salon
+   * has to be asked — staff in the CMS aren't bound by this.
+   */
+  private assertChangeable(visit: PrismaVisit, changeCutoffHours: number): void {
+    const live = visit.appointments.filter((appointment) => appointment.status !== "cancelled");
+    const first = live[0];
+    if (!first) return;
+    if (Date.now() >= first.startAt.getTime() - changeCutoffHours * 3_600_000) {
+      throw new ForbiddenException({
+        code: "change_cutoff",
+        message: "This booking can no longer be changed online. Please contact the salon.",
+      });
+    }
+  }
+
+  private tenantRules(tx: Prisma.TransactionClient): Promise<{ timezone: string; changeCutoffHours: number }> {
+    const { tenantId } = this.tenantContext.current;
+    return tx.tenant.findUniqueOrThrow({
+      where: { id: tenantId },
+      select: { timezone: true, changeCutoffHours: true },
     });
   }
 
