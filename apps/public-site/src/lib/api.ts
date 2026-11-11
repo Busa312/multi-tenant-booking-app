@@ -15,7 +15,7 @@ export function getPublicApiClient(): PublicApiClient {
   // The visitor's address as this app's own host/proxy recorded it (the
   // first X-Forwarded-For hop, set by the platform — not by the visitor).
   const visitor = (incoming.get("x-forwarded-for") ?? incoming.get("x-real-ip") ?? "").split(",")[0]?.trim() ?? "";
-  const key = process.env.PUBLIC_SITE_API_KEY;
+  const key = process.env.BOOKING_SITE_API_KEY;
   return new PublicApiClient({
     baseUrl: process.env.API_URL!,
     getExtraHeaders: () => ({
