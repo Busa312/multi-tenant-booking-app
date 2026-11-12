@@ -30,6 +30,7 @@ export const ICON_NAMES = [
   "info",
   "light_mode",
   "location_off",
+  "location_on",
   "lock",
   "mail",
   "menu",

@@ -1,4 +1,4 @@
-import { BadRequestException, ServiceUnavailableException } from "@nestjs/common";
+import { BadRequestException, HttpException, ServiceUnavailableException } from "@nestjs/common";
 import { VerificationService } from "./verification.service.js";
 import { hashToken } from "../booking/magic-link.js";
 import type { RedisService } from "../redis/redis.service.js";
@@ -7,15 +7,17 @@ import type { TenantContextService } from "../tenant/tenant-context.service.js";
 const TENANT_ID = "11111111-1111-1111-1111-111111111111";
 const PHONE = "+995 555 12 34 56";
 
-/** An in-memory stand-in for Redis: enough of get/set/del/incr/expire to drive the flow. */
+/** An in-memory stand-in for Redis: enough of get/set (incl. NX)/del/incr/expire/ttl to drive the flow. */
 function fakeRedis() {
   const store = new Map<string, string>();
   const client = {
     get: jest.fn(async (k: string) => store.get(k) ?? null),
-    set: jest.fn(async (k: string, v: string) => {
+    set: jest.fn(async (k: string, v: string, ...options: unknown[]) => {
+      if (options.includes("NX") && store.has(k)) return null;
       store.set(k, v);
       return "OK";
     }),
+    ttl: jest.fn(async () => 42),
     del: jest.fn(async (k: string) => (store.delete(k) ? 1 : 0)),
     incr: jest.fn(async (k: string) => {
       const next = Number(store.get(k) ?? 0) + 1;
@@ -26,7 +28,11 @@ function fakeRedis() {
   };
   // RedisService.incrementInWindow — the atomic INCR + EXPIRE NX
   const incrementInWindow = jest.fn((k: string) => client.incr(k));
-  return { store, service: { client, incrementInWindow } as unknown as RedisService, client };
+  /** The resend cooldown running out, without waiting a real minute. */
+  const passMinute = () => {
+    for (const k of [...store.keys()]) if (k.startsWith("otp-cooldown:")) store.delete(k);
+  };
+  return { store, service: { client, incrementInWindow } as unknown as RedisService, client, passMinute };
 }
 
 const setup = () => {
@@ -125,12 +131,38 @@ describe("VerificationService", () => {
   });
 
   it("stops sending after five codes to one number", async () => {
-    const { service } = setup();
+    const { service, redis } = setup();
 
     for (let i = 0; i < 5; i++) {
       await service.start(PHONE);
+      redis.passMinute();
     }
     await expect(service.start(PHONE)).rejects.toThrow("Too many codes requested");
+  });
+
+  it("sends at most one code per number per minute, however the page was refreshed", async () => {
+    const { service, redis } = setup();
+    const { devCode } = await service.start(PHONE);
+
+    const early = await service.start("+995555123456").catch((error: unknown) => error);
+
+    expect(early).toBeInstanceOf(HttpException);
+    expect((early as HttpException).getStatus()).toBe(429);
+    expect((early as HttpException).getResponse()).toEqual({ code: "otp_cooldown", retryAfterSeconds: 42 });
+    // The refused request neither replaced the code already texted…
+    await expect(service.verify(PHONE, devCode as string)).resolves.toMatch(/^[0-9a-f]{64}$/);
+    // …nor spent the number's hourly allowance.
+    expect(redis.store.get(`otp-sends:${TENANT_ID}:${hashToken("995555123456")}`)).toBe("1");
+
+    redis.passMinute();
+    await expect(service.start(PHONE)).resolves.toHaveProperty("devCode");
+  });
+
+  it("keeps the minute per number: another number isn't held up", async () => {
+    const { service } = setup();
+    await service.start(PHONE);
+
+    await expect(service.start("+995 555 99 88 77")).resolves.toHaveProperty("devCode");
   });
 
   it("fails closed when Redis is unreachable", async () => {

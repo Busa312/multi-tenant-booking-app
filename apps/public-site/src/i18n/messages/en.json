@@ -111,7 +111,8 @@
       "resendIn": "Resend in {seconds}s",
       "sending": "Sending…",
       "wrongCode": "That code isn't right, or it has expired. Try again or send a new one.",
-      "sendFailed": "We couldn't send a code just now. Please try again."
+      "sendFailed": "We couldn't send a code just now. Please try again.",
+      "recentlySent": "We sent a code to this number less than a minute ago. Enter that one, or ask for a new one when the timer runs out."
     }
   },
   "manage": {

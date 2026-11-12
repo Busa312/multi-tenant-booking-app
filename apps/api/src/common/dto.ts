@@ -369,6 +369,11 @@ export class BookingConflictResponseDto {
   @ApiProperty({ type: [BookingConflictDto] }) conflicts!: BookingConflictDto[];
 }
 
+export class OtpCooldownResponseDto {
+  @ApiProperty({ enum: ["otp_cooldown"] }) code!: "otp_cooldown";
+  @ApiProperty() retryAfterSeconds!: number;
+}
+
 export class StartVerificationRequestDto {
   @ApiProperty() phoneNumber!: string;
 }

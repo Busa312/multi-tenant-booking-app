@@ -1,5 +1,5 @@
-import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, Query } from "@nestjs/common";
-import { ApiBody, ApiOkResponse, ApiParam, ApiQuery, ApiTags } from "@nestjs/swagger";
+import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, Query, ServiceUnavailableException } from "@nestjs/common";
+import { ApiBody, ApiOkResponse, ApiParam, ApiQuery, ApiTags, ApiTooManyRequestsResponse } from "@nestjs/swagger";
 import type {
   AvailabilityQuery,
   CreateAppointmentRequest,
@@ -47,6 +47,7 @@ import {
   ResendMagicLinkRequestDto,
   ServiceDto,
   StartVerificationRequestDto,
+  OtpCooldownResponseDto,
   StartVerificationResponseDto,
   TenantDto,
   VerifyPhoneRequestDto,
@@ -220,22 +221,27 @@ export class PublicController {
   /**
    * Sends a one-time code to the number a customer is about to book with.
    *
-   * SMS delivery is mocked, so `devCode` carries the code back instead — the
-   * same arrangement the magic link and professional invites already use while
-   * no provider is wired in. `sendOtp` returning true is what makes that stop.
+   * While no SMS provider is configured, `devCode` carries the code back
+   * instead — the same arrangement the magic link and professional invites use.
+   * Once one is, the code only ever travels by SMS: a failed send is an error,
+   * never a reason to show the code to whoever asked for it. One code per
+   * number per minute (429 `otp_cooldown` otherwise; the last code still works).
    */
   @Post("verification/start")
   // R330: per address, on top of the per-phone and per-tenant limits inside
   @RateLimit({ name: "otp-start", max: 10, windowSeconds: 60 * 60 })
   @ApiBody({ type: StartVerificationRequestDto })
   @ApiOkResponse({ type: StartVerificationResponseDto })
+  @ApiTooManyRequestsResponse({ type: OtpCooldownResponseDto })
   async startVerification(@Body() body: StartVerificationRequest): Promise<StartVerificationResponse> {
     const { expiresAt, devCode } = await this.verification.start(body.phoneNumber);
-    const delivered = devCode
-      ? await this.notifications.sendOtp({ phoneNumber: body.phoneNumber, code: devCode })
-      : true;
-
-    return { expiresAt: expiresAt.toISOString(), devCode: delivered ? null : devCode };
+    if (!this.notifications.canDeliverSms()) {
+      return { expiresAt: expiresAt.toISOString(), devCode };
+    }
+    if (devCode && !(await this.notifications.sendOtp({ phoneNumber: body.phoneNumber, code: devCode }))) {
+      throw new ServiceUnavailableException("We couldn't text the code. Check the number and try again.");
+    }
+    return { expiresAt: expiresAt.toISOString(), devCode: null };
   }
 
   @Post("verification/verify")

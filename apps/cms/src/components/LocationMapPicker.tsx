@@ -5,6 +5,7 @@ import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { useI18n } from "../i18n/I18nContext.js";
 import { Alert, Button, TextInput } from "./ui/index.js";
+import type { IconName } from "../lib/iconNames.js";
 
 export interface LatLng {
   lat: number;
@@ -39,10 +40,13 @@ const ATTRIBUTION = '&copy; <a href="https://www.openstreetmap.org/copyright">Op
 const SEARCH_URL = "https://nominatim.openstreetmap.org/search";
 
 // Markers are HTML, styled with the theme's semantic colors like everything else.
+// Raw HTML, not <Icon>, so the glyph is typed here: the icon font only holds
+// the names in lib/iconNames.ts.
+const PIN_GLYPH: IconName = "location_on";
 const PIN_ICON = L.divIcon({
   className: "",
   // Filled glyph; written so the class reaches Tailwind's scanner exactly as rendered.
-  html: `<span class='ms block text-[40px] leading-none text-primary drop-shadow-md [font-variation-settings:"FILL"_1]'>location_on</span>`,
+  html: `<span class='ms block text-[40px] leading-none text-primary drop-shadow-md [font-variation-settings:"FILL"_1]'>${PIN_GLYPH}</span>`,
   iconSize: [40, 40],
   iconAnchor: [20, 38],
 });

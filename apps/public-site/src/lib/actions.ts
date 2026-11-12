@@ -1,7 +1,7 @@
 "use server";
 
 import { ApiError } from "@booking/api-client";
-import type { PublicProfessional, Visit, VisitSlot } from "@booking/shared-types";
+import type { OtpCooldownResponse, PublicProfessional, Visit, VisitSlot } from "@booking/shared-types";
 import { getPublicApiClient } from "./api";
 
 export type ActionResult<T> = ({ ok: true } & T) | { ok: false; reason: FailureReason };
@@ -57,13 +57,26 @@ export async function fetchProfessionals(
   }
 }
 
+/** A code went to this number under a minute ago; it still works. */
+export interface VerificationCooldown {
+  ok: false;
+  reason: "cooldown";
+  retryAfterSeconds: number;
+}
+
+const isOtpCooldown = (body: unknown): body is OtpCooldownResponse =>
+  typeof body === "object" && body !== null && (body as { code?: unknown }).code === "otp_cooldown";
+
 export async function startVerification(
   phoneNumber: string,
-): Promise<ActionResult<{ expiresAt: string; devCode: string | null }>> {
+): Promise<ActionResult<{ expiresAt: string; devCode: string | null }> | VerificationCooldown> {
   try {
     const response = await getPublicApiClient().startVerification({ phoneNumber });
     return { ok: true, ...response };
   } catch (error) {
+    if (error instanceof ApiError && error.status === 429 && isOtpCooldown(error.body)) {
+      return { ok: false, reason: "cooldown", retryAfterSeconds: error.body.retryAfterSeconds };
+    }
     return toFailure(error);
   }
 }

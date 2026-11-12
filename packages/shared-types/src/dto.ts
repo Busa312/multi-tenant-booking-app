@@ -54,6 +54,15 @@ export interface StartVerificationResponse {
   devCode: string | null;
 }
 
+/**
+ * 429 from start-verification: a code went to this number under a minute ago.
+ * That code still works; a new one can be asked for after `retryAfterSeconds`.
+ */
+export interface OtpCooldownResponse {
+  code: "otp_cooldown";
+  retryAfterSeconds: number;
+}
+
 export interface VerifyPhoneRequest {
   phoneNumber: string;
   code: string;

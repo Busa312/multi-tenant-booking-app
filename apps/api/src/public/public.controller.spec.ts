@@ -1,4 +1,4 @@
-import { BadRequestException, ConflictException, HttpException } from "@nestjs/common";
+import { BadRequestException, ConflictException, HttpException, ServiceUnavailableException } from "@nestjs/common";
 import { Prisma } from "../../generated/prisma/index.js";
 import { PublicController } from "./public.controller.js";
 import { HoldLimitError } from "../booking/visit.service.js";
@@ -432,12 +432,12 @@ describe("phone verification gate", () => {
     expect(visits.create).not.toHaveBeenCalled();
   });
 
-  it("hands the code back only while SMS delivery is mocked", async () => {
-    const { controller, notifications } = setup();
+  it("hands the code back only while no SMS provider is configured", async () => {
+    const { controller, notifications } = setup({ smsWorks: false });
 
     const started = await controller.startVerification({ phoneNumber: "+995555123456" });
 
-    expect(notifications.sendOtp).toHaveBeenCalledWith({ phoneNumber: "+995555123456", code: "123456" });
+    expect(notifications.sendOtp).not.toHaveBeenCalled();
     expect(started.devCode).toBe("123456");
   });
 
@@ -447,6 +447,18 @@ describe("phone verification gate", () => {
 
     const started = await controller.startVerification({ phoneNumber: "+995555123456" });
 
+    expect(notifications.sendOtp).toHaveBeenCalledWith({ phoneNumber: "+995555123456", code: "123456" });
     expect(started.devCode).toBeNull();
+  });
+
+  // R270: with a provider configured, a failed send must never fall back to
+  // showing the code — that would let anyone "verify" a number they don't own
+  it("refuses, without revealing the code, when a configured provider fails to send", async () => {
+    const { controller, notifications } = setup();
+    notifications.sendOtp.mockResolvedValue(false);
+
+    await expect(controller.startVerification({ phoneNumber: "+995555123456" })).rejects.toThrow(
+      ServiceUnavailableException,
+    );
   });
 });

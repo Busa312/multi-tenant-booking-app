@@ -57,7 +57,8 @@
 
 /* Material Symbols, cut down to the icons in lib/iconNames.ts (a few KB
    instead of ~317 KB; `pnpm --filter @booking/cms icons` rebuilds it).
-   `block`: never show an icon's ligature name while the font loads. */
+   `block`: never show an icon's ligature name while the font loads. The file
+   keeps the FILL axis (0–1), so `font-variation-settings: "FILL" 1` works. */
 @font-face {
   font-family: "Material Symbols Outlined";
   font-style: normal;

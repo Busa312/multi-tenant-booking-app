@@ -1,5 +1,6 @@
 import { Injectable, Logger } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
+import { maskSmsNumber, toSmsNumber } from "./sms-number.js";
 
 export interface MagicLinkMessage {
   /** R270: the verified phone the booking was made with. */
@@ -21,11 +22,30 @@ export interface PasswordResetMessage {
   resetUrl: string;
 }
 
+const UBILL_DEFAULT_URL = "https://api.ubill.dev";
+const UBILL_TIMEOUT_MS = 8_000;
+
+/** uBill's answer to a send. statusID 0 = accepted; anything else is a refusal. */
+interface UbillSendResponse {
+  statusID?: number;
+  smsID?: string;
+  message?: string;
+  /** OTP refusals (statusID 47): otpCooldown | otpNumberLimit. */
+  reason?: string;
+  /** Set when part of a batch was refused, which with one number means all of it. */
+  rejectedCount?: number;
+}
+
 /**
- * Outbound messages. **All mocked**: no SMS or mail provider is wired in yet.
- * Each method returns whether it actually delivered, which is what tells the
- * caller whether it has to fall back (show the link on screen, hand the dev
- * code back). Wiring a provider means sending in here and returning true.
+ * Outbound messages. SMS goes through uBill (ubill.ge) once `UBILL_API_KEY`
+ * and `UBILL_BRAND_ID` are set; without them it's a log-only stub, which is
+ * what development runs on. Each method returns whether it actually
+ * delivered, which is what tells the caller whether it has to fall back (show
+ * the link on screen, hand the dev code back). Mail is still a stub.
+ *
+ * Texts are plain Latin (GSM-7) on purpose: one Georgian letter switches the
+ * whole message to Unicode, which fits 70 characters per SMS instead of 160,
+ * so the link message would be billed as two or three.
  *
  * Credentials — links, codes — are never written to logs: for as long as they
  * live, a log line holding one is as good as the credential. The one
@@ -35,8 +55,16 @@ export interface PasswordResetMessage {
 @Injectable()
 export class NotificationService {
   private readonly logger = new Logger(NotificationService.name);
+  private readonly ubill: { url: string; key: string; brandId: number } | null;
 
-  constructor(private readonly config: ConfigService) {}
+  constructor(private readonly config: ConfigService) {
+    const key = this.config.get<string>("UBILL_API_KEY")?.trim();
+    const brandId = Number(this.config.get<string>("UBILL_BRAND_ID"));
+    this.ubill =
+      key && Number.isInteger(brandId) && brandId > 0
+        ? { url: this.config.get<string>("UBILL_API_URL")?.trim() || UBILL_DEFAULT_URL, key, brandId }
+        : null;
+  }
 
   /**
    * Whether texts actually reach phones. Lost-link recovery depends on it:
@@ -44,25 +72,33 @@ export class NotificationService {
    * new one it would only destroy the copy they have.
    */
   canDeliverSms(): boolean {
-    return false;
+    return this.ubill !== null;
   }
 
   /** R270: the manage link, by SMS to the phone the booking was verified with. */
   async sendMagicLink(message: MagicLinkMessage): Promise<boolean> {
-    this.logger.log(
-      `[stub] manage link for ${message.userName} (${message.startAt.toISOString()}` +
-        `${message.locationName ? `, ${message.locationName}` : ""}) — no SMS provider configured`,
-    );
-    return false;
+    if (!this.ubill) {
+      this.logger.log(
+        `[stub] manage link for ${message.userName} (${message.startAt.toISOString()}` +
+          `${message.locationName ? `, ${message.locationName}` : ""}) — no SMS provider configured`,
+      );
+      return false;
+    }
+    return this.sendSms(message.phoneNumber, `Your booking is confirmed. View, change or cancel it: ${message.manageUrl}`, {
+      otp: false,
+    });
   }
 
   /**
-   * The booking OTP. The code comes back on the start response instead while
-   * this returns false (see VerificationService).
+   * The booking OTP. While no provider is configured the code comes back on
+   * the start response instead (see PublicController.startVerification).
    */
   async sendOtp(message: OtpMessage): Promise<boolean> {
-    this.logger.log(`[stub] verification code for ${message.phoneNumber} — no SMS provider configured`);
-    return false;
+    if (!this.ubill) {
+      this.logger.log(`[stub] verification code — no SMS provider configured`);
+      return false;
+    }
+    return this.sendSms(message.phoneNumber, `Your booking code is ${message.code}`, { otp: true });
   }
 
   /**
@@ -79,5 +115,38 @@ export class NotificationService {
       this.logger.error(`password reset requested for ${message.email}, but no mail provider is configured`);
     }
     return false;
+  }
+
+  /** One text through uBill. Never throws: a failed send is `false`, logged without the text. */
+  private async sendSms(phoneNumber: string, text: string, options: { otp: boolean }): Promise<boolean> {
+    const ubill = this.ubill;
+    if (!ubill) return false;
+
+    const number = toSmsNumber(phoneNumber);
+    if (!number) {
+      this.logger.warn("SMS not sent: the phone number can't be dialled");
+      return false;
+    }
+
+    try {
+      const res = await fetch(`${ubill.url}/v1/sms/send`, {
+        method: "POST",
+        headers: { key: ubill.key, "Content-Type": "application/json" },
+        body: JSON.stringify({ brandID: ubill.brandId, numbers: [number], text, otp: options.otp }),
+        signal: AbortSignal.timeout(UBILL_TIMEOUT_MS),
+      });
+      const body = (await res.json().catch(() => ({}))) as UbillSendResponse;
+      if (res.ok && body.statusID === 0 && !body.rejectedCount) {
+        return true;
+      }
+      this.logger.error(
+        `SMS to ${maskSmsNumber(number)} refused: HTTP ${res.status}, statusID ${body.statusID ?? "?"}` +
+          `${body.reason ? ` (${body.reason})` : ""}${body.message ? ` — ${body.message}` : ""}`,
+      );
+      return false;
+    } catch (error) {
+      this.logger.error(`SMS to ${maskSmsNumber(number)} failed: ${(error as Error).message}`);
+      return false;
+    }
   }
 }

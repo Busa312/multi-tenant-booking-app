@@ -20,7 +20,7 @@ interface StepVerifyProps {
 
 const CODE_LENGTH = 6;
 
-/** No resend sooner than this after the last send. */
+/** No resend sooner than this after the last send. The API enforces the same minute. */
 const RESEND_COOLDOWN_MS = 60_000;
 /** A code with less life left than this is replaced on arrival rather than reused. */
 const REUSE_MARGIN_MS = 60_000;
@@ -39,11 +39,15 @@ export function StepVerify({ phoneNumber, codeSent, onCodeSent, onVerified, onBa
   const [isSending, setIsSending] = useState(false);
   const [isVerifying, setIsVerifying] = useState(false);
   const [now, setNow] = useState(() => Date.now());
+  // The API refused a send as too soon (a refresh lost our own record of the
+  // last one): count down to when it allows the next.
+  const [blockedUntil, setBlockedUntil] = useState<number | null>(null);
 
   // Only a code sent to *this* number counts — the customer may have gone
   // back and changed it.
   const sent = codeSent?.phoneNumber === phoneNumber ? codeSent : null;
-  const cooldownLeft = sent ? Math.max(0, Math.ceil((sent.sentAt + RESEND_COOLDOWN_MS - now) / 1000)) : 0;
+  const nextSendAt = Math.max(sent ? sent.sentAt + RESEND_COOLDOWN_MS : 0, blockedUntil ?? 0);
+  const cooldownLeft = Math.max(0, Math.ceil((nextSendAt - now) / 1000));
 
   // Ticks only while the resend button is counting down.
   useEffect(() => {
@@ -58,9 +62,16 @@ export function StepVerify({ phoneNumber, codeSent, onCodeSent, onVerified, onBa
     const result = await startVerification(phoneNumber);
     setIsSending(false);
     if (!result.ok) {
+      if (result.reason === "cooldown") {
+        const at = Date.now();
+        setNow(at);
+        setBlockedUntil(at + result.retryAfterSeconds * 1000);
+        return;
+      }
       setError(t("booking.verify.sendFailed"));
       return;
     }
+    setBlockedUntil(null);
     const sentAt = Date.now();
     setNow(sentAt);
     onCodeSent({ phoneNumber, sentAt, expiresAt: result.expiresAt, devCode: result.devCode });
@@ -142,6 +153,12 @@ export function StepVerify({ phoneNumber, codeSent, onCodeSent, onVerified, onBa
         {error && (
           <p className="alert alert-soft alert-error" role="alert">
             {error}
+          </p>
+        )}
+
+        {!error && blockedUntil !== null && cooldownLeft > 0 && (
+          <p className="alert alert-soft alert-info" role="status">
+            {t("booking.verify.recentlySent")}
           </p>
         )}
 

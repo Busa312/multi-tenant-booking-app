@@ -13,9 +13,10 @@ if (names.length === 0) throw new Error("no icon names found in src/lib/iconName
 const sorted = [...names].sort();
 if (sorted.join() !== names.join()) throw new Error("ICON_NAMES must be sorted (Google Fonts requires it)");
 
-// Same axes the CMS used before: optical size 24, weight 400, outlined, grade 0.
+// Optical size 24, weight 400, grade 0, and FILL as a 0–1 axis: icons are
+// outlined by default, and the map pin sets FILL 1 to draw the solid glyph.
 const cssUrl =
-  "https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0" +
+  "https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0..1,0" +
   `&icon_names=${names.join(",")}&display=block`;
 // A current browser user agent, so Google answers with woff2.
 const headers = {

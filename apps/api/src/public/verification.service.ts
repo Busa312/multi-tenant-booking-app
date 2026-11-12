@@ -1,5 +1,6 @@
 import { randomBytes, randomInt } from "node:crypto";
-import { BadRequestException, Injectable, ServiceUnavailableException } from "@nestjs/common";
+import { BadRequestException, HttpException, HttpStatus, Injectable, ServiceUnavailableException } from "@nestjs/common";
+import type { OtpCooldownResponse } from "@booking/shared-types";
 import { RedisService } from "../redis/redis.service.js";
 import { TenantContextService } from "../tenant/tenant-context.service.js";
 import { hashToken } from "../booking/magic-link.js";
@@ -8,11 +9,11 @@ import { hashToken } from "../booking/magic-link.js";
  * Phone verification for public bookings: a one-time code proves the customer
  * owns the number before an appointment is taken in their name.
  *
- * SMS delivery is **mocked** — see NotificationService.sendOtp. The flow around
- * it is real: codes are random, stored only as hashes, expire, are attempt-
- * limited and single-use, and verifying issues a separate short-lived token the
- * booking call must present. Wiring a provider is implementing `sendOtp` and
- * dropping `devCode` from the start response; nothing here changes.
+ * The code goes out by SMS through NotificationService.sendOtp (or comes back
+ * as `devCode` while no provider is configured — PublicController decides).
+ * Codes are random, stored only as hashes, expire, are attempt-limited and
+ * single-use, and verifying issues a separate short-lived token the booking
+ * call must present.
  *
  * Redis is the store because a code is ephemeral by definition. Unlike the
  * resend rate limiter, which fails *open* so a Redis outage can't block link
@@ -29,13 +30,17 @@ const MAX_ATTEMPTS = 5;
 const SEND_WINDOW_SECONDS = 60 * 60;
 const MAX_SENDS_PER_PHONE = 5;
 const MAX_SENDS_PER_TENANT = 100;
+/**
+ * At most one code per number per minute. The site's resend button counts the
+ * same minute down, but a page refresh resets that; this is what holds.
+ */
+const RESEND_COOLDOWN_SECONDS = 60;
 
 export interface StartedVerification {
   expiresAt: Date;
   /**
-   * The plaintext code, returned ONLY because no SMS provider is wired in —
-   * exactly the arrangement InviteProfessionalResponse uses. It is what makes
-   * the flow testable today and it must disappear the moment delivery is real.
+   * The plaintext code, for the caller to text. PublicController hands it
+   * back on the response only while no SMS provider is configured.
    */
   devCode: string | null;
 }
@@ -50,6 +55,10 @@ export class VerificationService {
   async start(phoneNumber: string): Promise<StartedVerification> {
     const { tenantId } = this.tenantContext.current;
     const phone = this.normalize(phoneNumber);
+
+    // Before the hourly counters, so a too-early retry doesn't spend them —
+    // and before a new code exists, so the one already texted keeps working.
+    await this.claimSendSlot(tenantId, phone);
 
     if (!(await this.withinSendLimits(tenantId, phone))) {
       throw new BadRequestException("Too many codes requested for this number. Try again later.");
@@ -144,6 +153,21 @@ export class VerificationService {
     return `otp-verified:${tenantId}:${phone}`;
   }
 
+  /** One send per number per RESEND_COOLDOWN_SECONDS; a 429 with the wait otherwise. */
+  private async claimSendSlot(tenantId: string, phone: string): Promise<void> {
+    const key = `otp-cooldown:${tenantId}:${phone}`;
+    const retryAfterSeconds = await this.withRedis(async () => {
+      const claimed = await this.redis.client.set(key, "1", "EX", RESEND_COOLDOWN_SECONDS, "NX");
+      if (claimed) return 0;
+      const ttl = await this.redis.client.ttl(key);
+      return ttl > 0 ? ttl : RESEND_COOLDOWN_SECONDS;
+    });
+    if (retryAfterSeconds > 0) {
+      const body: OtpCooldownResponse = { code: "otp_cooldown", retryAfterSeconds };
+      throw new HttpException(body, HttpStatus.TOO_MANY_REQUESTS);
+    }
+  }
+
   /** Per-number first so a blocked number stops spending the tenant's budget. */
   private async withinSendLimits(tenantId: string, phone: string): Promise<boolean> {
     if ((await this.bump(`otp-sends:${tenantId}:${phone}`)) > MAX_SENDS_PER_PHONE) {
@@ -167,7 +191,7 @@ export class VerificationService {
     try {
       return await operation();
     } catch (error) {
-      if (error instanceof BadRequestException) {
+      if (error instanceof HttpException) {
         throw error;
       }
       throw new ServiceUnavailableException("Verification is unavailable right now. Please try again.");
