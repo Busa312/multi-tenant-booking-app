@@ -30,6 +30,9 @@ export const serializeLocalizedText = (value: Prisma.JsonValue | null): Localize
   return entries.length > 0 ? Object.fromEntries(entries) : null;
 };
 
+/** A computed money total (a Decimal sum) on the wire: always two decimals, never a float. */
+export const serializeMoney = (value: Prisma.Decimal): string => value.toFixed(2);
+
 export const APPOINTMENT_INCLUDE = {
   services: {
     orderBy: { position: "asc" },

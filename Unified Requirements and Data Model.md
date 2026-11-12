@@ -65,6 +65,7 @@ as those code comments — they are not written down here yet, and back-filling 
 | R320 | CMS sessions can be ended server-side: logging out revokes that session's token, and a password change, a reset or deactivating the login ends all of that user's sessions immediately. The session token lives only in an httpOnly, SameSite=Strict cookie — the CMS's own JavaScript never sees it — and every state-changing CMS request must carry a header a cross-site form can't send. |
 | R330 | Every endpoint that can be called without a login, or that guards one (login, password reset, code verification, availability, holds, booking, manage-link actions), is rate limited per client address, and the sensitive ones per account or phone as well. Hitting a limit answers 429. |
 | R340 | The public site publishes a privacy policy and terms of use, linked from every page and from the booking form. |
+| R370 | The CMS home page shows numbers computed by the API (`GET /cms/dashboard`), following the location tab: past bookings still marked *booked*, which staff can mark *completed* or *no-show* right there (R100); the next 7 days' bookings and occupancy (booked minutes ÷ working minutes, where working minutes are business hours minus time off); and the last 30 days against the 30 before (bookings, no-show and cancellation rates, share booked online, new vs returning clients by phone, and the value of completed appointments). A professional login sees only their own appointments and never a money figure. |
 
 ## Booking Access — Magic Link
 

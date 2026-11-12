@@ -1,23 +1,30 @@
 import { useEffect, useMemo, useState } from "react";
-import type { LocationSummary, AppointmentSummary, ProfessionalSummary, ServiceSummary } from "@booking/shared-types";
+import type {
+  AppointmentSummary,
+  DashboardSummary,
+  LocationSummary,
+  ProfessionalSummary,
+  ServiceSummary,
+} from "@booking/shared-types";
 import { cachedApi } from "../lib/cache.js";
 import { useAuth } from "../auth/AuthContext.js";
 import { useI18n } from "../i18n/I18nContext.js";
-import { buildTrend, dashboardRange, todaysAgenda, topServices, type DashboardRange } from "../lib/dashboardStats.js";
+import { dashboardRange, todaysAgenda, type DashboardRange } from "../lib/dashboardStats.js";
 import { tenantDateString } from "../lib/tenantTime.js";
 import { AppShell } from "../components/AppShell.js";
 import { LocationTabs } from "../components/LocationTabs.js";
 import { CreateBookingModal } from "../components/CreateBookingModal.js";
 import { DashboardQuickActions, type BookingBlocker } from "../components/DashboardQuickActions.js";
 import { TodayAgendaCard } from "../components/TodayAgendaCard.js";
-import { BookingTrendChart } from "../components/BookingTrendChart.js";
-import { BookingTrendChartSkeleton } from "../components/BookingTrendChartSkeleton.js";
-import { TopServicesCard } from "../components/TopServicesCard.js";
+import { NeedsMarkingCard } from "../components/NeedsMarkingCard.js";
+import { WeekAheadCard } from "../components/WeekAheadCard.js";
+import { PeriodStatsCard } from "../components/PeriodStatsCard.js";
 import { CardSkeleton } from "../components/CardSkeleton.js";
 import { Alert } from "../components/ui/index.js";
 
 const AGENDA_ROW = "58px";
-const TABLE_ROW = "34px";
+const WEEK_ROW = "28px";
+const STAT_GROUP = "112px";
 
 interface PageContext {
   tenantName: string;
@@ -42,9 +49,12 @@ export function DashboardPage() {
   const [appointments, setAppointments] = useState<AppointmentSummary[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
-  // R150: null = every branch. Every card below derives from `appointments`, so
-  // filtering once here is what makes the whole dashboard follow the tab.
+  // R150: null = every branch. The agenda filters `appointments` here; the
+  // R370 summary is asked for per branch, so every card follows the tab.
   const [locationId, setLocationId] = useState<string | null>(null);
+  const [summary, setSummary] = useState<DashboardSummary | null>(null);
+  const [savingId, setSavingId] = useState<string | null>(null);
+  const [markError, setMarkError] = useState<string | null>(null);
 
   const [nowTick, setNowTick] = useState(0);
 
@@ -87,6 +97,36 @@ export function DashboardPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [range?.from, range?.to]);
 
+  // R370: one call for every number below the agenda
+  function loadSummary(forLocationId: string | null) {
+    cachedApi
+      .getDashboard(forLocationId ? { locationId: forLocationId } : {})
+      .then(setSummary)
+      .catch(() => setError(t("dashboard.errLoad")));
+  }
+
+  useEffect(() => {
+    setSummary(null);
+    loadSummary(locationId);
+
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [locationId]);
+
+  // R100: a person says whether the client came; then every number is redone
+  async function markStatus(appointment: AppointmentSummary, status: "completed" | "no_show") {
+    setSavingId(appointment.id);
+    setMarkError(null);
+    try {
+      await cachedApi.updateAppointmentStatus(appointment.id, { status });
+      loadSummary(locationId);
+      if (range) load(range.from, range.to);
+    } catch {
+      setMarkError(t("dashboard.markFailed"));
+    } finally {
+      setSavingId(null);
+    }
+  }
+
   useEffect(() => {
     const timer = setInterval(() => {
       setNowTick((n) => n + 1);
@@ -112,13 +152,6 @@ export function DashboardPage() {
 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visible, context, nowTick]);
-
-  const trend = useMemo(() => {
-    if (!visible || !context) return null;
-    return buildTrend(visible, context.timezone, context.range);
-  }, [visible, context]);
-
-  const top = useMemo(() => (visible ? topServices(visible) : null), [visible]);
 
   const activeServices = context?.services.filter((service) => service.isActive) ?? [];
   const activeProfessionals = context?.professionals.filter((professional) => professional.isActive) ?? [];
@@ -167,13 +200,32 @@ export function DashboardPage() {
           )}
         </div>
 
-        <div>{trend ? <BookingTrendChart trend={trend} /> : <BookingTrendChartSkeleton />}</div>
+        {summary && context && summary.unmarkedCount > 0 && (
+          <div className="xl:col-span-2">
+            <NeedsMarkingCard
+              appointments={summary.unmarked}
+              count={summary.unmarkedCount}
+              timezone={context.timezone}
+              savingId={savingId}
+              error={markError}
+              onMark={markStatus}
+            />
+          </div>
+        )}
 
-        <div>
-          {top ? (
-            <TopServicesCard services={top} showValue={role === "owner"} />
+        <div className="xl:col-span-2">
+          {summary ? (
+            <WeekAheadCard days={summary.week} isOwnOnly={role === "professional"} />
           ) : (
-            <CardSkeleton rows={5} rowHeight={TABLE_ROW} />
+            <CardSkeleton rows={7} rowHeight={WEEK_ROW} />
+          )}
+        </div>
+
+        <div className="xl:col-span-2">
+          {summary ? (
+            <PeriodStatsCard current={summary.current} previous={summary.previous} />
+          ) : (
+            <CardSkeleton rows={2} rowHeight={STAT_GROUP} />
           )}
         </div>
       </div>
@@ -192,6 +244,7 @@ export function DashboardPage() {
             setCreateOpen(false);
 
             load(context.range.from, context.range.to);
+            loadSummary(locationId);
           }}
         />
       )}

@@ -4,11 +4,13 @@ import type {
   BusinessHours,
   CmsAppointmentListQuery,
   CmsAvailabilityQuery,
+  CmsDashboardQuery,
   CreateCmsAppointmentRequest,
   CreateLocationRequest,
   CreateProfessionalRequest,
   CreateServiceRequest,
   CreateTimeOffRequest,
+  DashboardSummary,
   InviteProfessionalRequest,
   InviteProfessionalResponse,
   LocationSummary,
@@ -187,6 +189,14 @@ export class CmsApiClient {
     if (query.to) params.set("to", query.to);
     const search = params.toString();
     return this.http.get<AppointmentSummary[]>(`/cms/appointments${search ? `?${search}` : ""}`);
+  }
+
+  // R370: every number on the home page in one call
+  getDashboard(query: CmsDashboardQuery = {}) {
+    const params = new URLSearchParams();
+    if (query.locationId) params.set("locationId", query.locationId);
+    const search = params.toString();
+    return this.http.get<DashboardSummary>(`/cms/dashboard${search ? `?${search}` : ""}`);
   }
 
   // R50: the same open slots the public site would offer for this pairing

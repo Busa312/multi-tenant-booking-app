@@ -529,3 +529,39 @@ export class OnboardTenantResponseDto {
   @ApiProperty() ownerUserId!: string;
   @ApiProperty() ownerEmail!: string;
 }
+
+// R370: the CMS home page
+
+export class DashboardDayDto {
+  @ApiProperty({ example: "2026-11-12", description: "Tenant-local date" }) date!: string;
+  @ApiProperty({ description: "Visits starting that day, not cancelled; a split visit counts once" }) bookings!: number;
+  @ApiProperty({ description: "Minutes of appointments assigned to the professionals in scope" }) bookedMinutes!: number;
+  @ApiProperty({ description: "Their business hours that day minus time off" }) workingMinutes!: number;
+}
+
+export class DashboardPeriodDto {
+  @ApiProperty({ description: "Visits not cancelled; a split visit counts once" }) bookings!: number;
+  @ApiProperty({ description: "Of bookings, the ones the customer made online" }) onlineBookings!: number;
+  @ApiProperty({ description: "Appointments of every status" }) appointments!: number;
+  @ApiProperty() completed!: number;
+  @ApiProperty() noShows!: number;
+  @ApiProperty() cancelled!: number;
+  @ApiProperty({ description: "Clients (by phone) whose first visit falls in the period" }) newClients!: number;
+  @ApiProperty() returningClients!: number;
+  @ApiProperty({
+    nullable: true,
+    type: String,
+    example: "1240.00",
+    description: "Sum of completed appointments' prices; null for a professional login",
+  })
+  completedValue!: string | null;
+}
+
+export class DashboardSummaryDto {
+  @ApiProperty({ type: [AppointmentSummaryDto], description: "Past appointments still booked, oldest first" })
+  unmarked!: AppointmentSummaryDto[];
+  @ApiProperty() unmarkedCount!: number;
+  @ApiProperty({ type: [DashboardDayDto], description: "Today and the next 6 days" }) week!: DashboardDayDto[];
+  @ApiProperty({ type: DashboardPeriodDto, description: "The last 30 days" }) current!: DashboardPeriodDto;
+  @ApiProperty({ type: DashboardPeriodDto, description: "The 30 days before" }) previous!: DashboardPeriodDto;
+}

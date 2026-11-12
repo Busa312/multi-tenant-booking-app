@@ -7,7 +7,9 @@ import { ProfessionalsController } from "./professionals.controller.js";
 import { BusinessHoursController } from "./business-hours.controller.js";
 import { TimeOffController } from "./time-off.controller.js";
 import { AppointmentsController } from "./appointments.controller.js";
+import { DashboardController } from "./dashboard.controller.js";
 import { RevalidationService } from "./revalidation.service.js";
+import { DashboardService } from "./dashboard.service.js";
 
 @Module({
   imports: [BookingModule],
@@ -19,7 +21,8 @@ import { RevalidationService } from "./revalidation.service.js";
     BusinessHoursController,
     TimeOffController,
     AppointmentsController,
+    DashboardController,
   ],
-  providers: [RevalidationService],
+  providers: [RevalidationService, DashboardService],
 })
 export class CmsModule {}

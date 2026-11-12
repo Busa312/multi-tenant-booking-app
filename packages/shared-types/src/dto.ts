@@ -1,6 +1,6 @@
 
 
-import type { AppointmentStatus, TenantUserRole, Visit, VisitSlot } from "./entities";
+import type { AppointmentStatus, AppointmentSummary, TenantUserRole, Visit, VisitSlot } from "./entities";
 import type { TenantColors } from "./colors";
 import type { LocalizedText } from "./i18n";
 
@@ -157,6 +157,57 @@ export interface CmsAvailabilityQuery {
 export interface CmsAppointmentListQuery {
   from?: string;
   to?: string;
+}
+
+// R370: the home page's numbers, optionally for one branch (R150)
+export interface CmsDashboardQuery {
+  locationId?: string;
+}
+
+/** R370: one tenant-local day of the week ahead. */
+export interface DashboardDay {
+  /** Tenant-local "YYYY-MM-DD". */
+  date: string;
+  /** Visits starting that day, not cancelled. A visit split across professionals counts once. */
+  bookings: number;
+  /** Minutes of non-cancelled appointments assigned to the professionals in scope. */
+  bookedMinutes: number;
+  /** Their business hours that day minus time off. 0 = nobody works. */
+  workingMinutes: number;
+}
+
+/** R370: one rolling period, by appointment start time. */
+export interface DashboardPeriod {
+  /** Visits that weren't cancelled. A visit split across professionals counts once. */
+  bookings: number;
+  /** Of `bookings`, the ones the customer made online (no staff author). */
+  onlineBookings: number;
+  /** Appointments (segments), all statuses: the cancellation rate's denominator. */
+  appointments: number;
+  completed: number;
+  noShows: number;
+  cancelled: number;
+  /** Clients (by phone) whose first non-cancelled appointment falls in this period. */
+  newClients: number;
+  /** Clients in this period who had been before it. */
+  returningClients: number;
+  /**
+   * Sum of `price` over completed appointments, at the price saved when each
+   * was booked. A decimal string like every price; null for a professional login.
+   */
+  completedValue: string | null;
+}
+
+export interface DashboardSummary {
+  /** Past appointments still `booked`, oldest first; the first few only — `unmarkedCount` has the total. */
+  unmarked: AppointmentSummary[];
+  unmarkedCount: number;
+  /** Today and the 6 days after it. */
+  week: DashboardDay[];
+  /** The last 30 days, up to now. */
+  current: DashboardPeriod;
+  /** The 30 days before that. */
+  previous: DashboardPeriod;
 }
 
 export interface CreateCmsAppointmentRequest {

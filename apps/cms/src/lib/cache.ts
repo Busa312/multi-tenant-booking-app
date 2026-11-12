@@ -1,6 +1,7 @@
 import type {
   AppointmentSummary,
   CmsAppointmentListQuery,
+  CmsDashboardQuery,
   CmsAvailabilityQuery,
   CreateCmsAppointmentRequest,
   CreateLocationRequest,
@@ -190,5 +191,7 @@ export const cachedApi = {
   cancelAppointment: (id: string) => mutating(cmsApiClient.cancelAppointment(id), ["appointments"]),
   getProfessionalUpcomingCount: (id: string) => cmsApiClient.getProfessionalUpcomingCount(id),
   listAppointments: (query: CmsAppointmentListQuery = {}) => cmsApiClient.listAppointments(query),
+  // R370: never cached — it's the page's live numbers, and cheap to recompute
+  getDashboard: (query: CmsDashboardQuery = {}) => cmsApiClient.getDashboard(query),
   listAppointmentAvailability: (query: CmsAvailabilityQuery) => cmsApiClient.listAppointmentAvailability(query),
 };

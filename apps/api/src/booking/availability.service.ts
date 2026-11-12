@@ -14,6 +14,7 @@ import {
 import { resolveServiceLines, totalDurationMinutes, validateServiceIds } from "./service-lines.js";
 import { VISIT_GAP_STEP_MINUTES } from "./booking-rules.js";
 import { AvailabilityCacheService } from "./availability-cache.service.js";
+import { workingWindows } from "./working-hours.js";
 import {
   groupPlannedUnits,
   planVisitAt,
@@ -106,8 +107,6 @@ function isCovered(start: Date, end: Date, windows: Instant[]): boolean {
   return reach >= end.getTime();
 }
 
-const timeToMinutes = (time: Date): number => time.getUTCHours() * 60 + time.getUTCMinutes();
-
 @Injectable()
 export class AvailabilityService {
   constructor(
@@ -183,7 +182,7 @@ export class AvailabilityService {
       const slots: AvailabilitySlot[] = [];
 
       for (const candidate of candidates) {
-        const windows = this.windowsFor(businessHours, candidate.id);
+        const windows = workingWindows(businessHours, candidate.id);
         const busy: Instant[] = [
           ...timeOff
             .filter((block) => block.professionalId === null || block.professionalId === candidate.id)
@@ -290,7 +289,7 @@ export class AvailabilityService {
 
     const openWindows: Instant[] = [];
     for (const date of localDates) {
-      for (const window of this.windowsFor(
+      for (const window of workingWindows(
         businessHours.filter((row) => row.dayOfWeek === dayOfWeekForDateString(date)),
         professionalId,
       )) {
@@ -448,7 +447,7 @@ export class AvailabilityService {
     const schedules = new Map<string, ProfessionalSchedule>();
     for (const id of ids) {
       schedules.set(id, {
-        windows: this.windowsFor(businessHours, id).map((window) => ({
+        windows: workingWindows(businessHours, id).map((window) => ({
           start: zonedTimeToUtc(date, window.startMinutes, timezone).getTime(),
           end: zonedTimeToUtc(date, window.endMinutes, timezone).getTime(),
         })),
@@ -605,17 +604,5 @@ export class AvailabilityService {
       select: { id: true, name: true },
     });
     return professionals.map((p) => ({ id: p.id, name: p.name }));
-  }
-
-  private windowsFor(
-    businessHours: { professionalId: string | null; startTime: Date; endTime: Date }[],
-    professionalId: string | null,
-  ): { startMinutes: number; endMinutes: number }[] {
-    const own = professionalId ? businessHours.filter((row) => row.professionalId === professionalId) : [];
-    const rows = own.length > 0 ? own : businessHours.filter((row) => row.professionalId === null);
-    return rows
-      .map((row) => ({ startMinutes: timeToMinutes(row.startTime), endMinutes: timeToMinutes(row.endTime) }))
-
-      .filter((window) => window.endMinutes > window.startMinutes);
   }
 }
