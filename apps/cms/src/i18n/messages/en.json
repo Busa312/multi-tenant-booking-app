@@ -195,7 +195,7 @@
     "rescheduleTitle": "Reschedule {name}",
     "move": "Move booking",
     "moveAnyway": "Move anyway",
-    "magicLinkWarning": "This customer booked online. Moving the appointment invalidates their existing manage link.",
+    "magicLinkWarning": "This customer booked online. Their link keeps working and will show the new time, but they aren't notified of the change, so let them know.",
     "visitPartNote": "If this customer booked several services with different specialists, only this part moves — the others keep their times.",
     "conflictLead": "This time isn't free:",
     "conflictAppointment": "{name} already has an appointment at {at} ({customer}).",

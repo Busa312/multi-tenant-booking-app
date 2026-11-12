@@ -229,7 +229,7 @@ describe("BookingService.create", () => {
 
     expect(createdData(tx).visitId).toBeUndefined();
     expect(tx.visit.update).not.toHaveBeenCalled();
-    expect(result.magicLinkToken).toBeNull();
+    expect(result.appointment).toBeDefined();
   });
 
   it("records who created it and asks for the summary shape back", async () => {
@@ -905,66 +905,45 @@ describe("BookingService.update", () => {
     });
   });
 
-  describe("magic-link rotation", () => {
-    const OLD_HASH = "a".repeat(64);
+  describe("customer link on a staff move", () => {
     // The moved segment now ends at 07:30Z; the visit's other live segment ends earlier.
     const customerVisit = (): Overrides => ({
       appointment: { visitId: "v1" },
       visit: {
-        accessTokenHash: OLD_HASH,
+        accessTokenHash: "a".repeat(64),
         appointments: [{ endAt: new Date("2026-08-06T06:30:00.000Z") }, { endAt: new Date("2026-08-06T07:30:00.000Z") }],
       },
     });
-    const rotatedData = (tx: TxStub) => {
-      const call = tx.visit.update.mock.calls[0] as unknown as
-        | [{ data: { accessTokenHash: string; accessTokenExpiresAt: Date } }]
-        | undefined;
+    const visitWrite = (tx: TxStub) => {
+      const call = tx.visit.update.mock.calls[0] as unknown as [{ data: Record<string, unknown> }] | undefined;
       if (!call) throw new Error("expected visit.update to have been called");
       return call[0].data;
     };
 
-    // R110/R230: moving any segment rotates the visit's link
-    it("rotates the visit's token and re-dates it to a day after the visit's last segment", async () => {
+    // R230: the link the customer was texted keeps working after staff move them
+    it("keeps the token and moves its expiry to a day after the visit's last segment", async () => {
       const { service, tx } = setup(customerVisit());
 
-      const result = await service.update(updateInput({ date: "2026-08-06", time: "11:00" }));
+      await service.update(updateInput({ date: "2026-08-06", time: "11:00" }));
 
-      const data = rotatedData(tx);
-      expect(data.accessTokenHash).toMatch(/^[0-9a-f]{64}$/);
-      expect(data.accessTokenHash).not.toBe(OLD_HASH);
-      expect(data.accessTokenExpiresAt.toISOString()).toBe("2026-08-07T07:30:00.000Z");
-      // The plaintext goes back to the caller once and is never what's stored.
-      expect(result.magicLinkToken).toMatch(/^[0-9a-f]{64}$/);
-      expect(result.magicLinkToken).not.toBe(data.accessTokenHash);
-    });
-
-    it("issues a different token every time", async () => {
-      const first = setup(customerVisit());
-      const second = setup(customerVisit());
-
-      await first.service.update(updateInput({ date: "2026-08-06", time: "11:00" }));
-      await second.service.update(updateInput({ date: "2026-08-06", time: "11:00" }));
-
-      expect(rotatedData(first.tx).accessTokenHash).not.toBe(rotatedData(second.tx).accessTokenHash);
+      expect(visitWrite(tx)).toEqual({ accessTokenExpiresAt: new Date("2026-08-07T07:30:00.000Z") });
     });
 
     // R70: a staff-created booking is tokenless and stays that way
     it("leaves a staff-created booking without a link", async () => {
       const { service, tx } = setup();
 
-      const result = await service.update(updateInput({ date: "2026-08-06", time: "11:00" }));
+      await service.update(updateInput({ date: "2026-08-06", time: "11:00" }));
 
       expect(tx.visit.update).not.toHaveBeenCalled();
-      expect(result.magicLinkToken).toBeNull();
     });
 
     it("doesn't resurrect the link of a visit the customer cancelled", async () => {
       const { service, tx } = setup({ appointment: { visitId: "v1" }, visit: { accessTokenHash: null, appointments: [] } });
 
-      const result = await service.update(updateInput({ date: "2026-08-06", time: "11:00" }));
+      await service.update(updateInput({ date: "2026-08-06", time: "11:00" }));
 
       expect(tx.visit.update).not.toHaveBeenCalled();
-      expect(result.magicLinkToken).toBeNull();
     });
   });
 

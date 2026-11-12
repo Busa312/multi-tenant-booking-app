@@ -7,7 +7,7 @@ import { APPOINTMENT_SUMMARY_INCLUDE, type PrismaAppointmentSummary } from "../c
 import { parseTimeOfDay, zonedDateString, zonedTimeToUtc } from "../common/timezone.js";
 import { AvailabilityService } from "./availability.service.js";
 import { lockBookingDay } from "./booking-lock.js";
-import { issueToken } from "./magic-link.js";
+import { issueToken, linkExpiresAt } from "./magic-link.js";
 import {
   resolveServiceLines,
   totalDurationMinutes,
@@ -43,12 +43,6 @@ export interface CreateBookingInput {
 
 export interface BookingResult {
   appointment: PrismaAppointmentSummary;
-  /**
-   * R110/R230: set when the move rotated the customer's visit link. Customer
-   * bookings are created by VisitService; this service creates staff bookings,
-   * which never have a link (R70).
-   */
-  magicLinkToken: string | null;
 }
 
 export interface UpdateBookingInput {
@@ -125,7 +119,7 @@ export class BookingService {
         include: APPOINTMENT_SUMMARY_INCLUDE,
       });
 
-      return { appointment, magicLinkToken: null };
+      return { appointment };
     });
   }
 
@@ -211,10 +205,12 @@ export class BookingService {
         include: APPOINTMENT_SUMMARY_INCLUDE,
       });
 
-      // R110/R230: moving any segment rotates the visit's link
-      const magicLinkToken = existing.visitId ? await this.rotateVisitToken(tx, tenantId, existing.visitId) : null;
+      // R230: the customer's link keeps working — it only follows the visit's new end
+      if (existing.visitId) {
+        await this.extendVisitLink(tx, tenantId, existing.visitId);
+      }
 
-      return { appointment, magicLinkToken };
+      return { appointment };
     });
   }
 
@@ -229,7 +225,31 @@ export class BookingService {
   }
 
   /**
-   * R110/R230: a fresh link for the visit, expiring a day after its last live
+   * R230: after a move, the visit's link expires a day after its (new) last
+   * live segment. The token itself stays — the link the customer was texted
+   * keeps working, so no new one has to be sent. A cancelled visit's cleared
+   * link stays cleared.
+   */
+  async extendVisitLink(tx: Prisma.TransactionClient, tenantId: string, visitId: string): Promise<void> {
+    const visit = await tx.visit.findFirst({
+      where: { id: visitId, tenantId },
+      select: { accessTokenHash: true, appointments: { where: { status: { not: "cancelled" } }, select: { endAt: true } } },
+    });
+    if (!visit?.accessTokenHash) {
+      return;
+    }
+    const lastEnd = Math.max(...visit.appointments.map((appointment) => appointment.endAt.getTime()));
+    if (!Number.isFinite(lastEnd)) {
+      return;
+    }
+    await tx.visit.update({
+      where: { id: visitId, tenantId },
+      data: { accessTokenExpiresAt: linkExpiresAt(new Date(lastEnd)) },
+    });
+  }
+
+  /**
+   * Lost-link recovery (resend): a fresh link for the visit, expiring a day after its last live
    * segment. A visit whose link was cleared (cancelled) stays linkless — moving
    * a cancelled customer's leftovers must not resurrect a link.
    */

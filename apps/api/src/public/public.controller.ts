@@ -13,7 +13,6 @@ import type {
   StartVerificationResponse,
   VerifyPhoneRequest,
   VerifyPhoneResponse,
-  RescheduleAppointmentResponse,
   Service,
   PublicProfessional,
   Tenant,
@@ -43,7 +42,6 @@ import {
   LocationDto,
   PublicProfessionalDto,
   RescheduleAppointmentRequestDto,
-  RescheduleVisitResponseDto,
   ResendMagicLinkRequestDto,
   ServiceDto,
   StartVerificationRequestDto,
@@ -306,25 +304,15 @@ export class PublicController {
     return this.visits.rescheduleSlots(token, date);
   }
 
-  // R110: rescheduling rotates the token; R230: the whole visit moves
+  // R230: the whole visit moves. The link stays the same (only its expiry
+  // follows the new end), so nothing is texted — the one they have still works.
   @Patch("manage/:token/reschedule")
   @RateLimit({ name: "manage-write", max: 30, windowSeconds: 60 * 60 })
   @ApiParam({ name: "token" })
   @ApiBody({ type: RescheduleAppointmentRequestDto })
-  @ApiOkResponse({ type: RescheduleVisitResponseDto })
-  async rescheduleAppointment(
-    @Param("token") token: string,
-    @Body() body: RescheduleAppointmentRequest,
-  ): Promise<RescheduleAppointmentResponse> {
-    const { visit, magicLinkToken } = await this.visits.reschedule(token, body.date, body.time);
-
-    const manageUrl = this.buildManageUrl(magicLinkToken);
-    const linkTexted = await this.sendLink(visit, manageUrl);
-
-    // R110: the token the caller arrived with is dead now, so the replacement
-    // goes back in the response as well as by SMS — the customer must not be
-    // locked out of their own booking by the act of moving it.
-    return { visit: serializeVisit(visit), manageUrl, linkTexted };
+  @ApiOkResponse({ type: VisitDto })
+  async rescheduleAppointment(@Param("token") token: string, @Body() body: RescheduleAppointmentRequest): Promise<Visit> {
+    return serializeVisit(await this.visits.reschedule(token, body.date, body.time));
   }
 
   // R230: the customer cancels the whole visit; R90: rows stay as history

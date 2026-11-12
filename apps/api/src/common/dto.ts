@@ -279,7 +279,7 @@ export class AppointmentSummaryDto extends AppointmentDto {
   @ApiProperty({ nullable: true, type: String, description: "Joined so a calendar row needs no second lookup" })
   locationName!: string | null;
   @ApiProperty({ nullable: true, ...LOCALIZED_MAP, description: "R160" }) locationNameI18n!: Record<string, string> | null;
-  @ApiProperty({ description: "A customer magic link exists (public-site booking) — rescheduling rotates it (R110)" })
+  @ApiProperty({ description: "A customer magic link exists (public-site booking); moving keeps it working (R230)" })
   hasMagicLink!: boolean;
   @ApiProperty({
     nullable: true,
@@ -470,12 +470,6 @@ export class HoldSlotResponseDto {
   @ApiProperty() expiresAt!: string;
   @ApiProperty({ type: VisitSlotDto, description: "The plan actually held — may differ from the one shown" })
   slot!: VisitSlotDto;
-}
-
-export class RescheduleVisitResponseDto {
-  @ApiProperty({ type: VisitDto }) visit!: VisitDto;
-  @ApiProperty({ description: "R110: the rotated link — the one the caller used is dead now" }) manageUrl!: string;
-  @ApiProperty({ description: "R270" }) linkTexted!: boolean;
 }
 
 export class UpdateTenantBookingRulesRequestDto {

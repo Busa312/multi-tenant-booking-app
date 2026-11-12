@@ -249,16 +249,14 @@ describe("reschedule", () => {
     ]);
   });
 
-  // R110
-  it("rotates the link, expiring a day after the new end", async () => {
+  // R230: the link the customer already has keeps working — nothing new to text
+  it("keeps the link, moving only its expiry to a day after the new end", async () => {
     const { service, tx } = setup({ plan: plan([[0, "dato", 0, 90], [1, "nina", 90, 135]]) });
 
-    const result = await service.reschedule(TOKEN, "2026-08-07", "10:00");
+    await service.reschedule(TOKEN, "2026-08-07", "10:00");
 
-    const data = tx.visit.update.mock.calls[0]?.[0]?.data as { accessTokenHash: string; accessTokenExpiresAt: Date };
-    expect(data.accessTokenHash).not.toBe(hashToken(TOKEN));
-    expect(data.accessTokenExpiresAt).toEqual(new Date(T10 + 135 * MIN + 24 * 60 * MIN));
-    expect(hashToken(result.magicLinkToken)).toBe(data.accessTokenHash);
+    const data = tx.visit.update.mock.calls[0]?.[0]?.data;
+    expect(data).toEqual({ accessTokenExpiresAt: new Date(T10 + 135 * MIN + 24 * 60 * MIN) });
   });
 
   it("refuses a time the visit no longer fits with a 409, writing nothing", async () => {

@@ -126,7 +126,7 @@
     },
     "reschedule": "Change the time",
     "rescheduleHeading": "Pick a new time",
-    "rescheduleNote": "Changing the time replaces this link with a new one, which we'll text you.",
+    "rescheduleNote": "This link keeps working after you change the time.",
     "cancel": "Cancel this appointment",
     "cancelHeading": "Cancel this appointment?",
     "cancelConfirm": "Yes, cancel it",

@@ -77,7 +77,7 @@ Resolves the open question "should User log in to book an appointment?" — deci
 2. Server generates a random, high-entropy token, stores its hash on the `Visit` row, and sets an expiry (end of the visit's last segment + 24h grace period).
 3. Server texts the link to the verified phone (`https://{tenant-domain}/manage/{token}`) and shows it on the confirmation screen.
 4. Visiting that link authorizes read/reschedule/cancel actions against that one visit only (all of its segments, together — R230) — it does not authenticate a customer identity or grant access to other bookings.
-5. Rescheduling issues a new token (old one invalidated) so a leaked/expired link can't be reused after the visit moves. Staff moving one segment of a visit in the CMS rotates the visit's token too.
+5. The link stays the same for the life of the visit. Rescheduling — by the customer, or staff moving a segment in the CMS — keeps the token and only moves its expiry to the new end + 24h, so the link already texted keeps working and no new SMS is sent. (Rotating on every move was dropped: it only guarded against someone who already held the link, who could reschedule or cancel anyway, and it cost an SMS per move and stranded customers whose booking staff had moved.) The token is replaced only by lost-link recovery, below.
 
 **Recovering a lost link**: customer enters their phone number on a "resend link" page; server looks up upcoming, non-cancelled appointments for that phone number and texts fresh tokens to that number. Rate-limit this endpoint (phone-number enumeration risk).
 

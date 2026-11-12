@@ -7,7 +7,6 @@ import type {
   Location,
   ResendMagicLinkRequest,
   RescheduleAppointmentRequest,
-  RescheduleAppointmentResponse,
   StartVerificationRequest,
   StartVerificationResponse,
   VerifyPhoneRequest,
@@ -86,7 +85,7 @@ export class PublicApiClient {
   }
 
   rescheduleAppointment(token: string, payload: RescheduleAppointmentRequest) {
-    return this.http.patch<RescheduleAppointmentResponse>(`/public/manage/${token}/reschedule`, payload);
+    return this.http.patch<Visit>(`/public/manage/${token}/reschedule`, payload);
   }
 
   // R80/R230: start times for moving the whole visit, with itself excluded

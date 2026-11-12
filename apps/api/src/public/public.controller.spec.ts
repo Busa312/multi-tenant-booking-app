@@ -77,7 +77,7 @@ const setup = (overrides: Overrides = {}) => {
   const visits = {
     create: jest.fn().mockResolvedValue({ visit: visitRow(), magicLinkToken: "issued" }),
     getByToken: jest.fn().mockResolvedValue(visitRow()),
-    reschedule: jest.fn().mockResolvedValue({ visit: visitRow(), magicLinkToken: "rotated" }),
+    reschedule: jest.fn().mockResolvedValue(visitRow()),
     cancel: jest.fn().mockResolvedValue(visitRow({ status: "cancelled" })),
     findResendable: jest.fn().mockResolvedValue(overrides.resendable ?? []),
     reissue: jest.fn().mockResolvedValue(overrides.reissued === undefined ? "fresh" : overrides.reissued),
@@ -174,16 +174,14 @@ describe("manage", () => {
     expect(visits.getByToken).toHaveBeenCalledWith(TOKEN);
   });
 
-  // R110: the old link dies the moment the move succeeds
-  it("sends the customer their rotated link after a reschedule", async () => {
+  // R230: the link they used keeps working, so a move costs no SMS
+  it("returns the moved visit and texts nothing after a reschedule", async () => {
     const { controller, notifications } = setup();
 
     const result = await controller.rescheduleAppointment(TOKEN, { date: "2026-08-07", time: "11:00" });
 
-    expect(result.manageUrl).toBe("https://acme.platform.ge/manage/rotated");
-    expect(notifications.sendMagicLink).toHaveBeenCalledWith(
-      expect.objectContaining({ phoneNumber: "+995555123456", manageUrl: "https://acme.platform.ge/manage/rotated" }),
-    );
+    expect(result.id).toBeDefined();
+    expect(notifications.sendMagicLink).not.toHaveBeenCalled();
   });
 
   it("passes only the new time — never professionals, services or branch", async () => {

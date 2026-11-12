@@ -19,12 +19,15 @@ export interface IssuedToken {
   accessTokenExpiresAt: Date;
 }
 
+/** When a visit ending at `endAt` stops being manageable through its link. */
+export const linkExpiresAt = (endAt: Date): Date => new Date(endAt.getTime() + MAGIC_LINK_GRACE_MS);
+
 /** A fresh random token, expiring MAGIC_LINK_GRACE_MS after `endAt`. */
 export function issueToken(endAt: Date): IssuedToken {
   const token = randomBytes(32).toString("hex");
   return {
     token,
     accessTokenHash: hashToken(token),
-    accessTokenExpiresAt: new Date(endAt.getTime() + MAGIC_LINK_GRACE_MS),
+    accessTokenExpiresAt: linkExpiresAt(endAt),
   };
 }

@@ -102,20 +102,6 @@ export interface CreateAppointmentResponse {
   linkTexted: boolean;
 }
 
-/**
- * R110: rescheduling rotates the token, so the link the customer followed to
- * get here is dead by the time they read this. The replacement rides back on
- * the response — it is the same customer, already proven by the old token, and
- * without it they would be locked out of their own booking until they used the
- * resend-by-phone flow.
- */
-export interface RescheduleAppointmentResponse {
-  visit: Visit;
-  manageUrl: string;
-  /** R270 */
-  linkTexted: boolean;
-}
-
 export interface RescheduleAppointmentRequest {
   date: string;
   time: string;

@@ -8,7 +8,7 @@ import { VISIT_INCLUDE, type PrismaVisit } from "../common/serializers.js";
 import { AvailabilityService, type VisitUnitSpec } from "./availability.service.js";
 import { BookingService, requireText } from "./booking.service.js";
 import { lockBookingDay } from "./booking-lock.js";
-import { hashToken, issueToken } from "./magic-link.js";
+import { hashToken, issueToken, linkExpiresAt } from "./magic-link.js";
 import { HOLD_MAX_LIVE_PER_TENANT, HOLD_MINUTES } from "./slot-hold.js";
 import { resolveServiceLines, totalPrice, type ResolvedServiceLine } from "./service-lines.js";
 import { groupPlannedUnits, type PlannedVisit } from "./visit-planner.js";
@@ -234,9 +234,9 @@ export class VisitService {
 
   /**
    * R230: the whole visit moves to a new start, each segment keeping its
-   * professional. R110: the link rotates — the caller sends the new one on.
+   * professional. The link stays the same; only its expiry follows the new end.
    */
-  async reschedule(token: string, date: string, time: string): Promise<VisitResult> {
+  async reschedule(token: string, date: string, time: string): Promise<PrismaVisit> {
     const { tenantId } = this.tenantContext.current;
 
     return this.prisma.forTenant(async (tx) => {
@@ -274,13 +274,11 @@ export class VisitService {
         });
       }
 
-      const issued = issueToken(new Date(plan.end));
-      const updated = await tx.visit.update({
+      return tx.visit.update({
         where: { id: visit.id, tenantId },
-        data: { accessTokenHash: issued.accessTokenHash, accessTokenExpiresAt: issued.accessTokenExpiresAt },
+        data: { accessTokenExpiresAt: linkExpiresAt(new Date(plan.end)) },
         include: VISIT_INCLUDE,
       });
-      return { visit: updated, magicLinkToken: issued.token };
     });
   }
 

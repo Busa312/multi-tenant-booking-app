@@ -10,7 +10,7 @@ import { SlotGrid } from "./SlotGrid";
 interface RescheduleDialogProps {
   /** R230: the whole visit moves; each segment keeps its professional. */
   visit: Visit;
-  /** The live token — rotated by an earlier reschedule, so not the URL's. */
+  /** The visit's link token (unchanged by a reschedule). */
   token: string;
   timezone: string;
   /** R290 */

@@ -41,10 +41,6 @@ export function ManageAppointment({
     [locale, defaultLocale],
   );
   const [current, setCurrent] = useState(visit);
-  // R110: rescheduling rotates the token, so the one in the URL dies the moment
-  // the first move succeeds. Every later action uses the replacement, and the
-  // address bar is rewritten so a refresh (or a bookmark) still works.
-  const [activeToken, setActiveToken] = useState(token);
   const [dialog, setDialog] = useState<"reschedule" | "cancel" | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -58,7 +54,7 @@ export function ManageAppointment({
   const canChange = isActionable && !pastCutoff && !locked;
 
   const reschedule = async (date: string, time: string) => {
-    const result = await rescheduleBooking(activeToken, date, time);
+    const result = await rescheduleBooking(token, date, time);
     if (!result.ok) {
       if (result.reason === "tooLate") {
         setLocked(true);
@@ -68,19 +64,15 @@ export function ManageAppointment({
       setError(result.reason === "conflict" ? t("booking.details.slotTaken") : t("common.somethingWrong"));
       return false;
     }
+    // R230: the link stays the same, so the address bar (and the SMS) still work
     setCurrent(result.visit);
-    const rotated = result.manageUrl.split("/manage/")[1];
-    if (rotated) {
-      setActiveToken(rotated);
-      window.history.replaceState(null, "", `/manage/${rotated}`);
-    }
     setDialog(null);
     setError(null);
     return true;
   };
 
   const cancel = async () => {
-    const result = await cancelBooking(activeToken);
+    const result = await cancelBooking(token);
     if (!result.ok) {
       if (result.reason === "tooLate") {
         setLocked(true);
@@ -165,7 +157,7 @@ export function ManageAppointment({
       {dialog === "reschedule" && (
         <RescheduleDialog
           visit={current}
-          token={activeToken}
+          token={token}
           timezone={timezone}
           lastDate={addDays(todayInTimezone(timezone), maxAdvanceDays)}
           locale={locale}

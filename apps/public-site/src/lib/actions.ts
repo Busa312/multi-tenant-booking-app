@@ -165,10 +165,10 @@ export async function rescheduleBooking(
   token: string,
   date: string,
   time: string,
-): Promise<ActionResult<{ visit: Visit; manageUrl: string }>> {
+): Promise<ActionResult<{ visit: Visit }>> {
   try {
-    const { visit, manageUrl } = await getPublicApiClient().rescheduleAppointment(token, { date, time });
-    return { ok: true, visit, manageUrl };
+    const visit = await getPublicApiClient().rescheduleAppointment(token, { date, time });
+    return { ok: true, visit };
   } catch (error) {
     return toFailure(error);
   }
