@@ -4,8 +4,10 @@
 
 @import "tailwindcss";
 @import "./theme.css";
-/* Leaflet's own layout rules (panes, tiles, controls) — the map picker needs them. */
-@import "leaflet/dist/leaflet.css";
+/* Self-hosted text fonts (named in theme.css): same origin, no render-blocking
+   request to Google, and the browser fetches only the subsets a page uses. */
+@import "@fontsource-variable/manrope";
+@import "@fontsource-variable/newsreader";
 
 /* Built-in themes are off: the CMS ships only the two defined in theme.css. */
 @plugin "daisyui" {
@@ -51,6 +53,17 @@
       font-size: 16px;
     }
   }
+}
+
+/* Material Symbols, cut down to the icons in lib/iconNames.ts (a few KB
+   instead of ~317 KB; `pnpm --filter @booking/cms icons` rebuilds it).
+   `block`: never show an icon's ligature name while the font loads. */
+@font-face {
+  font-family: "Material Symbols Outlined";
+  font-style: normal;
+  font-weight: 400;
+  font-display: block;
+  src: url("./assets/fonts/material-symbols-outlined.woff2") format("woff2");
 }
 
 @layer components {

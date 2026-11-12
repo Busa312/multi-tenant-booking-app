@@ -105,8 +105,8 @@
   --noise: 0;
 }
 
-/* Typography. The font files themselves are loaded in index.html. */
+/* Typography. The font files are self-hosted (@fontsource-variable, imported in index.css). */
 @theme {
-  --font-sans: "Manrope", ui-sans-serif, system-ui, sans-serif;
-  --font-display: "Newsreader", ui-serif, Georgia, serif;
+  --font-sans: "Manrope Variable", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Newsreader Variable", ui-serif, Georgia, serif;
 }

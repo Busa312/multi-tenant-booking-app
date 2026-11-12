@@ -3,6 +3,7 @@ import { Brand } from "./ui/Brand.js";
 import { Icon } from "./ui/Icon.js";
 import { LanguageSwitcher } from "./LanguageSwitcher.js";
 import { ThemeToggle } from "./ThemeToggle.js";
+import type { IconName } from "../lib/iconNames.js";
 
 interface AuthLayoutProps {
   /** Marketing copy in the decorative left panel. */
@@ -15,7 +16,7 @@ interface AuthLayoutProps {
   children: ReactNode;
 }
 
-const ART_ICONS = ["event_available", "diversity_3", "palette"];
+const ART_ICONS: readonly IconName[] = ["event_available", "diversity_3", "palette"];
 
 // Shared split-screen chrome for the unauthenticated screens (Login,
 // SetPassword) — art panel on the left from `lg` up, a centred form card.

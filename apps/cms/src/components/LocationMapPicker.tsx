@@ -1,5 +1,8 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import L from "leaflet";
+// Leaflet's own layout rules (panes, tiles, controls). Imported here, not in
+// index.css, so only the Locations chunk pays for them.
+import "leaflet/dist/leaflet.css";
 import { useI18n } from "../i18n/I18nContext.js";
 import { Alert, Button, TextInput } from "./ui/index.js";
 

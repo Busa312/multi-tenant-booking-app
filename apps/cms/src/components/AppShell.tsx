@@ -7,10 +7,11 @@ import { Icon } from "./ui/Icon.js";
 import { LanguageSwitcher } from "./LanguageSwitcher.js";
 import { ThemeToggle } from "./ThemeToggle.js";
 import { cx } from "../lib/cx.js";
+import type { IconName } from "../lib/iconNames.js";
 
 interface NavItem {
   to: string;
-  icon: string;
+  icon: IconName;
   labelKey: string;
 }
 
@@ -35,14 +36,14 @@ export function AppShell({ title, subtitle, tenantSubdomain, children }: AppShel
     { to: "/", icon: "space_dashboard", labelKey: "nav.dashboard" },
     { to: "/bookings", icon: "event_available", labelKey: "nav.bookings" },
     ...(role === "owner"
-      ? [
+      ? ([
           { to: "/services", icon: "design_services", labelKey: "nav.services" },
           { to: "/professionals", icon: "diversity_3", labelKey: "nav.professionals" },
           // R150: sits next to the roster
           { to: "/locations", icon: "storefront", labelKey: "nav.locations" },
           { to: "/settings/colors", icon: "palette", labelKey: "nav.colors" },
           { to: "/settings/public-site", icon: "edit_note", labelKey: "nav.publicSite" },
-        ]
+        ] satisfies NavItem[])
       : []),
   ];
 

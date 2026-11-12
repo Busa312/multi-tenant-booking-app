@@ -1,9 +1,10 @@
 import type { CSSProperties } from "react";
 import { cx } from "../../lib/cx.js";
+import type { IconName } from "../../lib/iconNames.js";
 
 interface IconProps {
   /** Material Symbols Outlined ligature name, e.g. "person_add". */
-  name: string;
+  name: IconName;
   size?: number;
   color?: string;
   className?: string;

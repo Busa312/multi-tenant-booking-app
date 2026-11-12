@@ -18,8 +18,9 @@ function contentSecurityPolicy(env: Record<string, string>): Plugin {
     "default-src 'self'",
     "script-src 'self'",
     // Inline styles: Leaflet and a few dynamic values (chart bar heights) set them.
-    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
-    "font-src 'self' https://fonts.gstatic.com",
+    "style-src 'self' 'unsafe-inline'",
+    // Every font is self-hosted (index.css), so nothing loads from Google.
+    "font-src 'self'",
     // Tenant logos may be hosted anywhere over https; map tiles come from OSM.
     "img-src 'self' data: blob: https:",
     `connect-src 'self' ${api} https://nominatim.openstreetmap.org https://*.ingest.sentry.io https://*.ingest.us.sentry.io https://*.ingest.de.sentry.io`,
@@ -44,6 +45,11 @@ export default defineConfig(({ mode }) => {
     plugins: [react(), tailwindcss(), contentSecurityPolicy(env)],
     server: {
       port: 5173,
+    },
+    build: {
+      // Fonts always ship as files: the CSP's `font-src 'self'` refuses the
+      // data: URLs Vite would otherwise inline small subsets as, and files cache.
+      assetsInlineLimit: (filePath: string) => (/\.woff2?$/.test(filePath) ? false : undefined),
     },
   };
 });

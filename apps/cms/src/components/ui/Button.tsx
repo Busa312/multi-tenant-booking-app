@@ -1,9 +1,10 @@
 import type { ButtonHTMLAttributes, ReactNode } from "react";
 import { Icon } from "./Icon.js";
 import { buttonClassName, buttonIconSize, type ButtonStyleProps } from "./buttonStyles.js";
+import type { IconName } from "../../lib/iconNames.js";
 
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement>, ButtonStyleProps {
-  icon?: string;
+  icon?: IconName;
   children?: ReactNode;
 }
 

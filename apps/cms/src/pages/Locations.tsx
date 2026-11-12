@@ -86,7 +86,7 @@ export function LocationsPage() {
         : { label: t("locations.reactivate"), icon: "visibility", onSelect: () => setActive(location, true) },
       ...(location.hasAppointmentHistory
         ? []
-        : [{ label: t("locations.delete"), icon: "delete", danger: true, onSelect: () => handleDelete(location) }]),
+        : ([{ label: t("locations.delete"), icon: "delete", danger: true, onSelect: () => handleDelete(location) }] satisfies ActionMenuItem[])),
     ];
   }
 

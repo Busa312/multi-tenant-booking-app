@@ -2,9 +2,10 @@ import type { ReactNode } from "react";
 import { Link, type LinkProps } from "react-router-dom";
 import { buttonClassName, buttonIconSize, type ButtonStyleProps } from "./buttonStyles.js";
 import { Icon } from "./Icon.js";
+import type { IconName } from "../../lib/iconNames.js";
 
 interface ButtonLinkProps extends LinkProps, Omit<ButtonStyleProps, "iconOnly" | "danger"> {
-  icon?: string;
+  icon?: IconName;
   children?: ReactNode;
 }
 

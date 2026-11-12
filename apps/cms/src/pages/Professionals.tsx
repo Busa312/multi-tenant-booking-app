@@ -137,7 +137,7 @@ export function ProfessionalsPage() {
       { label: t("professionals.edit"), icon: "edit", onSelect: () => setEditTarget(p) },
       { label: t("professionals.hours"), icon: "schedule", to: `/hours?professionalId=${p.id}` },
       ...(p.cmsLoginStatus === "none"
-        ? [{ label: t("professionals.invite"), icon: "mail", onSelect: () => setInviteTarget(p) }]
+        ? ([{ label: t("professionals.invite"), icon: "mail", onSelect: () => setInviteTarget(p) }] satisfies ActionMenuItem[])
         : []),
       p.isActive
         ? { label: t("professionals.deactivate"), icon: "visibility_off", onSelect: () => handleDeactivateClick(p) }
@@ -145,7 +145,7 @@ export function ProfessionalsPage() {
       // R80: delete is only offered for someone who was never booked
       ...(p.hasAppointmentHistory
         ? []
-        : [{ label: t("professionals.delete"), icon: "delete", danger: true, onSelect: () => handleDelete(p) }]),
+        : ([{ label: t("professionals.delete"), icon: "delete", danger: true, onSelect: () => handleDelete(p) }] satisfies ActionMenuItem[])),
     ];
   }
 

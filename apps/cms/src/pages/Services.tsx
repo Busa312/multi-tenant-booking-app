@@ -138,7 +138,7 @@ export function ServicesPage() {
       // R70: delete is only offered for a service that was never booked.
       ...(s.hasAppointmentHistory
         ? []
-        : [{ label: t("services.delete"), icon: "delete", danger: true, onSelect: () => handleDelete(s) }]),
+        : ([{ label: t("services.delete"), icon: "delete", danger: true, onSelect: () => handleDelete(s) }] satisfies ActionMenuItem[])),
     ];
   }
 

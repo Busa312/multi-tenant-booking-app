@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
 import { Icon } from "./Icon.js";
 import { cx } from "../../lib/cx.js";
+import type { IconName } from "../../lib/iconNames.js";
 
 export interface ActionMenuItem {
   label: string;
@@ -11,7 +12,7 @@ export interface ActionMenuItem {
   to?: string;
   onSelect?: () => void;
   /** Material Symbols ligature, e.g. "delete". */
-  icon?: string;
+  icon?: IconName;
   danger?: boolean;
 }
 
