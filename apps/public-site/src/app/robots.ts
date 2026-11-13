@@ -13,7 +13,7 @@ export default async function robots(): Promise<MetadataRoute.Robots> {
     return { rules: { userAgent: "*", disallow: "/" } };
   }
   return {
-    rules: { userAgent: "*", allow: "/", disallow: ["/manage/", "/*/manage/", "/api/"] },
+    rules: { userAgent: "*", allow: "/", disallow: ["/manage/", "/*/manage/", "/embed/", "/*/embed/", "/api/"] },
     sitemap: `${origin}/sitemap.xml`,
   };
 }

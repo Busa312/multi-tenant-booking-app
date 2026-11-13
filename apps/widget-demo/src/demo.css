@@ -1,0 +1,19 @@
+/* The stand-in salon's own styling — intentionally unlike the tenant palette. */
+* { box-sizing: border-box; }
+body { margin: 0; font-family: Georgia, "Times New Roman", serif; background: #f6f1ea; color: #2d2620; }
+code { font-family: ui-monospace, monospace; font-size: 0.9em; background: #ebe2d6; padding: 0.1em 0.35em; border-radius: 4px; }
+.site-header { display: flex; flex-wrap: wrap; gap: 1rem; align-items: center; justify-content: space-between; padding: 1rem 1.5rem; background: #2d2620; color: #f6f1ea; }
+.site-header nav { display: flex; flex-wrap: wrap; gap: 1rem; align-items: center; }
+.site-header a { color: #f6f1ea; }
+.logo { font-size: 1.4rem; font-style: italic; }
+.own-button { font: inherit; background: #c9a36b; color: #2d2620; border: 0; padding: 0.5rem 0.9rem; border-radius: 999px; cursor: pointer; }
+main { max-width: 960px; margin: 0 auto; padding: 1.5rem 1rem 4rem; }
+.hero h1 { font-size: 2.4rem; margin: 1rem 0 0.5rem; }
+.locale { display: inline-flex; gap: 0.5rem; align-items: center; margin-top: 0.5rem; }
+.block { margin-top: 3rem; }
+.block h2 { margin-bottom: 0.25rem; }
+.note { color: #7a6c5d; margin-top: 0; }
+.narrow { max-width: 420px; }
+.columns { display: grid; gap: 1.5rem; }
+@media (min-width: 760px) { .columns { grid-template-columns: 1fr 380px; align-items: start; } }
+.log { font-family: ui-monospace, monospace; font-size: 0.85rem; }

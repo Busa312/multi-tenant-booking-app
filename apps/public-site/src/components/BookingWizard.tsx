@@ -6,6 +6,7 @@ import type { Location, PublicProfessional, Service, Visit, VisitSlot } from "@b
 import { translator, type Locale, type Messages } from "@/i18n/locales";
 import { fetchProfessionals, holdSlot, releaseHold, submitBooking, type FailureReason } from "@/lib/actions";
 import { addDays, formatInstant, todayInTimezone, wallClock } from "@/lib/tenant-time";
+import { postToHost } from "@/lib/embed";
 import { useLocaleHref } from "@/lib/useLocaleHref";
 import { isBookable, professionalIdsFromSlot } from "@/lib/visit-booking";
 import { clearWizard, loadWizard, saveWizard, type CodeSent, type WizardState } from "@/lib/wizard-storage";
@@ -33,6 +34,8 @@ interface BookingWizardProps {
   locale: Locale;
   defaultLocale: string;
   messages: Messages;
+  /** R410: framed by a salon's own website (the /embed pages). */
+  embedded?: boolean;
 }
 
 type StepId = "services" | "location" | "professional" | "time" | "details" | "verify";
@@ -79,6 +82,7 @@ export function BookingWizard({
   locale,
   defaultLocale,
   messages,
+  embedded = false,
 }: BookingWizardProps) {
   const t = useMemo(() => translator(messages), [messages]);
   const text = useCallback(
@@ -317,6 +321,8 @@ export function BookingWizard({
       linkTexted: result.linkTexted,
       phoneNumber: collected.phoneNumber,
     });
+    // R410: lets the salon's own page react (say, thank the customer). No manage link: it is a credential.
+    if (embedded) postToHost({ type: "booking-widget:booked", startAt: result.visit.startAt });
   };
 
   if (confirmation) {
@@ -327,10 +333,19 @@ export function BookingWizard({
         locale={locale}
         t={t}
         text={text}
+        // R410: the manage page belongs in its own tab, not inside the salon's site
+        manageInNewTab={embedded}
         onBookAnother={() => {
           // A clean start: no saved progress, no deep-link preselection.
           clearWizard();
-          window.location.assign(bookHref);
+          // Embedded, start over on this same embed page (keeping only whether it
+          // is the overlay); otherwise on the booking page.
+          if (embedded) {
+            const overlay = new URLSearchParams(window.location.search).get("overlay");
+            window.location.assign(window.location.pathname + (overlay ? `?overlay=${encodeURIComponent(overlay)}` : ""));
+          } else {
+            window.location.assign(bookHref);
+          }
         }}
       />
     );

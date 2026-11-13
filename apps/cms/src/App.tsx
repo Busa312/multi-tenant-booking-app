@@ -19,6 +19,7 @@ const chunks = {
   hours: () => import("./pages/Hours.js"),
   subscription: () => import("./pages/Subscription.js"),
   blockedNumbers: () => import("./pages/BlockedNumbers.js"),
+  setup: () => import("./pages/Setup.js"),
 };
 
 const SetPasswordPage = lazy(() => chunks.setPassword().then((m) => ({ default: m.SetPasswordPage })));
@@ -34,6 +35,7 @@ const PublicSiteSettingsPage = lazy(() =>
   chunks.publicSite().then((m) => ({ default: m.PublicSiteSettingsPage })),
 );
 const HoursPage = lazy(() => chunks.hours().then((m) => ({ default: m.HoursPage })));
+const SetupPage = lazy(() => chunks.setup().then((m) => ({ default: m.SetupPage })));
 const BlockedNumbersPage = lazy(() => chunks.blockedNumbers().then((m) => ({ default: m.BlockedNumbersPage })));
 const SubscriptionPage = lazy(() => chunks.subscription().then((m) => ({ default: m.SubscriptionPage })));
 
@@ -48,6 +50,7 @@ const NAV_CHUNKS = [
   chunks.hours,
   chunks.subscription,
   chunks.blockedNumbers,
+  chunks.setup,
 ];
 
 function RequireAuth({ children }: { children: React.ReactElement }) {
@@ -103,6 +106,16 @@ export function App() {
             element={
               <RequireAuth>
                 <BookingsPage />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/setup"
+            element={
+              <RequireAuth>
+                <RequireOwner>
+                  <SetupPage />
+                </RequireOwner>
               </RequireAuth>
             }
           />

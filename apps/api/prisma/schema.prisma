@@ -45,6 +45,12 @@ model Tenant {
   minBookingNoticeMinutes Int @default(0) @map("min_booking_notice_minutes") @db.SmallInt
   maxBookingAdvanceDays   Int @default(365) @map("max_booking_advance_days") @db.SmallInt
   changeCutoffHours       Int @default(0) @map("change_cutoff_hours") @db.SmallInt
+  // R420: the guided setup's own state. Whether a step is done is read from
+  // the salon's data; only skips and finishing/dismissing are kept.
+  onboardingSkipped     String[]  @default([]) @map("onboarding_skipped")
+  onboardingDismissedAt DateTime? @map("onboarding_dismissed_at") @db.Timestamptz
+  // Finishing (the last step) is not the same as hiding the dashboard card.
+  onboardingFinishedAt  DateTime? @map("onboarding_finished_at") @db.Timestamptz
   createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz
 
   locations       Location[]

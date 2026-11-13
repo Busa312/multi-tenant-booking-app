@@ -55,6 +55,29 @@ export function AppShell({ title, subtitle, children }: AppShellProps) {
     };
   }, []);
 
+  // R420: the setup guide is in the menu only while it is unfinished. Hidden
+  // until known, so a finished salon never sees it flash in.
+  const [setupOpen, setSetupOpen] = useState(() => {
+    const known = cachedApi.peekOnboarding();
+    return known !== undefined && !known.dismissed;
+  });
+
+  useEffect(() => {
+    if (role !== "owner") return undefined;
+    let live = true;
+    cachedApi
+      .getOnboardingCached()
+      .then((status) => {
+        if (live) setSetupOpen(!status.dismissed);
+      })
+      .catch(() => undefined);
+    const stop = cachedApi.onOnboardingChange((status) => setSetupOpen(!status.dismissed));
+    return () => {
+      live = false;
+      stop();
+    };
+  }, [role]);
+
   // Grouped by what a person comes here to do: run the day, set the salon up,
   // or change what customers see. The last two are owner-only (as the routes are).
   const navGroups: NavGroup[] = [
@@ -69,6 +92,8 @@ export function AppShell({ title, subtitle, children }: AppShellProps) {
           {
             labelKey: "nav.groupSetup",
             items: [
+              // R420: until the setup is finished or hidden
+              ...(setupOpen ? [{ to: "/setup", icon: "flag", labelKey: "nav.setup" } satisfies NavItem] : []),
               { to: "/services", icon: "design_services", labelKey: "nav.services" },
               { to: "/professionals", icon: "diversity_3", labelKey: "nav.professionals" },
               // R150: sits next to the roster

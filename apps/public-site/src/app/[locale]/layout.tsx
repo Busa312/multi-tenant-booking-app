@@ -8,6 +8,7 @@ import { isLocale } from "@/i18n/locales";
 import { localePath } from "@/lib/locale-path";
 import { loadPageContextOrNull, resolveCopy } from "@/lib/page-context";
 import { siteOrigin, sitePath } from "@/lib/site-url";
+import { isEmbedPath } from "@/lib/embed";
 import { resolveTenantColors } from "@/lib/tenant-config";
 import { tenantThemeStyle, tenantThemeVars } from "@/lib/tenant-theme";
 import "../theme.css";
@@ -58,6 +59,16 @@ export default async function RootLayout({ children, params }: LayoutProps) {
   // (injection guard); tenantThemeStyle only adds constants and checks again.
   const colors = resolveTenantColors(context.tenant);
   const logoUrl = context.tenant.configJson.logoUrl;
+
+  // R410: a page framed by a salon's own website brings no header or footer of
+  // its own — the host page is the chrome. Same palette, same language.
+  if (isEmbedPath(sitePath())) {
+    return (
+      <html lang={context.locale} style={tenantThemeStyle(tenantThemeVars(colors))} suppressHydrationWarning>
+        <body>{children}</body>
+      </html>
+    );
+  }
 
   return (
     // suppressHydrationWarning covers <html>'s own attributes only (not its

@@ -23,10 +23,12 @@ import type {
   UpdateTenantLocalesRequest,
   UpsertBusinessHoursRequest,
   Tenant,
+  OnboardingStatus,
+  UpdateOnboardingRequest
 } from "@booking/shared-types";
 import { cmsApiClient } from "./api.js";
 
-type CacheKey = "tenant" | "services" | "professionals" | "business-hours" | "time-off" | "locations";
+type CacheKey = "tenant" | "services" | "professionals" | "business-hours" | "time-off" | "locations" | "onboarding";
 
 type InvalidationKey = CacheKey | "appointments";
 
@@ -101,6 +103,17 @@ function rememberRange(key: string, value: AppointmentSummary[]): void {
 
     if (oldest !== undefined) appointmentRanges.delete(oldest);
   }
+}
+
+// R420: whoever shows the setup's state (the sidebar) hears of every change to
+// it at once — finishing or hiding the setup takes its menu entry away while
+// the page that did it is still on screen.
+const onboardingListeners = new Set<(status: OnboardingStatus) => void>();
+
+function rememberOnboarding(status: OnboardingStatus): OnboardingStatus {
+  entries.set("onboarding", { value: status, at: Date.now() });
+  onboardingListeners.forEach((listener) => listener(status));
+  return status;
 }
 
 export function clearCmsCache(): void {
@@ -182,6 +195,24 @@ export const cachedApi = {
   upsertBusinessHours: (payload: UpsertBusinessHoursRequest) =>
     mutating(cmsApiClient.upsertBusinessHours(payload), ["business-hours"]),
   deleteBusinessHours: (id: string) => mutating(cmsApiClient.deleteBusinessHours(id), ["business-hours"]),
+  // R420: always fetched fresh — it is read from the salon's data, which every
+  // other write changes. Each answer is remembered for the sidebar, which only
+  // needs to know whether the setup is still open.
+  getOnboarding: () => {
+    // Fresh, but shared: the sidebar asks at the same moment as the page.
+    if (!inFlight.has("onboarding")) entries.delete("onboarding");
+    return cached("onboarding", () => cmsApiClient.getOnboarding()).then(rememberOnboarding);
+  },
+  updateOnboarding: (payload: UpdateOnboardingRequest) => cmsApiClient.updateOnboarding(payload).then(rememberOnboarding),
+  /** The setup's state as last seen, fetched only when nothing recent is known. */
+  getOnboardingCached: () => cached("onboarding", () => cmsApiClient.getOnboarding()),
+  peekOnboarding: (): OnboardingStatus | undefined =>
+    (entries.get("onboarding") as Entry<OnboardingStatus> | undefined)?.value,
+  /** Calls `listener` with every new setup state; returns the way to stop. */
+  onOnboardingChange: (listener: (status: OnboardingStatus) => void): (() => void) => {
+    onboardingListeners.add(listener);
+    return () => onboardingListeners.delete(listener);
+  },
   // R380: never cached — a short list, and a block must show the moment it's made.
   // Blocking changes what every listed appointment says about its customer.
   listBlockedPhones: () => cmsApiClient.listBlockedPhones(),

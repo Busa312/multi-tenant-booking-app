@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { localizedAddress } from "@booking/shared-types";
 import type { LocationSummary } from "@booking/shared-types";
 import { ApiError } from "@booking/api-client";
+import { enabledLocalesOf } from "@booking/shared-types";
 import { cachedApi } from "../lib/cache.js";
 import { useI18n } from "../i18n/I18nContext.js";
 import { useLocalizedName } from "../lib/useLocalizedName.js";
@@ -46,7 +47,7 @@ export function LocationsPage() {
   function load() {
     Promise.all([cachedApi.listLocations(), cachedApi.getTenant()])
       .then(([locations, tenant]) => {
-        setData({ locations, enabledLocales: tenant.configJson.enabledLocales ?? [] });
+        setData({ locations, enabledLocales: enabledLocalesOf(tenant.configJson.enabledLocales) });
       })
       .catch(() => setListError(t("locations.errLoad")));
   }

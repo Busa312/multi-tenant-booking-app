@@ -1,4 +1,5 @@
 import { ApiProperty, ApiPropertyOptional, PartialType } from "@nestjs/swagger";
+import { ONBOARDING_STEP_ORDER } from "./onboarding-steps.js";
 
 export class TenantConfigColorsDto {
   @ApiPropertyOptional() primary?: string;
@@ -267,6 +268,25 @@ export class AppointmentDto {
   status!: "booked" | "cancelled" | "completed" | "no_show";
   @ApiProperty() createdAt!: string;
   @ApiProperty() updatedAt!: string;
+}
+
+export class OnboardingStepDto {
+  @ApiProperty({ enum: ONBOARDING_STEP_ORDER }) id!: string;
+  @ApiProperty({ description: "Read from the salon's data" }) done!: boolean;
+  @ApiProperty({ description: "The owner skipped it for now" }) skipped!: boolean;
+}
+
+export class OnboardingStatusDto {
+  @ApiProperty({ type: [OnboardingStepDto], description: "R420: every step, in order" }) steps!: OnboardingStepDto[];
+  @ApiProperty({ description: "Finished, or hidden by the owner" }) dismissed!: boolean;
+  @ApiProperty({ description: "Nothing done or skipped yet" }) firstRun!: boolean;
+}
+
+export class UpdateOnboardingRequestDto {
+  @ApiPropertyOptional({ enum: ONBOARDING_STEP_ORDER }) skip?: string;
+  @ApiPropertyOptional({ enum: ONBOARDING_STEP_ORDER }) unskip?: string;
+  @ApiPropertyOptional({ description: "true: hide without finishing; false: show the setup again" }) dismissed?: boolean;
+  @ApiPropertyOptional({ enum: [true], description: "Finish the setup; also hides it" }) finished?: boolean;
 }
 
 export class OpeningHoursDto {

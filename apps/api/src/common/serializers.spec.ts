@@ -25,6 +25,9 @@ const prismaTenant = (overrides: Partial<Parameters<typeof serializeTenant>[0]> 
   minBookingNoticeMinutes: 0,
   maxBookingAdvanceDays: 365,
   changeCutoffHours: 0,
+  onboardingSkipped: [],
+  onboardingDismissedAt: null,
+  onboardingFinishedAt: null,
   createdAt: new Date("2026-01-02T03:04:05.678Z"),
   ...overrides,
 });

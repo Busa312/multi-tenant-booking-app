@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import type { ProfessionalSummary, ServiceSummary } from "@booking/shared-types";
 import { ApiError } from "@booking/api-client";
+import { enabledLocalesOf } from "@booking/shared-types";
 import { cachedApi } from "../lib/cache.js";
 import { useI18n } from "../i18n/I18nContext.js";
 import { useLocalizedName } from "../lib/useLocalizedName.js";
@@ -69,7 +70,7 @@ export function ServicesPage() {
           services,
           professionals,
           hasTenantWideHours: hours.some((h) => h.professionalId === null),
-          enabledLocales: tenant.configJson.enabledLocales ?? [],
+          enabledLocales: enabledLocalesOf(tenant.configJson.enabledLocales),
         });
       })
       .catch(() => setListError(t("services.errLoad")));

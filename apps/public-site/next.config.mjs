@@ -43,6 +43,11 @@ const nextConfig = {
         source: "/manage/:path*",
         headers: [{ key: "Referrer-Policy", value: "no-referrer" }],
       },
+      // R410: the embed pages exist to be framed by salons' own websites, which
+      // can be any site. Listed after the catch-all above, so they override its
+      // frame-ancestors; every other page still refuses to be framed.
+      { source: "/embed/:path*", headers: [{ key: "Content-Security-Policy", value: "frame-ancestors *" }] },
+      { source: "/:locale/embed/:path*", headers: [{ key: "Content-Security-Policy", value: "frame-ancestors *" }] },
       {
         // R160: the same page under a language prefix (/ka/manage/…)
         source: "/:locale/manage/:path*",

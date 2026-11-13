@@ -162,5 +162,11 @@
   "notFound": {
     "title": "გვერდი ვერ მოიძებნა",
     "body": "შეამოწმეთ მისამართი და სცადეთ თავიდან."
+  },
+  "embed": {
+    "openToday": "დღეს ღიაა {opens}–{closes}",
+    "closedToday": "დღეს დაკეტილია",
+    "close": "დახურვა",
+    "moreServices": "+{count} სხვა სერვისი"
   }
 }

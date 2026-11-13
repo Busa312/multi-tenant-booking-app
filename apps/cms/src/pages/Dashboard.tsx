@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import type {
   AppointmentSummary,
   DashboardSummary,
   LocationSummary,
   ProfessionalSummary,
   ServiceSummary,
+  OnboardingStatus
 } from "@booking/shared-types";
 import { cachedApi } from "../lib/cache.js";
 import { useAuth } from "../auth/AuthContext.js";
@@ -21,6 +23,8 @@ import { WeekAheadCard } from "../components/WeekAheadCard.js";
 import { NoShowRiskCard } from "../components/NoShowRiskCard.js";
 import { PeriodStatsCard } from "../components/PeriodStatsCard.js";
 import { CardSkeleton } from "../components/CardSkeleton.js";
+import { SetupProgressCard } from "../components/SetupProgressCard.js";
+import { setupOpenedThisSession } from "../lib/setupSteps.js";
 import { Alert } from "../components/ui/index.js";
 
 const AGENDA_ROW = "58px";
@@ -56,6 +60,37 @@ export function DashboardPage() {
   const [markError, setMarkError] = useState<string | null>(null);
 
   const [nowTick, setNowTick] = useState(0);
+  // R420: the owner's setup progress; null until loaded, and for professionals.
+  const [onboarding, setOnboarding] = useState<OnboardingStatus | null>(null);
+  const [hidingSetup, setHidingSetup] = useState(false);
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    if (role !== "owner") return;
+    cachedApi
+      .getOnboarding()
+      .then((status) => {
+        // A salon with nothing set up opens the setup — once a session.
+        if (status.firstRun && !setupOpenedThisSession()) navigate("/setup", { replace: true });
+        else setOnboarding(status);
+      })
+      // The setup is a convenience; the dashboard works without it.
+      .catch(() => undefined);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [role]);
+
+  async function hideSetup() {
+    setHidingSetup(true);
+    try {
+      setOnboarding(await cachedApi.updateOnboarding({ dismissed: true }));
+    } catch {
+      setError(t("common.somethingWrong"));
+    } finally {
+      setHidingSetup(false);
+    }
+  }
+
+  const showSetup = onboarding !== null && !onboarding.dismissed;
 
   useEffect(() => {
     Promise.all([
@@ -179,9 +214,12 @@ export function DashboardPage() {
             role={role}
             onNewBooking={() => setCreateOpen(true)}
             canBook={canBook}
-            blocker={blocker}
+            // The setup card says what's missing, and how to add it.
+            blocker={showSetup ? null : blocker}
           />
         </div>
+
+        {showSetup && <SetupProgressCard status={onboarding} busy={hidingSetup} onDismiss={() => void hideSetup()} />}
 
         {/* Today on the left, where the eye lands; the week beside it from `xl` up. */}
         <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)] xl:gap-5">

@@ -12,11 +12,13 @@ interface ConfirmationPanelProps {
   text: (plain: string, i18n: unknown) => string;
   /** Start a new booking — the confirmation otherwise stays put, even across a language switch. */
   onBookAnother: () => void;
+  /** R410: open the manage page in a new tab (when this is framed by another site). */
+  manageInNewTab?: boolean;
 }
 
 // Built from what the API actually booked (the Visit), not from the draft —
 // if the plan shifted at the last moment, this shows the truth.
-export function ConfirmationPanel({ confirmation, timezone, locale, t, text, onBookAnother }: ConfirmationPanelProps) {
+export function ConfirmationPanel({ confirmation, timezone, locale, t, text, onBookAnother, manageInNewTab = false }: ConfirmationPanelProps) {
   const { visit } = confirmation;
 
   return (
@@ -52,7 +54,12 @@ export function ConfirmationPanel({ confirmation, timezone, locale, t, text, onB
       />
 
       <div className="flex flex-col items-start gap-2 rounded-box bg-base-200 p-4">
-        <a className="btn btn-primary" href={confirmation.manageUrl}>
+        <a
+          className="btn btn-primary"
+          href={confirmation.manageUrl}
+          target={manageInNewTab ? "_blank" : undefined}
+          rel={manageInNewTab ? "noopener noreferrer" : undefined}
+        >
           {t("booking.confirmed.manageNow")}
         </a>
         <p className="text-sm text-base-content/65">{t("booking.confirmed.keepLinkHint")}</p>

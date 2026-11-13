@@ -442,3 +442,36 @@ export interface UnblockPhoneRequest {
 export interface PhoneBlockedResponse {
   code: "phone_blocked";
 }
+
+// R420: the owner's guided setup, in order
+export const ONBOARDING_STEPS = ["locations", "hours", "services", "team", "site", "live"] as const;
+export type OnboardingStepId = (typeof ONBOARDING_STEPS)[number];
+
+export interface OnboardingStep {
+  id: OnboardingStepId;
+  /** Read from the salon's data ("live": the setup was finished). */
+  done: boolean;
+  /** The owner chose to skip it for now. */
+  skipped: boolean;
+}
+
+export interface OnboardingStatus {
+  /** Every step, in order. */
+  steps: OnboardingStep[];
+  /** Finished, or hidden by the owner: the dashboard and the menu stop showing it. */
+  dismissed: boolean;
+  /**
+   * Nothing done, nothing skipped, not dismissed — a salon that hasn't started.
+   * The CMS opens the setup for it once.
+   */
+  firstRun: boolean;
+}
+
+export interface UpdateOnboardingRequest {
+  skip?: OnboardingStepId;
+  unskip?: OnboardingStepId;
+  /** true: hide it without finishing; false: show the setup again. */
+  dismissed?: boolean;
+  /** Finish the setup (the last step). Also hides it. */
+  finished?: true;
+}

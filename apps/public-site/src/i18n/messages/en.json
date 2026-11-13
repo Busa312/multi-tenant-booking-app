@@ -162,5 +162,11 @@
   "notFound": {
     "title": "Page not found",
     "body": "Check the address and try again."
+  },
+  "embed": {
+    "openToday": "Open today {opens}–{closes}",
+    "closedToday": "Closed today",
+    "close": "Close",
+    "moreServices": "+{count} more services"
   }
 }

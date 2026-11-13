@@ -38,6 +38,8 @@ import type {
   UpdateProfessionalRequest,
   UpdateServiceRequest,
   UpsertBusinessHoursRequest,
+  OnboardingStatus,
+  UpdateOnboardingRequest
 } from "@booking/shared-types";
 import { HttpClient, type ApiClientOptions } from "./http";
 
@@ -184,6 +186,15 @@ export class CmsApiClient {
 
   deleteTimeOff(id: string) {
     return this.http.delete<void>(`/cms/time-off/${id}`);
+  }
+
+  // R420
+  getOnboarding() {
+    return this.http.get<OnboardingStatus>("/cms/onboarding");
+  }
+
+  updateOnboarding(payload: UpdateOnboardingRequest) {
+    return this.http.patch<OnboardingStatus>("/cms/onboarding", payload);
   }
 
   // R380

@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Widget demo — a salon's own website</title>
+    <link rel="stylesheet" href="/src/demo.css" />
+  </head>
+  <body>
+    <!-- A made-up salon website with its own look, on purpose: everything inside
+         the widgets should still come out in the salon's CMS palette. -->
+    <header class="site-header">
+      <span class="logo">Studio Lumière</span>
+      <nav>
+        <a href="#small">Small</a>
+        <a href="#medium">Medium</a>
+        <a href="#full">Full page</a>
+        <a href="/react.html">React version</a>
+        <button type="button" id="own-button" class="own-button">Our own "Book now" button</button>
+      </nav>
+    </header>
+
+    <main>
+      <section class="hero">
+        <h1>A salon's own website</h1>
+        <p>
+          Test bench for <code>@booking/widget</code>. The widgets below frame
+          <code id="site-label"></code>; their colours, language and services come from that salon's CMS settings.
+        </p>
+        <label class="locale">
+          Widget language
+          <select id="locale">
+            <option value="">Salon's main language</option>
+            <option value="en">English</option>
+            <option value="ka">ქართული</option>
+          </select>
+        </label>
+      </section>
+
+      <section id="small" class="block">
+        <h2>Small widget</h2>
+        <p class="note">Mounted declaratively, with <code>data-booking-widget</code> attributes.</p>
+        <div class="narrow" data-booking-widget data-size="small" data-site=""></div>
+      </section>
+
+      <section id="medium" class="block columns">
+        <div>
+          <h2>Medium widget</h2>
+          <p class="note">Mounted with <code>mount()</code>. "Book" opens the full flow over this page.</p>
+          <p>Some of the salon's own text sits beside it, to see how the widget reads in a real layout.</p>
+        </div>
+        <div id="medium-widget"></div>
+      </section>
+
+      <section id="full" class="block">
+        <h2>Full page widget</h2>
+        <p class="note">The whole booking flow inline. Its height follows its content.</p>
+        <div id="full-widget"></div>
+      </section>
+
+      <section class="block">
+        <h2>Events</h2>
+        <p class="note">What the host page hears from the widgets.</p>
+        <ol id="log" class="log"></ol>
+      </section>
+    </main>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

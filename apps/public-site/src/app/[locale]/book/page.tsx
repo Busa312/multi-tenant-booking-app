@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { getPublicApiClient } from "@/lib/api";
+import { loadBookingPageData } from "@/lib/booking-page";
 import { loadPageContext } from "@/lib/page-context";
 import { getMessages } from "@/i18n/locales";
 import { isValidTimezone } from "@/lib/tenant-time";
@@ -29,32 +29,15 @@ export default async function BookPage({
     );
   }
 
-  const api = getPublicApiClient();
-  // R240: everyone, with the services they perform — decides which services
-  // and branches can be booked at all before the customer picks anything.
-  const [services, locations, professionals] = await Promise.all([
-    api.listServices(),
-    api.listLocations(),
-    api.listProfessionals(),
-  ]);
-
-  const preselected = (searchParams.serviceIds ?? "")
-    .split(",")
-    .map((id) => id.trim())
-
-    .filter((id) => services.some((service) => service.id === id));
-
-  const preselectedLocationId = locations.some((location) => location.id === searchParams.locationId)
-    ? searchParams.locationId
-    : undefined;
+  const data = await loadBookingPageData(searchParams);
 
   return (
     <BookingWizard
-      services={services}
-      locations={locations}
-      professionals={professionals}
-      preselectedServiceIds={preselected}
-      preselectedLocationId={preselectedLocationId}
+      services={data.services}
+      locations={data.locations}
+      professionals={data.professionals}
+      preselectedServiceIds={data.preselectedServiceIds}
+      preselectedLocationId={data.preselectedLocationId}
       timezone={context.tenant.timezone}
       maxAdvanceDays={context.tenant.maxBookingAdvanceDays}
       locale={context.locale}

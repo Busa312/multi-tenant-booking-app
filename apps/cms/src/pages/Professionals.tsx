@@ -5,6 +5,7 @@ import type {
   Service,
 } from "@booking/shared-types";
 import { ApiError } from "@booking/api-client";
+import { enabledLocalesOf } from "@booking/shared-types";
 import { cachedApi } from "../lib/cache.js";
 import { useI18n } from "../i18n/I18nContext.js";
 import { useLocalizedName } from "../lib/useLocalizedName.js";
@@ -74,7 +75,7 @@ export function ProfessionalsPage() {
       .then(([p, s, l, tenant]) => {
         setProfessionals(p);
         setServices(s);
-        setLocales(tenant.configJson.enabledLocales ?? []);
+        setLocales(enabledLocalesOf(tenant.configJson.enabledLocales));
         // R150: only open branches can be newly assigned
 
         setLocations(l.filter((location) => location.isActive));

@@ -29,6 +29,7 @@ export const ICON_NAMES = [
   "event_available",
   "event_busy",
   "expand_more",
+  "flag",
   "info",
   "light_mode",
   "location_off",

@@ -1,16 +1,8 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import type { BusinessHours, ProfessionalSummary, TimeOff } from "@booking/shared-types";
 import { cachedApi } from "../lib/cache.js";
-import {
-  diffWeek,
-  draftFromHours,
-  hasChanges,
-  invalidDays,
-  WEEK_DAYS,
-  type DayHours,
-  type WeekDraft,
-} from "../lib/weekSchedule.js";
+import { useWeekScheduleDraft } from "../lib/useWeekScheduleDraft.js";
 import { useAuth } from "../auth/AuthContext.js";
 import { useI18n } from "../i18n/I18nContext.js";
 import { useLocalizedName } from "../lib/useLocalizedName.js";
@@ -58,19 +50,8 @@ export function HoursPage() {
 
   const [data, setData] = useState<PageData | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [saving, setSaving] = useState(false);
-  // Latches after a successful write and clears on the next edit, so the save
-  // bar can distinguish "just saved" from "nothing to save".
-  const [saved, setSaved] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [addOpen, setAddOpen] = useState(false);
-
-  /**
-   * The week being edited. Held here rather than in the row components so the
-   * whole schedule submits as one change — nothing below writes to the server.
-   * Null until the first load lands.
-   */
-  const [draft, setDraft] = useState<WeekDraft | null>(null);
 
   // A professional login only ever manages its own schedule (R20), so the URL
   // can't put it on someone else's.
@@ -79,13 +60,16 @@ export function HoursPage() {
   const professionalId = locked ? ownProfessionalId : scopeParam;
 
   /**
-   * `reseedDraft` is the whole reason this takes an argument. Time-off writes
-   * reload the page's data too, and re-seeding on every load would silently
-   * throw away schedule edits that hadn't been submitted yet — so only the
-   * paths that genuinely invalidate the draft (first load, a saved week) ask
-   * for it.
+   * The week being edited, held here rather than in the row components so the
+   * whole schedule submits as one change — nothing below writes to the server.
+   * Seeded when the hours first load and when the scope changes, never on the
+   * reloads time-off writes cause (see useWeekScheduleDraft).
    */
-  function load(reseedDraft = true) {
+  const schedule = useWeekScheduleDraft(data?.hours ?? null, professionalId);
+  const { draft, dirty, invalidCount, saving, saved } = schedule;
+
+  /** Fetches everything the page shows, and hands back the fresh data (null if it failed). */
+  function load(): Promise<PageData | null> {
     return Promise.all([
       cachedApi.getTenant(),
       cachedApi.listBusinessHours(),
@@ -93,25 +77,19 @@ export function HoursPage() {
       cachedApi.listProfessionals(),
     ])
       .then(([tenant, hours, timeOff, professionals]) => {
-        setData({ timezone: tenant.timezone, hours, timeOff, professionals });
-        if (reseedDraft) setDraft(draftFromHours(hours, professionalId));
+        const next = { timezone: tenant.timezone, hours, timeOff, professionals };
+        setData(next);
+        return next;
       })
-      .catch(() => setError(t("hours.errLoad")));
+      .catch(() => {
+        setError(t("hours.errLoad"));
+        return null;
+      });
   }
 
   // Fetch once on mount; a language switch shouldn't trigger a refetch.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => void load(), []);
-
-  // Switching scope replaces the draft with that scope's stored week. Guarded
-  // at the picker below, so anything unsaved has already been confirmed away.
-  useEffect(() => {
-    if (data) setDraft(draftFromHours(data.hours, professionalId));
-    setSaved(false);
-    // Deliberately not keyed on `data`: that would re-seed on every reload,
-    // including the ones time-off writes trigger. See `load`.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [professionalId]);
 
   const scopedProfessional = data?.professionals.find((p) => p.id === professionalId) ?? null;
   const scope = professionalId ? "professional" : "organisation";
@@ -122,65 +100,17 @@ export function HoursPage() {
     return professional ? nameOf(professional.name, professional.nameI18n) : t("hours.unknown");
   }
 
-  const changes = useMemo(
-    () => (data && draft ? diffWeek(draft, data.hours, professionalId) : null),
-    [data, draft, professionalId],
-  );
-  const dirty = changes !== null && hasChanges(changes);
-  const invalidCount = draft ? invalidDays(draft).length : 0;
-
-  function changeDay(dayOfWeek: number, next: DayHours) {
-    setSaved(false);
-    setDraft((current) => (current ? { ...current, [dayOfWeek]: next } : current));
-  }
-
-  /** Spread one day's hours across every other day already open in this scope. */
-  function copyToAll(startTime: string, endTime: string) {
-    setSaved(false);
-    setDraft((current) => {
-      if (!current) return current;
-      const next: WeekDraft = { ...current };
-      for (const dayOfWeek of WEEK_DAYS) {
-        // Only days already open: a copy spreads hours, it doesn't open the
-        // salon on days that were closed.
-        if (next[dayOfWeek]) next[dayOfWeek] = { startTime, endTime };
-      }
-      return next;
-    });
+  async function saveWeek() {
+    setError(null);
+    // The hook re-seeds the draft from the reload; a failed save leaves the
+    // draft as it was, so it is retryable rather than something to retype.
+    const outcome = await schedule.save(async () => (await load())?.hours ?? null);
+    if (outcome === "failed") setError(t("hours.errSaveWeek"));
   }
 
   function discard() {
-    if (data) setDraft(draftFromHours(data.hours, professionalId));
+    schedule.discard();
     setError(null);
-    setSaved(false);
-  }
-
-  async function saveWeek() {
-    if (!changes || !dirty || invalidCount > 0 || saving) return;
-    setError(null);
-    setSaved(false);
-    setSaving(true);
-    try {
-      // Parallel, and safe to be: the API's upsert scopes its replace to
-      // (tenant, professional, dayOfWeek), so two days never touch the same
-      // rows and can't interleave. This is where the speed comes from — the
-      // whole week costs one round trip's latency instead of one per day, and
-      // one reload at the end instead of one after every keystroke's blur.
-      await Promise.all([
-        ...changes.upserts.map((day) =>
-          cachedApi.upsertBusinessHours({ professionalId: professionalId ?? undefined, ...day }),
-        ),
-        ...changes.deletes.map((row) => cachedApi.deleteBusinessHours(row.id)),
-      ]);
-      await load();
-      setSaved(true);
-    } catch {
-      // The draft is left exactly as it was, so a failed save is retryable
-      // rather than something the user has to retype.
-      setError(t("hours.errSaveWeek"));
-    } finally {
-      setSaving(false);
-    }
   }
 
   function deleteTimeOff(block: TimeOff) {
@@ -198,8 +128,8 @@ export function HoursPage() {
     setDeletingId(block.id);
     try {
       await cachedApi.deleteTimeOff(block.id);
-      // Keeps the schedule draft: this write has nothing to do with it.
-      await load(false);
+      // Leaves the schedule draft alone: this write has nothing to do with it.
+      await load();
     } catch {
       setError(t("hours.errSaveTimeOff"));
     } finally {
@@ -262,8 +192,8 @@ export function HoursPage() {
               dirty={dirty}
               invalidCount={invalidCount}
               saved={saved}
-              onChangeDay={changeDay}
-              onCopyToAll={copyToAll}
+              onChangeDay={schedule.changeDay}
+              onCopyToAll={schedule.copyToAll}
               onSubmit={saveWeek}
               onDiscard={discard}
             />
@@ -304,7 +234,7 @@ export function HoursPage() {
           onClose={() => setAddOpen(false)}
           onCreated={() => {
             setAddOpen(false);
-            void load(false);
+            void load();
           }}
         />
       )}
