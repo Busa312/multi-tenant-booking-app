@@ -141,21 +141,29 @@ export function EditLocationModal({ target, locales, onClose, onSaved }: EditLoc
         />
         {fieldErrors.addressLine && <Alert className="-mt-2 mb-4 py-2">{t(fieldErrors.addressLine)}</Alert>}
 
-        {/* R160: the city translates with the address line, so the two read as one address */}
-        <LocalizedField
-          id="location-city"
-          label={t("locations.cityLabel")}
-          locales={locales}
-          locale={activeLocale}
-          value={city}
-          onChange={setCity}
-          i18n={cityI18n}
-          onI18nChange={setCityI18n}
-        />
+        <div className="grid gap-x-3 sm:grid-cols-2">
+          {/* R160: the city translates with the address line, so the two read as one address */}
+          <LocalizedField
+            id="location-city"
+            label={t("locations.cityLabel")}
+            locales={locales}
+            locale={activeLocale}
+            value={city}
+            onChange={setCity}
+            i18n={cityI18n}
+            onI18nChange={setCityI18n}
+          />
 
-        <Field label={t("locations.phoneLabel")} htmlFor="location-phone">
-          <TextInput id="location-phone" type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} />
-        </Field>
+          <Field label={t("locations.phoneLabel")} htmlFor="location-phone">
+            <TextInput
+              id="location-phone"
+              type="tel"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              placeholder="+995 555 00 00 00"
+            />
+          </Field>
+        </div>
 
         <LocationMapPicker
           value={pinned}

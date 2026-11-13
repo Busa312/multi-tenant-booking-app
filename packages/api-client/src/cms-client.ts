@@ -9,6 +9,8 @@ import type {
   CreateLocationRequest,
   CreateProfessionalRequest,
   CreateServiceRequest,
+  BlockPhoneRequest,
+  BlockedPhone,
   CreateTimeOffRequest,
   DashboardSummary,
   InviteProfessionalRequest,
@@ -30,6 +32,7 @@ import type {
   TenantColors,
   TenantConfig,
   TimeOff,
+  UnblockPhoneRequest,
   UpcomingAppointmentCountResponse,
   UpdateAppointmentStatusRequest,
   UpdateProfessionalRequest,
@@ -181,6 +184,19 @@ export class CmsApiClient {
 
   deleteTimeOff(id: string) {
     return this.http.delete<void>(`/cms/time-off/${id}`);
+  }
+
+  // R380
+  listBlockedPhones() {
+    return this.http.get<BlockedPhone[]>("/cms/blocked-phones");
+  }
+
+  blockPhone(payload: BlockPhoneRequest) {
+    return this.http.post<BlockedPhone>("/cms/blocked-phones", payload);
+  }
+
+  unblockPhone(payload: UnblockPhoneRequest) {
+    return this.http.post<void>("/cms/blocked-phones/unblock", payload);
   }
 
   listAppointments(query: CmsAppointmentListQuery = {}) {

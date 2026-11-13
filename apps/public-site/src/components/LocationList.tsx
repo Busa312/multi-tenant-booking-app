@@ -6,27 +6,29 @@ interface LocationListProps {
   heading: string;
 
   bookLabel: (name: string) => string;
+  href: (path: string) => string;
   text: (plain: string, i18n: unknown) => string;
 }
 
 // R150: where the business
-export function LocationList({ locations, heading, bookLabel, text }: LocationListProps) {
+export function LocationList({ locations, heading, bookLabel, href, text }: LocationListProps) {
   if (locations.length === 0) {
     return null;
   }
 
   return (
     <section aria-labelledby="locations-heading">
-      <h2 className="mb-4 text-xl font-bold tracking-tight" id="locations-heading">
+      <h2 className="mb-4 text-2xl font-extrabold tracking-tight" id="locations-heading">
         {heading}
       </h2>
       {/* One branch takes the full width rather than sitting alone in a half column. */}
-      <ul className={locations.length === 1 ? "grid gap-3" : "grid gap-3 sm:grid-cols-2"}>
+      <ul className={locations.length === 1 ? "grid gap-8" : "grid gap-8 sm:grid-cols-2"}>
         {locations.map((location) => (
           <li key={location.id}>
             <LocationCard
               location={location}
               bookLabel={bookLabel(text(location.name, location.nameI18n))}
+              href={href}
               text={text}
             />
           </li>

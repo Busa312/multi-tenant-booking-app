@@ -60,8 +60,8 @@ export function BookingsWeekGrid({
                 className="group flex w-full cursor-pointer items-baseline gap-1.5 border-b border-base-300 px-0.5 pb-1.5 text-left"
                 onClick={() => onSelectDay(day)}
               >
-                <span className="text-[11px] tracking-wider text-base-content/55 uppercase group-hover:text-primary">{formatWeekdayLabel(day, lang)}</span>
-                <span className="font-display text-lg leading-none group-hover:text-primary">{dayOfMonth(day)}</span>
+                <span className="text-xs text-base-content/60">{formatWeekdayLabel(day, lang)}</span>
+                <span className="font-display text-2xl leading-none font-bold group-hover:underline">{dayOfMonth(day)}</span>
                 {dayAppointments.length > 0 && <span className="badge ml-auto badge-xs border-none bg-primary/12 font-semibold text-primary tabular-nums">{dayAppointments.length}</span>}
               </button>
               <div className="grid content-start gap-1.5">

@@ -4,6 +4,8 @@ import { Prisma } from "../../generated/prisma/index.js";
 import { PrismaService } from "../prisma/prisma.service.js";
 import { TenantContextService } from "../tenant/tenant-context.service.js";
 import { APPOINTMENT_SUMMARY_INCLUDE, type PrismaAppointmentSummary } from "../common/serializers.js";
+import { loadFinishedVisits, noShowHistoryBefore } from "../common/no-show-history.js";
+import { phoneKey } from "../common/phone-key.js";
 import { parseTimeOfDay, zonedDateString, zonedTimeToUtc } from "../common/timezone.js";
 import { AvailabilityService } from "./availability.service.js";
 import { lockBookingDay } from "./booking-lock.js";
@@ -88,6 +90,8 @@ export class BookingService {
       // R260: checked behind the day's lock, so a concurrent booking can't slip in
       await lockBookingDay(tx, tenantId, input.date);
       await this.assertBookable(tx, {
+        tenantId,
+        phoneNumber,
         professionalId: input.professionalId,
         startAt,
         endAt,
@@ -103,6 +107,7 @@ export class BookingService {
           locationId,
           userName,
           phoneNumber,
+          phoneKey: phoneKey(phoneNumber),
           // R270: no longer collected; the column stays for older bookings
           email: "",
           startAt,
@@ -179,6 +184,8 @@ export class BookingService {
       // R260: the day it lands on — the only day a move can create a conflict on
       await lockBookingDay(tx, tenantId, zonedDateString(startAt, timezone));
       await this.assertBookable(tx, {
+        tenantId,
+        phoneNumber: existing.phoneNumber,
         professionalId,
         startAt,
         endAt,
@@ -399,7 +406,15 @@ export class BookingService {
   // R60: a conflict is a warning
   private async assertBookable(
     tx: Prisma.TransactionClient,
-    input: { professionalId: string | null; startAt: Date; endAt: Date; override: boolean; excludeAppointmentId?: string },
+    input: {
+      tenantId: string;
+      phoneNumber: string;
+      professionalId: string | null;
+      startAt: Date;
+      endAt: Date;
+      override: boolean;
+      excludeAppointmentId?: string;
+    },
   ): Promise<void> {
     if (input.override) {
       return;
@@ -411,7 +426,14 @@ export class BookingService {
       excludeAppointmentId: input.excludeAppointmentId,
     });
     if (conflicts.length > 0) {
-      const body: BookingConflictResponse = { code: "booking_conflict", conflicts };
+      // R360: staff deciding whether to book anyway also see how this customer's last visits went
+      const visits = await loadFinishedVisits(tx, input.tenantId, [input.phoneNumber]);
+      const key = phoneKey(input.phoneNumber);
+      const body: BookingConflictResponse = {
+        code: "booking_conflict",
+        conflicts,
+        noShowHistory: noShowHistoryBefore(visits.get(key), input.startAt),
+      };
       throw new ConflictException(body);
     }
   }

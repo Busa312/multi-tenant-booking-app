@@ -31,13 +31,9 @@ export function ErrorScreen({ kind, onReload }: ErrorScreenProps) {
 
   return (
     <div className="grid min-h-dvh place-items-center p-4">
-      <Card className="w-full max-w-md p-8 text-center" role="alert">
-        <span
-          className={`mx-auto mb-4 grid size-12 place-items-center rounded-full ${stale ? "bg-info/15 text-info" : "bg-error/15 text-error"}`}
-        >
-          <Icon name={stale ? "update" : "error"} size={24} />
-        </span>
-        <h1 className="font-display text-2xl font-semibold">{t(stale ? "error.staleTitle" : "error.crashTitle")}</h1>
+      <Card className="w-full max-w-md p-8" role="alert">
+        <Icon name={stale ? "update" : "error"} size={32} className={stale ? "text-info" : "text-error"} />
+        <h1 className="mt-3 font-display text-3xl leading-tight font-bold">{t(stale ? "error.staleTitle" : "error.crashTitle")}</h1>
         <p className="mt-2 mb-6 text-base-content/65">{t(stale ? "error.staleBody" : "error.crashBody")}</p>
         <Button variant={stale ? "primary" : "secondary"} icon="refresh" onClick={onReload}>
           {t("error.reload")}

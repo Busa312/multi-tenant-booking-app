@@ -53,6 +53,10 @@ function contentFor(fill: string, colors: Required<TenantColors>): string {
   return mostReadableOn(fill, [WHITE, INK]);
 }
 
+// A rule drawn in the secondary color must still show against the page; below
+// this contrast it would vanish, so the text color draws it instead.
+const VISIBLE_RULE = 1.5;
+
 export function tenantThemeVars(colors: Required<TenantColors>): TenantThemeVars {
   const scheme = mostReadableOn(colors.background, [INK, WHITE]) === INK ? "light" : "dark";
   const status = STATUS[scheme];
@@ -63,6 +67,9 @@ export function tenantThemeVars(colors: Required<TenantColors>): TenantThemeVars
     "--tenant-primary-content": contentFor(colors.primary, colors),
     "--tenant-secondary": colors.secondary,
     "--tenant-secondary-content": contentFor(colors.secondary, colors),
+    // The heavy rules of the page (letterhead, price list, receipts) — the secondary's job.
+    "--tenant-accent":
+      (getContrastRatio(colors.secondary, colors.background) ?? 0) >= VISIBLE_RULE ? colors.secondary : colors.text,
     "--tenant-background": colors.background,
     "--tenant-text": colors.text,
     "--tenant-info": status.info,

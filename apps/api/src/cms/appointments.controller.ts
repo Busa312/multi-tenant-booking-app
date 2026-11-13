@@ -35,7 +35,8 @@ import { TenantContextService } from "../tenant/tenant-context.service.js";
 import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard.js";
 import { RolesGuard } from "../auth/guards/roles.guard.js";
 import { CurrentUser } from "../auth/decorators/current-user.decorator.js";
-import { APPOINTMENT_SUMMARY_INCLUDE, serializeAppointmentSummary } from "../common/serializers.js";
+import { APPOINTMENT_SUMMARY_INCLUDE, type PrismaAppointmentSummary } from "../common/serializers.js";
+import { summarizeAppointments } from "../common/appointment-summaries.js";
 import { addDaysToDateString, zonedTimeToUtc } from "../common/timezone.js";
 import { parseIdList } from "../common/query.js";
 import {
@@ -69,7 +70,7 @@ export class AppointmentsController {
     const { tenantId } = this.tenantContext.current;
     const professionalScope = this.professionalScope();
 
-    const appointments = await this.prisma.forTenant(async (tx) => {
+    return this.prisma.forTenant(async (tx) => {
       const { timezone } = await tx.tenant.findUniqueOrThrow({
         where: { id: tenantId },
         select: { timezone: true },
@@ -77,7 +78,7 @@ export class AppointmentsController {
 
       const range = this.resolveRange(query, timezone);
 
-      return tx.appointment.findMany({
+      const appointments = await tx.appointment.findMany({
         where: {
           tenantId,
           ...(professionalScope ? { professionalId: professionalScope } : {}),
@@ -86,8 +87,9 @@ export class AppointmentsController {
         include: APPOINTMENT_SUMMARY_INCLUDE,
         orderBy: { startAt: "asc" },
       });
+      // R360, R380: the customers' records, looked up once for the whole page
+      return summarizeAppointments(tx, tenantId, appointments);
     });
-    return appointments.map(serializeAppointmentSummary);
   }
 
   // R50: the professional's genuinely open slots
@@ -149,7 +151,7 @@ export class AppointmentsController {
       createdByUserId: user.sub,
       override: body.override,
     });
-    return serializeAppointmentSummary(appointment);
+    return this.summarize(appointment);
   }
 
   @Patch(":id/reschedule")
@@ -173,7 +175,7 @@ export class AppointmentsController {
       override: body.override,
       professionalScope,
     });
-    return serializeAppointmentSummary(appointment);
+    return this.summarize(appointment);
   }
 
   // R100: completed / no_show are set by a person and only by a person
@@ -191,15 +193,16 @@ export class AppointmentsController {
       throw new BadRequestException("status must be booked, completed or no_show — cancelling has its own endpoint");
     }
 
-    const appointment = await this.prisma.forTenant(async (tx) => {
+    return this.prisma.forTenant(async (tx) => {
       const existing = await this.booking.loadOwnAppointment(tx, tenantId, id, professionalScope);
-      return tx.appointment.update({
+      const appointment = await tx.appointment.update({
         where: { id: existing.id, tenantId },
         data: { status: body.status },
         include: APPOINTMENT_SUMMARY_INCLUDE,
       });
+      const [summary] = await summarizeAppointments(tx, tenantId, [appointment]);
+      return summary as AppointmentSummary;
     });
-    return serializeAppointmentSummary(appointment);
   }
 
   // R90: cancelling only flips the status
@@ -210,15 +213,23 @@ export class AppointmentsController {
     const { tenantId } = this.tenantContext.current;
     const professionalScope = this.professionalScope();
 
-    const appointment = await this.prisma.forTenant(async (tx) => {
+    return this.prisma.forTenant(async (tx) => {
       const existing = await this.booking.loadOwnAppointment(tx, tenantId, id, professionalScope);
-      return tx.appointment.update({
+      const appointment = await tx.appointment.update({
         where: { id: existing.id, tenantId },
         data: { status: "cancelled" },
         include: APPOINTMENT_SUMMARY_INCLUDE,
       });
+      const [summary] = await summarizeAppointments(tx, tenantId, [appointment]);
+      return summary as AppointmentSummary;
     });
-    return serializeAppointmentSummary(appointment);
+  }
+
+  /** One appointment, with what the salon knows about its customer (R360, R380). */
+  private async summarize(appointment: PrismaAppointmentSummary): Promise<AppointmentSummary> {
+    const { tenantId } = this.tenantContext.current;
+    const [summary] = await this.prisma.forTenant((tx) => summarizeAppointments(tx, tenantId, [appointment]));
+    return summary as AppointmentSummary;
   }
 
   private professionalScope(): string | null {

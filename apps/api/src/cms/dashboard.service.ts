@@ -3,12 +3,15 @@ import type { CmsDashboardQuery, DashboardDay, DashboardSummary } from "@booking
 import type { Prisma } from "../../generated/prisma/index.js";
 import { PrismaService } from "../prisma/prisma.service.js";
 import { TenantContextService } from "../tenant/tenant-context.service.js";
-import { APPOINTMENT_SUMMARY_INCLUDE, serializeAppointmentSummary } from "../common/serializers.js";
+import { APPOINTMENT_SUMMARY_INCLUDE } from "../common/serializers.js";
+import { summarizeAppointments } from "../common/appointment-summaries.js";
 import { addDaysToDateString, dayOfWeekForDateString, zonedDateString, zonedTimeToUtc } from "../common/timezone.js";
 import { summarizeDay, summarizePeriod } from "./dashboard-metrics.js";
 
 /** How many unmarked appointments the home page lists; the count covers the rest. */
 export const DASHBOARD_UNMARKED_LIMIT = 8;
+/** R360: how many upcoming bookings from customers with a missed visit it lists. */
+export const DASHBOARD_AT_RISK_LIMIT = 8;
 export const DASHBOARD_PERIOD_DAYS = 30;
 export const DASHBOARD_WEEK_DAYS = 7;
 
@@ -52,7 +55,7 @@ export class DashboardService {
       const currentStart = new Date(now.getTime() - DASHBOARD_PERIOD_DAYS * DAY_MS);
       const previousStart = new Date(now.getTime() - 2 * DASHBOARD_PERIOD_DAYS * DAY_MS);
 
-      const [unmarked, unmarkedCount, periodRows, weekRows, professionals, businessHours, timeOff] = await Promise.all([
+      const [unmarked, unmarkedCount, upcoming, periodRows, weekRows, professionals, businessHours, timeOff] = await Promise.all([
         tx.appointment.findMany({
           where: unmarkedWhere,
           include: APPOINTMENT_SUMMARY_INCLUDE,
@@ -60,9 +63,15 @@ export class DashboardService {
           take: DASHBOARD_UNMARKED_LIMIT,
         }),
         tx.appointment.count({ where: unmarkedWhere }),
+        // R360: what's still to come this week — narrowed below to customers with a missed visit
+        tx.appointment.findMany({
+          where: { ...scope, status: "booked", startAt: { gte: now, lt: weekEnd } },
+          include: APPOINTMENT_SUMMARY_INCLUDE,
+          orderBy: { startAt: "asc" },
+        }),
         tx.appointment.findMany({
           where: { ...scope, startAt: { gte: previousStart, lt: now } },
-          select: { id: true, visitId: true, phoneNumber: true, status: true, createdByUserId: true, price: true, startAt: true },
+          select: { id: true, visitId: true, phoneKey: true, status: true, createdByUserId: true, price: true, startAt: true },
         }),
         tx.appointment.findMany({
           where: { ...scope, status: { not: "cancelled" }, startAt: { gte: weekStart, lt: weekEnd } },
@@ -91,23 +100,23 @@ export class DashboardService {
 
       // First visit ever per phone, across every branch: "new" means new to
       // the salon (or, for a professional login, new to them), not to a branch.
-      const phones = [...new Set(periodRows.filter((row) => row.status !== "cancelled").map((row) => row.phoneNumber))];
+      const phones = [...new Set(periodRows.filter((row) => row.status !== "cancelled").map((row) => row.phoneKey))];
       const firsts =
         phones.length === 0
           ? []
           : await tx.appointment.groupBy({
-              by: ["phoneNumber"],
+              by: ["phoneKey"],
               where: {
                 tenantId,
                 ...(professionalScope ? { professionalId: professionalScope } : {}),
                 status: { not: "cancelled" },
-                phoneNumber: { in: phones },
+                phoneKey: { in: phones },
               },
               _min: { startAt: true },
             });
       const firstSeen = new Map<string, Date>();
       for (const row of firsts) {
-        if (row._min.startAt) firstSeen.set(row.phoneNumber, row._min.startAt);
+        if (row._min.startAt) firstSeen.set(row.phoneKey, row._min.startAt);
       }
 
       // Money is the owner's: a professional login never receives a value
@@ -132,9 +141,15 @@ export class DashboardService {
         );
       }
 
+      // R360: one lookup of the customers' records covers both lists
+      const summaries = await summarizeAppointments(tx, tenantId, [...unmarked, ...upcoming]);
+      const atRisk = summaries.slice(unmarked.length).filter((appointment) => (appointment.noShowHistory?.missed ?? 0) > 0);
+
       return {
-        unmarked: unmarked.map(serializeAppointmentSummary),
+        unmarked: summaries.slice(0, unmarked.length),
         unmarkedCount,
+        atRisk: atRisk.slice(0, DASHBOARD_AT_RISK_LIMIT),
+        atRiskCount: atRisk.length,
         week,
         current: summarizePeriod(
           periodRows.filter((row) => row.startAt >= currentStart),

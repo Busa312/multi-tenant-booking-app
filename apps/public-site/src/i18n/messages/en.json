@@ -15,13 +15,15 @@
     "servicesTitle": "Services",
     "servicesEmpty": "This business hasn't published any services yet.",
     "locationsTitle": "Where to find us",
-    "minutes": "{count} min",
+    "minutes": "{count} min on average",
     "book": "Book an appointment",
     "bookService": "Book",
     "selectAndBook": "Book {count} selected",
     "defaultTitle": "Book an appointment at {name}",
     "defaultDescription": "See what's available and book online at {name}.",
-    "bookAt": "Book at {name}"
+    "bookAt": "Book at {name}",
+    "hoursTitle": "Opening hours",
+    "closed": "Closed"
   },
   "booking": {
     "title": "Book an appointment",
@@ -38,7 +40,7 @@
       "heading": "What would you like booked?",
       "hint": "Pick one or more. They'll run back to back in one appointment.",
       "empty": "Nothing is bookable online right now.",
-      "totalDuration": "{count} min total",
+      "totalDuration": "about {count} min total",
       "totalPrice": "{price} ₾ total",
       "max": "You can book up to {max} services at once.",
       "unavailable": "Not bookable online"
@@ -61,12 +63,16 @@
       "heading": "Pick a time",
       "noSlots": "Nothing open on this day. Try another date.",
       "loading": "Checking what's open…",
-      "previousDay": "Previous day",
-      "nextDay": "Next day",
       "today": "Today",
       "plan": "Your visit",
       "with": "With {name}",
-      "taken": "Someone else just took that time. The times below are up to date — please pick another."
+      "taken": "Someone else just took that time. The times below are up to date — please pick another.",
+      "previousWeek": "Previous week",
+      "nextWeek": "Next week",
+      "dayLabel": "Day",
+      "morning": "Morning",
+      "afternoon": "Afternoon",
+      "evening": "Evening"
     },
     "details": {
       "heading": "Your details",
@@ -112,8 +118,10 @@
       "sending": "Sending…",
       "wrongCode": "That code isn't right, or it has expired. Try again or send a new one.",
       "sendFailed": "We couldn't send a code just now. Please try again.",
-      "recentlySent": "We sent a code to this number less than a minute ago. Enter that one, or ask for a new one when the timer runs out."
-    }
+      "recentlySent": "We sent a code to this number less than a minute ago. Enter that one, or ask for a new one when the timer runs out.",
+      "bookingFailed": "Your number is confirmed, but we couldn't complete the booking. Please ask for a new code and try again."
+    },
+    "blocked": "Online booking isn't available for this number. Please call the salon to book."
   },
   "manage": {
     "heading": "Your appointment",
@@ -142,7 +150,8 @@
       "done": "If that number has an upcoming booking with us, we've just texted the link."
     },
     "segmentCancelled": "Cancelled by the salon",
-    "tooLate": "This booking can no longer be changed online. To change or cancel it, please contact the salon."
+    "tooLate": "This booking can no longer be changed online. To change or cancel it, please contact the salon.",
+    "findBooking": "Change or cancel a booking"
   },
   "legal": {
     "privacyTitle": "Privacy policy",

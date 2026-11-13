@@ -1,10 +1,11 @@
 import { headers } from "next/headers";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { ApiError } from "@booking/api-client";
 import { defaultLocaleOf, localized } from "@booking/shared-types";
 import type { Tenant } from "@booking/shared-types";
 import { getCachedTenant } from "./tenant-config";
-import { getMessages, resolveLocale, translator, type Locale, type Translate } from "@/i18n/locales";
+import { getMessages, isLocale, resolveLocale, translator, type Locale, type Translate } from "@/i18n/locales";
+import { SITE_PATH_HEADER, localePath } from "./locale-path";
 
 export interface PageContext {
   tenant: Tenant;
@@ -16,6 +17,9 @@ export interface PageContext {
   t: Translate;
 
   text: (plain: string, i18n: unknown) => string;
+
+  /** R160: a site path ("/book") as a link in the language being read. */
+  href: (path: string) => string;
 }
 
 /**
@@ -26,10 +30,16 @@ export interface PageContext {
  * not-found page itself: it is the outermost layout, so nothing above it
  * could.
  */
+// R160: each page has exactly one URL per language. A language prefix the salon
+// doesn't publish in, or one naming its main language (whose pages have no
+// prefix), is redirected to the unprefixed page rather than served as a duplicate.
 export async function loadPageContext(requestedLocale: string): Promise<PageContext> {
   const context = await loadPageContextOrNull(requestedLocale);
   if (!context) {
     notFound();
+  }
+  if (isLocale(requestedLocale) && (requestedLocale !== context.locale || requestedLocale === context.defaultLocale)) {
+    redirect(headers().get(SITE_PATH_HEADER) ?? "/");
   }
   return context;
 }
@@ -51,6 +61,7 @@ export async function loadPageContextOrNull(requestedLocale: string): Promise<Pa
     defaultLocale,
     t: translator(getMessages(locale)),
     text: (plain, i18n) => localized(plain, i18n, locale, defaultLocale),
+    href: (path) => localePath(locale, defaultLocale, path),
   };
 }
 

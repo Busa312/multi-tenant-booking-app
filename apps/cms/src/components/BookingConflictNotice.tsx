@@ -1,11 +1,14 @@
-import type { BookingConflict } from "@booking/shared-types";
+import type { BookingConflict, NoShowHistory } from "@booking/shared-types";
 import { useI18n } from "../i18n/I18nContext.js";
 import { useLocalizedName } from "../lib/useLocalizedName.js";
 import { formatDateTimeLabel } from "../lib/tenantTime.js";
+import { NoShowBadge } from "./NoShowBadge.js";
 import { Alert } from "./ui/index.js";
 
 interface BookingConflictNoticeProps {
   conflicts: BookingConflict[];
+  /** R360: how the customer being booked has turned up lately; null = nothing to say. */
+  noShowHistory?: NoShowHistory | null;
   /** Tenant timezone — conflict windows are instants and belong on the salon's clock. */
   timezone: string;
 }
@@ -16,7 +19,7 @@ interface BookingConflictNoticeProps {
  * conflicts; this names each one so "book anyway" is an informed choice rather
  * than a shrug past a generic error.
  */
-export function BookingConflictNotice({ conflicts, timezone }: BookingConflictNoticeProps) {
+export function BookingConflictNotice({ conflicts, noShowHistory, timezone }: BookingConflictNoticeProps) {
   const { t, lang } = useI18n();
   const nameOf = useLocalizedName();
 
@@ -62,6 +65,7 @@ export function BookingConflictNotice({ conflicts, timezone }: BookingConflictNo
           {describe(conflict)}
         </span>
       ))}
+      {noShowHistory && <NoShowBadge history={noShowHistory} className="mt-2" />}
     </Alert>
   );
 }

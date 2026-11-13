@@ -4,6 +4,8 @@ import { ApiError } from "@booking/api-client";
 import { cachedApi } from "../lib/cache.js";
 import { useI18n } from "../i18n/I18nContext.js";
 import { useLocalizedName } from "../lib/useLocalizedName.js";
+import { ConfirmModal, type ConfirmRequest } from "../components/ConfirmModal.js";
+import { usePagination } from "../lib/usePagination.js";
 import { AppShell } from "../components/AppShell.js";
 import { PillList } from "../components/PillList.js";
 import { Modal } from "../components/Modal.js";
@@ -15,7 +17,7 @@ import {
   Alert,
   Button,
   Pill,
-  Table,
+  Pagination, Table,
   TableHead,
   TableRow,
   TableEmpty,
@@ -40,8 +42,13 @@ interface PageData {
   enabledLocales: string[];
 }
 
+// Rows per page; a pager appears only once there are more.
+const PAGE_SIZE = 10;
+
 export function ServicesPage() {
   const { t } = useI18n();
+  // The question waiting on an answer, if any (see ConfirmModal).
+  const [confirmRequest, setConfirmRequest] = useState<ConfirmRequest | null>(null);
   const nameOf = useLocalizedName();
   const [data, setData] = useState<PageData | null>(null);
   const [listError, setListError] = useState<string | null>(null);
@@ -118,8 +125,17 @@ export function ServicesPage() {
     }
   }
 
-  async function handleDelete(s: ServiceSummary) {
-    if (!window.confirm(t("services.confirmDelete", { name: nameOf(s.name, s.nameI18n) }))) return;
+  function handleDelete(s: ServiceSummary) {
+    setConfirmRequest({
+      title: t("services.delete"),
+      message: t("services.confirmDelete", { name: nameOf(s.name, s.nameI18n) }),
+      confirmLabel: t("services.delete"),
+      danger: true,
+      run: () => void handleDeleteConfirmed(s),
+    });
+  }
+
+  async function handleDeleteConfirmed(s: ServiceSummary) {
     setListError(null);
     try {
       await cachedApi.deleteService(s.id);
@@ -142,13 +158,12 @@ export function ServicesPage() {
     ];
   }
 
+  const pager = usePagination(data?.services ?? [], PAGE_SIZE);
+
   return (
     <AppShell title={t("services.title")} subtitle={t("services.subtitle")}>
-      <div className="animate-fade-up motion-reduce:animate-none">
-        <div className="mb-5 flex flex-wrap items-center gap-3">
-          <div className="text-[13px] text-base-content/60">
-            {data ? t("services.count", { count: data.services.length }) : t("common.loading")}
-          </div>
+      <div>
+        <div className="mb-5 flex flex-wrap items-center justify-end gap-3">
           {/* Disabled until the roster and locale list are in — the form can't
               be rendered without them. */}
           <Button className="ml-auto" icon="add" disabled={!data} onClick={() => setEditTarget("new")}>
@@ -170,7 +185,7 @@ export function ServicesPage() {
                 <div>{t("services.colStatus")}</div>
                 <div></div>
               </TableHead>
-              {data.services.map((s) => (
+              {pager.pageItems.map((s) => (
                 <TableRow key={s.id} columns={COLUMNS}>
                   <div>
                     <div className="font-semibold">{nameOf(s.name, s.nameI18n)}</div>
@@ -198,6 +213,7 @@ export function ServicesPage() {
               ))}
               {data.services.length === 0 && <TableEmpty>{t("services.empty")}</TableEmpty>}
             </Table>
+            <Pagination {...pager} />
           </div>
         )}
         {!data && <CardSkeleton rows={5} rowHeight={TABLE_ROW} />}
@@ -233,6 +249,7 @@ export function ServicesPage() {
           <p className="text-base-content/70">{t("services.deactivateBody", { name: nameOf(deactivateTarget.name, deactivateTarget.nameI18n) })}</p>
         </Modal>
       )}
+      {confirmRequest && <ConfirmModal request={confirmRequest} onClose={() => setConfirmRequest(null)} />}
     </AppShell>
   );
 }

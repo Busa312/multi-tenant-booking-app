@@ -1,4 +1,5 @@
 import type { Translate } from "@/i18n/locales";
+import { PAGE_HEADING } from "@/lib/wizardClasses";
 import { BookingSummary } from "./BookingSummary";
 import type { Confirmation } from "./BookingWizard";
 
@@ -20,14 +21,12 @@ export function ConfirmationPanel({ confirmation, timezone, locale, t, text, onB
 
   return (
     <section className="flex flex-col gap-5">
-      {/* The success header reads as one centred block: mark, heading, what's next. */}
-      <header className="flex flex-col items-center gap-3 text-center">
-        <div className="grid size-14 place-items-center rounded-full bg-success/15 text-success" aria-hidden="true">
-          <svg className="size-7" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M20 6 9 17l-5-5" />
-          </svg>
-        </div>
-        <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">{t("booking.confirmed.heading")}</h1>
+      {/* Mark, heading, what's next — set flush left like the rest of the flow. */}
+      <header className="flex flex-col items-start gap-3">
+        <svg className="size-10 text-success" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="square" aria-hidden="true">
+          <path d="M20 6 9 17l-5-5" />
+        </svg>
+        <h1 className={PAGE_HEADING}>{t("booking.confirmed.heading")}</h1>
         <p className="max-w-xl text-base-content/70">
           {/* R270: texted to the verified phone once SMS is live; until then this screen is the copy */}
           {confirmation.linkTexted
@@ -52,14 +51,14 @@ export function ConfirmationPanel({ confirmation, timezone, locale, t, text, onB
         t={t}
       />
 
-      <div className="flex flex-col items-start gap-2 rounded-box border border-primary/25 bg-primary/5 p-4">
+      <div className="flex flex-col items-start gap-2 rounded-box bg-base-200 p-4">
         <a className="btn btn-primary" href={confirmation.manageUrl}>
           {t("booking.confirmed.manageNow")}
         </a>
         <p className="text-sm text-base-content/65">{t("booking.confirmed.keepLinkHint")}</p>
       </div>
 
-      <button type="button" className="btn btn-ghost self-center" onClick={onBookAnother}>
+      <button type="button" className="btn btn-ghost self-start" onClick={onBookAnother}>
         {t("booking.confirmed.bookAnother")}
       </button>
     </section>

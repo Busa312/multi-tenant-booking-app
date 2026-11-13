@@ -269,7 +269,46 @@ export class AppointmentDto {
   @ApiProperty() updatedAt!: string;
 }
 
+export class OpeningHoursDto {
+  @ApiProperty({ description: "0 = Sunday … 6 = Saturday" }) dayOfWeek!: number;
+  @ApiProperty({ description: "HH:mm, salon's clock" }) opens!: string;
+  @ApiProperty({ description: "HH:mm, salon's clock" }) closes!: string;
+}
+
+export class BlockedPhoneDto {
+  @ApiProperty() id!: string;
+  @ApiProperty({ description: "As staff entered it" }) phoneNumber!: string;
+  @ApiProperty({ nullable: true, type: String }) reason!: string | null;
+  @ApiProperty() createdAt!: string;
+}
+
+export class BlockPhoneRequestDto {
+  @ApiProperty() phoneNumber!: string;
+  @ApiPropertyOptional({ description: "For the salon's own reference; never shown to the customer" }) reason?: string;
+}
+
+export class UnblockPhoneRequestDto {
+  @ApiProperty({ description: "Matched however it is spelled" }) phoneNumber!: string;
+}
+
+export class PhoneBlockedResponseDto {
+  @ApiProperty({ enum: ["phone_blocked"] }) code!: "phone_blocked";
+}
+
+export class NoShowHistoryDto {
+  @ApiProperty({ description: "How many of those visits the customer missed" }) missed!: number;
+  @ApiProperty({ description: "Finished visits looked at: 1 to 3" }) of!: number;
+}
+
 export class AppointmentSummaryDto extends AppointmentDto {
+  @ApiProperty({
+    nullable: true,
+    type: NoShowHistoryDto,
+    description: "R360: the customer's last finished visits before this one; null = none yet",
+  })
+  noShowHistory!: NoShowHistoryDto | null;
+  @ApiProperty({ description: "R380: this salon has blocked the customer's number from booking online" })
+  phoneBlocked!: boolean;
   @ApiProperty({ nullable: true, type: String, description: "TenantUser who created it; null = customer's own booking" })
   createdByUserId!: string | null;
   @ApiProperty({ nullable: true, type: String, description: "Internal staff note — never shown to the customer" })
@@ -367,6 +406,8 @@ export class BookingConflictDto {
 export class BookingConflictResponseDto {
   @ApiProperty({ enum: ["booking_conflict"] }) code!: "booking_conflict";
   @ApiProperty({ type: [BookingConflictDto] }) conflicts!: BookingConflictDto[];
+  @ApiProperty({ nullable: true, type: NoShowHistoryDto, description: "R360: the customer being booked" })
+  noShowHistory!: NoShowHistoryDto | null;
 }
 
 export class OtpCooldownResponseDto {
@@ -560,6 +601,9 @@ export class DashboardSummaryDto {
   @ApiProperty({ type: [AppointmentSummaryDto], description: "Past appointments still booked, oldest first" })
   unmarked!: AppointmentSummaryDto[];
   @ApiProperty() unmarkedCount!: number;
+  @ApiProperty({ type: [AppointmentSummaryDto], description: "R360: next 7 days, customers with a missed visit, soonest first" })
+  atRisk!: AppointmentSummaryDto[];
+  @ApiProperty() atRiskCount!: number;
   @ApiProperty({ type: [DashboardDayDto], description: "Today and the next 6 days" }) week!: DashboardDayDto[];
   @ApiProperty({ type: DashboardPeriodDto, description: "The last 30 days" }) current!: DashboardPeriodDto;
   @ApiProperty({ type: DashboardPeriodDto, description: "The 30 days before" }) previous!: DashboardPeriodDto;

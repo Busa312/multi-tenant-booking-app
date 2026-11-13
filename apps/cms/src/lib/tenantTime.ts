@@ -52,6 +52,25 @@ export function startOfWeek(date: string): string {
   return addDays(date, -daysSinceMonday);
 }
 
+/** The first day of the month a "YYYY-MM-DD" falls in. */
+export function startOfMonth(date: string): string {
+  return `${date.slice(0, 8)}01`;
+}
+
+/** Shifts a "YYYY-MM-DD" by whole months; the 31st lands on a shorter month's last day. */
+export function addMonths(date: string, months: number): string {
+  const from = dateOf(date);
+  const first = new Date(Date.UTC(from.getUTCFullYear(), from.getUTCMonth() + months, 1));
+  const lastDay = new Date(Date.UTC(first.getUTCFullYear(), first.getUTCMonth() + 1, 0)).getUTCDate();
+  first.setUTCDate(Math.min(from.getUTCDate(), lastDay));
+  return first.toISOString().slice(0, 10);
+}
+
+/** The month of a "YYYY-MM-DD", e.g. "November 2026". */
+export function formatMonthLabel(date: string, lang: string): string {
+  return new Intl.DateTimeFormat(lang, { month: "long", year: "numeric", timeZone: "UTC" }).format(dateOf(date));
+}
+
 /** A "YYYY-MM-DD" rendered for humans in the active UI language. */
 export function formatDateLabel(date: string, lang: string): string {
   return new Intl.DateTimeFormat(lang, {

@@ -12,5 +12,5 @@ type CardProps<T extends ElementType> = CardOwnProps<T> & Omit<ComponentPropsWit
 
 export function Card<T extends ElementType = "div">({ as, className, ...rest }: CardProps<T>) {
   const Tag: ElementType = as ?? "div";
-  return <Tag className={cx("rounded-box border border-base-300 bg-base-100 p-5 shadow-xs", className)} {...rest} />;
+  return <Tag className={cx("rounded-box border border-base-300 bg-base-100 p-5", className)} {...rest} />;
 }

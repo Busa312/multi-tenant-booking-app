@@ -5,10 +5,12 @@ import { MAX_SERVICES_PER_BOOKING, localized } from "@booking/shared-types";
 import type { Location, PublicProfessional, Service, Visit, VisitSlot } from "@booking/shared-types";
 import { translator, type Locale, type Messages } from "@/i18n/locales";
 import { fetchProfessionals, holdSlot, releaseHold, submitBooking, type FailureReason } from "@/lib/actions";
-import { addDays, todayInTimezone, wallClock } from "@/lib/tenant-time";
+import { addDays, formatInstant, todayInTimezone, wallClock } from "@/lib/tenant-time";
+import { useLocaleHref } from "@/lib/useLocaleHref";
 import { isBookable, professionalIdsFromSlot } from "@/lib/visit-booking";
 import { clearWizard, loadWizard, saveWizard, type CodeSent, type WizardState } from "@/lib/wizard-storage";
 import { StepProgress } from "./StepProgress";
+import { WizardRecap } from "./WizardRecap";
 import { StepServices } from "./StepServices";
 import { StepLocation } from "./StepLocation";
 import { StepProfessional } from "./StepProfessional";
@@ -91,6 +93,9 @@ export function BookingWizard({
         : ["services", "professional", "time", "details", "verify"],
     [locations.length, preselectedLocationId],
   );
+
+  // R160: "book another" starts over in the language being read
+  const bookHref = useLocaleHref()("/book");
 
   const [stepIndex, setStepIndex] = useState(0);
   const [draft, setDraft] = useState<BookingDraft>(() => {
@@ -325,20 +330,33 @@ export function BookingWizard({
         onBookAnother={() => {
           // A clean start: no saved progress, no deep-link preselection.
           clearWizard();
-          window.location.assign("/book");
+          window.location.assign(bookHref);
         }}
       />
     );
   }
 
   return (
-    <div className="flex flex-col gap-6">
-      <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">{t("booking.title")}</h1>
+    <div className="flex flex-col gap-5">
+      <h1 className="text-sm font-bold">{t("booking.title")}</h1>
       <StepProgress
         steps={steps.map((id) => t(`booking.steps.${id}`))}
         current={stepIndex}
         label={t("booking.stepOf", { current: stepIndex + 1, total: steps.length })}
+        onSelect={setStepIndex}
       />
+
+      {/* What's been picked so far. The details step shows the full summary instead. */}
+      {stepIndex > 0 && step !== "details" && (
+        <WizardRecap
+          label={t("booking.summary.heading")}
+          items={[
+            selectedServices.map((service) => text(service.name, service.nameI18n)).join(", "),
+            locations.length > 1 && selectedLocation ? text(selectedLocation.name, selectedLocation.nameI18n) : "",
+            draft.slot && stepIndex > steps.indexOf("time") ? formatInstant(draft.slot.startAt, timezone, locale) : "",
+          ].filter((item) => item !== "")}
+        />
+      )}
 
       {submitError === "conflict" && (
         <div className="alert alert-soft alert-warning" role="alert">
@@ -442,6 +460,8 @@ export function BookingWizard({
           codeSent={codeSent}
           onCodeSent={setCodeSent}
           onVerified={(verificationToken) => void confirm(details, verificationToken)}
+          isBooking={isSubmitting}
+          bookingError={submitError === "conflict" ? null : submitError}
           onBack={goBack}
           t={t}
         />

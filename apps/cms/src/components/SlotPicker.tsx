@@ -4,7 +4,7 @@ import { cachedApi } from "../lib/cache.js";
 import { useI18n } from "../i18n/I18nContext.js";
 import { cx } from "../lib/cx.js";
 import { formatTimeLabel, tenantTimeString } from "../lib/tenantTime.js";
-import { Eyebrow, Field, TextInput } from "./ui/index.js";
+import { GroupLabel, Field, TextInput } from "./ui/index.js";
 
 interface SlotPickerProps {
   /** Empty until picked — slots can't be computed without these and a date. */
@@ -76,7 +76,7 @@ export function SlotPicker({
 
   return (
     <div className="mb-1">
-      <Eyebrow className="mb-2">{t("bookings.openSlots")}</Eyebrow>
+      <GroupLabel>{t("bookings.openSlots")}</GroupLabel>
       {incomplete && <p className="mb-3 text-[13px] text-base-content/60">{t("bookings.slotsNeedSelection")}</p>}
       {!incomplete && error && <p className="mb-3 text-[13px] text-error">{error}</p>}
       {!incomplete && !error && slots === null && <p className="mb-3 flex items-center gap-2 text-[13px] text-base-content/60">
@@ -95,7 +95,7 @@ export function SlotPicker({
                 type="button"
                 aria-pressed={time === value}
                 className={cx(
-                  "btn rounded-full px-3 font-medium tabular-nums btn-sm",
+                  "btn px-3 font-medium tabular-nums btn-sm",
                   time === value ? "btn-primary" : "border-base-300 bg-base-100 hover:border-primary hover:bg-base-100",
                 )}
                 onClick={() => onChange(time)}

@@ -6,7 +6,7 @@ import { useLocalizedName } from "../lib/useLocalizedName.js";
 import { Modal } from "./Modal.js";
 import { LocalizedField } from "./LocalizedField.js";
 import { ContentLocaleSelect } from "./ContentLocaleSelect.js";
-import { Alert, Button, Checkbox, Eyebrow, Field, TextInput } from "./ui/index.js";
+import { Alert, Button, Checkbox, GroupLabel, Field, TextInput } from "./ui/index.js";
 
 interface EditServiceModalProps {
   target: ServiceSummary | "new";
@@ -165,7 +165,7 @@ export function EditServiceModal({ target, professionals, locales, onClose, onSa
         {fieldErrors.durationMinutes && <Alert className="-mt-2 mb-4 py-2">{t(fieldErrors.durationMinutes)}</Alert>}
         {fieldErrors.price && <Alert className="-mt-2 mb-4 py-2">{t(fieldErrors.price)}</Alert>}
 
-        <Eyebrow className="mb-2">{t("services.performedBy")}</Eyebrow>
+        <GroupLabel>{t("services.performedBy")}</GroupLabel>
         {assignable.length === 0 && <p className="mb-3 text-[13px] text-base-content/60">{t("services.noProfessionalsCreated")}</p>}
         {assignable.length > 0 && (
           <div className="mb-1.5 rounded-field border border-base-300 px-3 py-1.5">

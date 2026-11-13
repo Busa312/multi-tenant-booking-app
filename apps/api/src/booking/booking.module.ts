@@ -3,6 +3,7 @@ import { AvailabilityService } from "./availability.service.js";
 import { BookingService } from "./booking.service.js";
 import { VisitService } from "./visit.service.js";
 import { AvailabilityCacheService } from "./availability-cache.service.js";
+import { BlockedPhoneService } from "./blocked-phone.service.js";
 
 /**
  * Booking domain logic with no HTTP surface of its own — imported by both
@@ -10,7 +11,7 @@ import { AvailabilityCacheService } from "./availability-cache.service.js";
  * computation and one set of write rules (see AvailabilityService's comment).
  */
 @Module({
-  providers: [AvailabilityService, AvailabilityCacheService, BookingService, VisitService],
-  exports: [AvailabilityService, BookingService, VisitService],
+  providers: [AvailabilityService, AvailabilityCacheService, BookingService, VisitService, BlockedPhoneService],
+  exports: [AvailabilityService, BookingService, VisitService, BlockedPhoneService],
 })
 export class BookingModule {}

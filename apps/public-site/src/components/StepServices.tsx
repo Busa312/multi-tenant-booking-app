@@ -49,13 +49,13 @@ export function StepServices({ services, professionals, selectedIds, onChange, o
             return (
               <li key={service.id}>
                 <label
-                  className="flex cursor-pointer items-center gap-3.5 rounded-box border border-base-300 bg-base-100 px-4 py-3.5 transition-colors hover:border-primary/60 data-disabled:cursor-not-allowed data-disabled:opacity-55 data-disabled:hover:border-base-300 data-selected:border-primary data-selected:bg-primary/8 data-selected:ring-1 data-selected:ring-primary"
+                  className="flex cursor-pointer items-center gap-3.5 rounded-box border border-base-300 bg-base-100 px-4 py-3.5 transition-colors hover:border-base-content/50 data-disabled:cursor-not-allowed data-disabled:opacity-55 data-disabled:hover:border-base-300 data-selected:border-primary data-selected:bg-base-200 data-selected:shadow-[inset_4px_0_0_var(--color-primary)]"
                   data-selected={isSelected || undefined}
                   data-disabled={disabled || undefined}
                 >
                   <input
                     type="checkbox"
-                    className="checkbox checkbox-primary rounded-[0.35rem]"
+                    className="checkbox checkbox-primary"
                     checked={isSelected}
                     disabled={disabled}
                     onChange={() => toggle(service.id)}
@@ -64,7 +64,7 @@ export function StepServices({ services, professionals, selectedIds, onChange, o
                     <span className="font-semibold">
                       {/* Order matters once there are several — it's the order they're done in. */}
                       {isSelected && selectedIds.length > 1 && (
-                        <span className="badge badge-primary badge-sm mr-2 align-middle tabular-nums">{position}</span>
+                        <span className="badge badge-secondary badge-sm mr-2 align-middle tabular-nums">{position}</span>
                       )}
                       {text(service.name, service.nameI18n)}
                     </span>

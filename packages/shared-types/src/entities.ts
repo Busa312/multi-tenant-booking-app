@@ -181,7 +181,41 @@ export interface Appointment {
 
 }
 
+/** R390: one weekday the salon is open, for visitors. Closed days are simply absent. */
+export interface OpeningHours {
+  /** 0 = Sunday … 6 = Saturday. */
+  dayOfWeek: number;
+  /** "HH:mm" on the salon's clock. */
+  opens: string;
+  closes: string;
+}
+
+/** R380: a phone number one salon has stopped from booking online. Never visible to another salon. */
+export interface BlockedPhone {
+  id: string;
+  /** As staff entered it. */
+  phoneNumber: string;
+  reason: string | null;
+  createdAt: string;
+}
+
+/**
+ * R360: how the customer's latest finished visits (at most three, before this
+ * appointment) went. Derived from appointments a person marked completed or
+ * no-show; never stored.
+ */
+export interface NoShowHistory {
+  /** How many of those visits the customer didn't come to. */
+  missed: number;
+  /** How many finished visits were looked at: 1 to 3. */
+  of: number;
+}
+
 export interface AppointmentSummary extends Appointment {
+  // R360: null = no finished visit yet — a new customer is never flagged
+  noShowHistory: NoShowHistory | null;
+  // R380: this salon has blocked the customer's number from booking online
+  phoneBlocked: boolean;
   createdByUserId: string | null;
   notes: string | null;
   professionalName: string | null;

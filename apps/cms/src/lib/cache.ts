@@ -7,11 +7,13 @@ import type {
   CreateLocationRequest,
   CreateProfessionalRequest,
   CreateServiceRequest,
+  BlockPhoneRequest,
   CreateTimeOffRequest,
   InviteProfessionalRequest,
   UpdateCmsAppointmentRequest,
   TenantColors,
   TenantConfig,
+  UnblockPhoneRequest,
   UpdateAppointmentStatusRequest,
   UpdateLocationRequest,
   UpdateProfessionalRequest,
@@ -180,6 +182,11 @@ export const cachedApi = {
   upsertBusinessHours: (payload: UpsertBusinessHoursRequest) =>
     mutating(cmsApiClient.upsertBusinessHours(payload), ["business-hours"]),
   deleteBusinessHours: (id: string) => mutating(cmsApiClient.deleteBusinessHours(id), ["business-hours"]),
+  // R380: never cached — a short list, and a block must show the moment it's made.
+  // Blocking changes what every listed appointment says about its customer.
+  listBlockedPhones: () => cmsApiClient.listBlockedPhones(),
+  blockPhone: (payload: BlockPhoneRequest) => mutating(cmsApiClient.blockPhone(payload), ["appointments"]),
+  unblockPhone: (payload: UnblockPhoneRequest) => mutating(cmsApiClient.unblockPhone(payload), ["appointments"]),
   createTimeOff: (payload: CreateTimeOffRequest) => mutating(cmsApiClient.createTimeOff(payload), ["time-off"]),
   deleteTimeOff: (id: string) => mutating(cmsApiClient.deleteTimeOff(id), ["time-off"]),
   createAppointment: (payload: CreateCmsAppointmentRequest) =>

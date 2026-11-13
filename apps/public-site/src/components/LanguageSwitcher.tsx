@@ -1,47 +1,59 @@
 "use client";
 
-import { useRouter } from "next/navigation";
-import { useTransition } from "react";
-import { LOCALES, LOCALE_COOKIE, LOCALE_LABELS, isLocale, type Locale } from "@/i18n/locales";
+import { usePathname } from "next/navigation";
+import { LOCALES, LOCALE_LABELS, isLocale, type Locale } from "@/i18n/locales";
+import { localePath } from "@/lib/locale-path";
 
 interface LanguageSwitcherProps {
   current: Locale;
-
+  /** The salon's main language: the one whose pages have no prefix. */
+  defaultLocale: string;
   enabledLocales: string[] | undefined;
   label: string;
 }
 
-export function LanguageSwitcher({ current, enabledLocales, label }: LanguageSwitcherProps) {
-  const router = useRouter();
-  const [isPending, startTransition] = useTransition();
+/**
+ * R160: each language is a link to this same page at that language's URL —
+ * real links, so they work without JavaScript and search engines can follow
+ * them. The booking wizard keeps its progress across the switch (it restores
+ * from the tab's storage).
+ */
+export function LanguageSwitcher({ current, defaultLocale, enabledLocales, label }: LanguageSwitcherProps) {
+  const pathname = usePathname() ?? "/";
 
   const available = (enabledLocales ?? []).filter(isLocale);
   if (available.length < 2) {
     return null;
   }
 
-  const select = (locale: Locale) => {
-    document.cookie = `${LOCALE_COOKIE}=${locale}; path=/; max-age=31536000; samesite=lax`;
-    startTransition(() => router.refresh());
-  };
+  // The page's own path, with whatever language prefix it has now taken off.
+  const first = pathname.split("/")[1] ?? "";
+  const path = isLocale(first) ? pathname.slice(first.length + 1) || "/" : pathname;
 
   return (
-    <div
-      className={`join flex-none transition-opacity ${isPending ? "pointer-events-none opacity-60" : ""}`}
-      role="group"
-      aria-label={label}
-    >
-      {LOCALES.filter((locale) => available.includes(locale)).map((locale) => (
-        <button
-          key={locale}
-          type="button"
-          className={`btn join-item btn-sm ${locale === current ? "btn-primary" : "border-base-300 bg-base-100 font-normal"}`}
-          aria-pressed={locale === current}
-          onClick={() => select(locale)}
-        >
-          {LOCALE_LABELS[locale]}
-        </button>
-      ))}
-    </div>
+    <nav className="flex flex-none items-center gap-1" aria-label={label}>
+      {LOCALES.filter((locale) => available.includes(locale)).map((locale) => {
+        const href = localePath(locale, defaultLocale, path);
+        return (
+          <a
+            key={locale}
+            href={href}
+            hrefLang={locale}
+            lang={locale}
+            className={`btn btn-ghost btn-sm px-2 ${locale === current ? "font-bold underline decoration-2 underline-offset-4" : "font-normal text-base-content/65"}`}
+            aria-current={locale === current ? "true" : undefined}
+            onClick={(event) => {
+              // Keep the query (a preselected service or branch) across the switch.
+              if (window.location.search) {
+                event.preventDefault();
+                window.location.assign(href + window.location.search);
+              }
+            }}
+          >
+            {LOCALE_LABELS[locale]}
+          </a>
+        );
+      })}
+    </nav>
   );
 }

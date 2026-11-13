@@ -6,7 +6,7 @@ import { useLocalizedName } from "../lib/useLocalizedName.js";
 import { Modal } from "./Modal.js";
 import { LocalizedField } from "./LocalizedField.js";
 import { ContentLocaleSelect } from "./ContentLocaleSelect.js";
-import { Alert, Button, Checkbox, Eyebrow, Field, Select } from "./ui/index.js";
+import { Alert, Button, Checkbox, GroupLabel, Field, Select } from "./ui/index.js";
 
 export function EditProfessionalModal({
   target,
@@ -108,7 +108,7 @@ export function EditProfessionalModal({
           </Field>
         )}
 
-        <Eyebrow className="mb-2">{t("professionals.servicesPerformed")}</Eyebrow>
+        <GroupLabel>{t("professionals.servicesPerformed")}</GroupLabel>
         {services.length === 0 && (
           <p className="mb-3 text-[13px] text-base-content/60">{t("professionals.noServicesCreated")}</p>
         )}

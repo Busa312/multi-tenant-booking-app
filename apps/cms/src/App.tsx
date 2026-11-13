@@ -17,6 +17,8 @@ const chunks = {
   locations: () => import("./pages/Locations.js"),
   publicSite: () => import("./pages/PublicSiteSettings.js"),
   hours: () => import("./pages/Hours.js"),
+  subscription: () => import("./pages/Subscription.js"),
+  blockedNumbers: () => import("./pages/BlockedNumbers.js"),
 };
 
 const SetPasswordPage = lazy(() => chunks.setPassword().then((m) => ({ default: m.SetPasswordPage })));
@@ -32,6 +34,8 @@ const PublicSiteSettingsPage = lazy(() =>
   chunks.publicSite().then((m) => ({ default: m.PublicSiteSettingsPage })),
 );
 const HoursPage = lazy(() => chunks.hours().then((m) => ({ default: m.HoursPage })));
+const BlockedNumbersPage = lazy(() => chunks.blockedNumbers().then((m) => ({ default: m.BlockedNumbersPage })));
+const SubscriptionPage = lazy(() => chunks.subscription().then((m) => ({ default: m.SubscriptionPage })));
 
 const NAV_CHUNKS = [
   chunks.dashboard,
@@ -42,6 +46,8 @@ const NAV_CHUNKS = [
   chunks.locations,
   chunks.publicSite,
   chunks.hours,
+  chunks.subscription,
+  chunks.blockedNumbers,
 ];
 
 function RequireAuth({ children }: { children: React.ReactElement }) {
@@ -97,6 +103,26 @@ export function App() {
             element={
               <RequireAuth>
                 <BookingsPage />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/blocked-numbers"
+            element={
+              <RequireAuth>
+                <RequireOwner>
+                  <BlockedNumbersPage />
+                </RequireOwner>
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/settings/subscription"
+            element={
+              <RequireAuth>
+                <RequireOwner>
+                  <SubscriptionPage />
+                </RequireOwner>
               </RequireAuth>
             }
           />

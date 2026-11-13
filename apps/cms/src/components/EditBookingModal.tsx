@@ -14,6 +14,7 @@ import { Modal } from "./Modal.js";
 import { SlotPicker } from "./SlotPicker.js";
 import { BookingServiceRows } from "./BookingServiceRows.js";
 import { BookingConflictNotice } from "./BookingConflictNotice.js";
+import { NoShowBadge } from "./NoShowBadge.js";
 import { Alert, Button, Field, Select, TextInput } from "./ui/index.js";
 
 interface EditBookingModalProps {
@@ -138,6 +139,8 @@ export function EditBookingModal({
       }
     >
       <form id="edit-booking-form" onSubmit={handleSubmit} noValidate>
+        {/* R360 */}
+        <NoShowBadge history={appointment.noShowHistory} className="mb-4" />
         <BookingServiceRows
           services={services}
           value={serviceIds}

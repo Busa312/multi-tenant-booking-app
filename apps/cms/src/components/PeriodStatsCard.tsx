@@ -21,7 +21,7 @@ interface PeriodStatsCardProps {
 // turns horizontal; on a phone both stack. Three equal columns (not daisyUI's
 // size-to-content ones) keep the dividers of both rows aligned, including when
 // a professional login's second row has only two stats.
-const GROUP = "stats stats-vertical w-full bg-base-200/50 md:stats-horizontal md:grid-cols-3";
+const GROUP = "stats stats-vertical w-full rounded-field border border-base-300 md:stats-horizontal md:grid-cols-3";
 
 /**
  * R370: the last 30 days against the 30 before. Counts compare as a relative
@@ -60,7 +60,7 @@ export function PeriodStatsCard({ current, previous }: PeriodStatsCardProps) {
   return (
     <Card>
       <Eyebrow>{t("dashboard.periodTitle", { days: DASHBOARD_PERIOD_DAYS })}</Eyebrow>
-      <div className="mt-0.5 font-display text-lg font-semibold">
+      <div className="mt-0.5 font-display text-2xl leading-tight font-bold">
         {t("dashboard.periodSubtitle", { days: DASHBOARD_PERIOD_DAYS })}
       </div>
 

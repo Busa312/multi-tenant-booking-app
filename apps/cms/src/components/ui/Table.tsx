@@ -6,7 +6,7 @@ export function Table({ className, children, ...rest }: HTMLAttributes<HTMLDivEl
   return (
     <div
       className={cx(
-        "divide-y divide-base-300 overflow-hidden rounded-box border border-base-300 bg-base-100 shadow-xs",
+        "divide-y divide-base-300 overflow-hidden rounded-box border border-base-300 bg-base-100",
         className,
       )}
       {...rest}

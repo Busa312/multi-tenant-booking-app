@@ -16,13 +16,16 @@ export function WeekAheadRow({ day, isToday }: WeekAheadRowProps) {
 
   return (
     <li className="grid grid-cols-[4.5rem_minmax(0,1fr)_3rem] items-center gap-3 py-2 sm:grid-cols-[5.5rem_minmax(0,1fr)_3.5rem_5.5rem]">
-      <div className="truncate text-[13.5px] font-semibold">{dayLabel}</div>
+      <div className="truncate text-[13.5px] font-semibold">
+        {/* The highlighter marks today, the same way it marks "next up". */}
+        {isToday ? <span className="bg-accent px-1.5 py-0.5 text-accent-content">{dayLabel}</span> : dayLabel}
+      </div>
 
       {share === null ? (
         <div className="text-xs text-base-content/55">{t("dashboard.weekClosed")}</div>
       ) : (
         <progress
-          className="progress progress-primary"
+          className="progress progress-primary h-2.5 rounded-none"
           value={Math.min(100, Math.round(share * 100))}
           max={100}
           aria-label={t("dashboard.weekOccupancyLabel", { day: dayLabel, percent: formatPercent(share, lang) })}

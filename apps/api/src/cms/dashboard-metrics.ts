@@ -109,7 +109,8 @@ export function summarizeDay(input: DayInput): DashboardDay {
 export interface PeriodAppointmentRow {
   id: string;
   visitId: string | null;
-  phoneNumber: string;
+  /** Who the client is: their number in its canonical spelling. */
+  phoneKey: string;
   status: AppointmentStatus;
   createdByUserId: string | null;
   price: Prisma.Decimal;
@@ -138,7 +139,7 @@ export function summarizePeriod(
     visits.add(visit);
     // A visit is online when the customer made it: no staff author.
     if (row.createdByUserId === null) onlineVisits.add(visit);
-    phones.add(row.phoneNumber);
+    phones.add(row.phoneKey);
   }
 
   let newClients = 0;

@@ -1,5 +1,6 @@
 import type { Translate } from "@/i18n/locales";
 import { formatInstant } from "@/lib/tenant-time";
+import { SUMMARY, SUMMARY_ROW as ROW, SUMMARY_TERM as TERM } from "@/lib/wizardClasses";
 import { VisitPlan, type VisitPlanRow } from "./VisitPlan";
 
 interface BookingSummaryProps {
@@ -15,14 +16,11 @@ interface BookingSummaryProps {
   t: Translate;
 }
 
-const ROW = "flex flex-col gap-0.5 py-3 min-[26rem]:flex-row min-[26rem]:gap-4";
-const TERM = "text-sm text-base-content/60 min-[26rem]:w-28 min-[26rem]:flex-none";
-
-// The booking as one card: used before booking (details step) and after
+// The booking as one receipt: used before booking (details step) and after
 // (confirmation), so the customer sees the same thing on both sides.
 export function BookingSummary({ startAt, location, plan, total, timezone, locale, t }: BookingSummaryProps) {
   return (
-    <dl className="divide-y divide-base-300 rounded-box border border-base-300 bg-base-200/50 px-4">
+    <dl className={SUMMARY}>
       {startAt && (
         <div className={ROW}>
           <dt className={TERM}>{t("booking.summary.when")}</dt>
@@ -48,7 +46,7 @@ export function BookingSummary({ startAt, location, plan, total, timezone, local
 
       <div className={ROW}>
         <dt className={TERM}>{t("booking.summary.total")}</dt>
-        <dd className="text-lg font-bold tabular-nums">{total} ₾</dd>
+        <dd className="text-xl font-extrabold tabular-nums">{total} ₾</dd>
       </div>
     </dl>
   );

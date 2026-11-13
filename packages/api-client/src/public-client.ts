@@ -16,6 +16,7 @@ import type {
   Tenant,
   Visit,
   VisitSlot,
+  OpeningHours,
 } from "@booking/shared-types";
 import { HttpClient, type ApiClientOptions } from "./http";
 
@@ -32,6 +33,11 @@ export class PublicApiClient {
 
   listServices() {
     return this.http.get<Service[]>("/public/services");
+  }
+
+  // R390
+  listOpeningHours() {
+    return this.http.get<OpeningHours[]>("/public/hours");
   }
 
   // R150: active branches

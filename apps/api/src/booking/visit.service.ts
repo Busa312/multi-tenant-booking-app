@@ -5,6 +5,7 @@ import type { Prisma } from "../../generated/prisma/index.js";
 import { PrismaService } from "../prisma/prisma.service.js";
 import { TenantContextService } from "../tenant/tenant-context.service.js";
 import { VISIT_INCLUDE, type PrismaVisit } from "../common/serializers.js";
+import { phoneKey } from "../common/phone-key.js";
 import { AvailabilityService, type VisitUnitSpec } from "./availability.service.js";
 import { BookingService, requireText } from "./booking.service.js";
 import { lockBookingDay } from "./booking-lock.js";
@@ -112,6 +113,7 @@ export class VisitService {
             locationId,
             userName,
             phoneNumber,
+            phoneKey: phoneKey(phoneNumber),
             // R270: no longer collected; the column stays for older bookings
             email: "",
             startAt: new Date(group.start),
@@ -323,7 +325,8 @@ export class VisitService {
           accessTokenHash: { not: null },
           accessTokenExpiresAt: { gt: now },
           appointments: {
-            some: { phoneNumber, status: { not: "cancelled" }, startAt: { gt: now } },
+            // Matched on the canonical number, however it was typed then or now
+            some: { phoneKey: phoneKey(phoneNumber), status: { not: "cancelled" }, startAt: { gt: now } },
           },
         },
         include: VISIT_INCLUDE,
@@ -473,7 +476,8 @@ export class VisitService {
 
   /** 409 in the shape the booking flow already maps to "that time was just taken". */
   private slotGone(): ConflictException {
-    const body: BookingConflictResponse = { code: "booking_conflict", conflicts: [] };
+    // R360: the customer's record is for staff — the public flow never carries it
+    const body: BookingConflictResponse = { code: "booking_conflict", conflicts: [], noShowHistory: null };
     return new ConflictException(body);
   }
 }

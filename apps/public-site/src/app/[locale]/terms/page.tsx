@@ -6,7 +6,7 @@ import { LegalDocument } from "@/components/LegalDocument";
 // R340
 export async function generateMetadata({ params }: { params: { locale: string } }): Promise<Metadata> {
   const context = await loadPageContext(params.locale);
-  return { title: `${LEGAL[context.locale].terms.title} — ${context.tenant.name}` };
+  return { title: LEGAL[context.locale].terms.title };
 }
 
 export default async function TermsPage({ params }: { params: { locale: string } }) {

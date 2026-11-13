@@ -4,7 +4,7 @@ import L from "leaflet";
 // index.css, so only the Locations chunk pays for them.
 import "leaflet/dist/leaflet.css";
 import { useI18n } from "../i18n/I18nContext.js";
-import { Alert, Button, TextInput } from "./ui/index.js";
+import { Alert, Button, GroupLabel, TextInput } from "./ui/index.js";
 import type { IconName } from "../lib/iconNames.js";
 
 export interface LatLng {
@@ -218,7 +218,7 @@ export function LocationMapPicker({ value, onChange, initialQuery }: LocationMap
 
   return (
     <div className="mb-4 flex flex-col gap-2">
-      <p className="text-sm font-medium">{t("locations.mapLabel")}</p>
+      <GroupLabel flush>{t("locations.mapLabel")}</GroupLabel>
 
       <div className="join w-full">
         <TextInput

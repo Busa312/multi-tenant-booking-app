@@ -4,8 +4,9 @@ import { useEffect, useRef, useState } from "react";
 import type { VisitSlot } from "@booking/shared-types";
 import type { Translate } from "@/i18n/locales";
 import { fetchAvailability } from "@/lib/actions";
-import { addDays, formatDay, todayInTimezone } from "@/lib/tenant-time";
+import { todayInTimezone } from "@/lib/tenant-time";
 import { BTN_BACK, BTN_NEXT, FOOTER, STATUS_TEXT, STEP, STEP_HEADING } from "@/lib/wizardClasses";
+import { DayPicker } from "./DayPicker";
 import { SlotGrid } from "./SlotGrid";
 import { VisitPlan } from "./VisitPlan";
 import type { BookingDraft } from "./BookingWizard";
@@ -30,8 +31,6 @@ interface StepDateTimeProps {
   onBack: () => void;
   t: Translate;
 }
-
-const DAY_NAV = "btn btn-square btn-ghost text-xl";
 
 export function StepDateTime({
   draft,
@@ -87,36 +86,19 @@ export function StepDateTime({
     };
   }, [draft.serviceIds, draft.professionalIds, draft.locationId, draft.date, slotsVersion]);
 
-  const today = todayInTimezone(timezone);
-  const isToday = draft.date <= today;
-
   return (
     <section className={STEP}>
       <h2 className={STEP_HEADING}>{t("booking.time.heading")}</h2>
 
-      <div className="flex items-center gap-2 rounded-box border border-base-300 bg-base-200/60 p-1.5">
-        <button
-          type="button"
-          className={DAY_NAV}
-          onClick={() => onPickDate(addDays(draft.date, -1))}
-          disabled={isToday}
-          aria-label={t("booking.time.previousDay")}
-        >
-          ‹
-        </button>
-        <p className="flex-1 text-center font-semibold" aria-live="polite">
-          {formatDay(draft.date, timezone, locale)}
-        </p>
-        <button
-          type="button"
-          className={DAY_NAV}
-          onClick={() => onPickDate(addDays(draft.date, 1))}
-          disabled={draft.date >= lastDate}
-          aria-label={t("booking.time.nextDay")}
-        >
-          ›
-        </button>
-      </div>
+      <DayPicker
+        date={draft.date}
+        today={todayInTimezone(timezone)}
+        lastDate={lastDate}
+        timezone={timezone}
+        locale={locale}
+        onPick={onPickDate}
+        t={t}
+      />
 
       {slotTaken && (
         <div className="alert alert-soft alert-warning" role="alert">
@@ -138,6 +120,7 @@ export function StepDateTime({
           timezone={timezone}
           locale={locale}
           onPick={onPickSlot}
+          t={t}
         />
       )}
 
@@ -145,7 +128,7 @@ export function StepDateTime({
       {draft.slot && (
         <div
           ref={planRef}
-          className="scroll-mb-24 rounded-box border border-primary/25 bg-primary/5 p-4 sm:scroll-mb-4"
+          className="scroll-mb-24 rounded-box bg-base-200 p-4 sm:scroll-mb-4"
           aria-live="polite"
         >
           <p className="mb-3 text-sm font-semibold text-base-content/70">{t("booking.time.plan")}</p>

@@ -14,6 +14,7 @@ type LocationRow = { id: string; name: string; isActive: boolean };
 
 type LineRow = { serviceId: string; position: number; durationMinutes: number; price: Prisma.Decimal };
 type AppointmentRow = {
+  phoneNumber: string;
   id: string;
   tenantId: string;
   professionalId: string | null;
@@ -86,6 +87,7 @@ const setup = (overrides: Overrides = {}) => {
     tenantId: TENANT_ID,
     professionalId: "p1",
     locationId: null,
+    phoneNumber: "+995555123456",
     startAt: new Date("2026-08-05T06:00:00.000Z"),
     endAt: new Date("2026-08-05T06:30:00.000Z"),
     status: "booked",
@@ -122,6 +124,8 @@ const setup = (overrides: Overrides = {}) => {
     },
     appointment: {
       findFirst: jest.fn().mockResolvedValue(existing),
+      // R360: the customer's finished appointments, read when a conflict is reported
+      findMany: jest.fn().mockResolvedValue([]),
       create: jest.fn(({ data }: WriteArgs) => Promise.resolve({ id: "new", ...data })),
       update: jest.fn(({ data }: WriteArgs) => Promise.resolve({ id: "a1", ...data })),
     },
@@ -440,6 +444,15 @@ describe("BookingService.create", () => {
     });
   });
 
+  // One customer however the number is typed: the canonical spelling is stored beside the typed one.
+  it("stores the phone's canonical key next to the number as typed", async () => {
+    const { service, tx } = setup();
+
+    await service.create(createInput({ phoneNumber: "555 12 34 56" }));
+
+    expect(createdData(tx)).toMatchObject({ phoneNumber: "555 12 34 56", phoneKey: "995555123456" });
+  });
+
   describe("conflicts", () => {
     // R60: a conflict is a warning the caller must have seen
     it("409s with every named conflict when the window isn't clear", async () => {
@@ -454,7 +467,21 @@ describe("BookingService.create", () => {
       await expect(service.create(createInput()).catch((error) => error.getResponse())).resolves.toEqual({
         code: "booking_conflict",
         conflicts,
+        noShowHistory: null,
       });
+    });
+
+    // R360: "book anyway" is decided knowing how this customer's last visits went
+    it("names the customer's no-show history alongside the conflicts", async () => {
+      const { service, tx } = setup({ conflicts: [{ type: "appointment" }] });
+      tx.appointment.findMany.mockResolvedValue([
+        { id: "h1", visitId: null, phoneKey: "995555123456", status: "no_show", startAt: new Date("2026-01-05T08:00:00Z") },
+        { id: "h2", visitId: null, phoneKey: "995555123456", status: "completed", startAt: new Date("2026-01-12T08:00:00Z") },
+      ]);
+
+      const body = await service.create(createInput()).catch((error) => error.getResponse());
+
+      expect(body.noShowHistory).toEqual({ missed: 1, of: 2 });
     });
 
     it("books over a conflict once the caller confirms", async () => {

@@ -1,14 +1,14 @@
 import { useState, type FormEvent } from "react";
-import type { BookingConflict, LocationSummary, ProfessionalSummary, ServiceSummary } from "@booking/shared-types";
+import type { BookingConflict, NoShowHistory, LocationSummary, ProfessionalSummary, ServiceSummary } from "@booking/shared-types";
 import { cachedApi } from "../lib/cache.js";
 import { useI18n } from "../i18n/I18nContext.js";
 import { useLocalizedName } from "../lib/useLocalizedName.js";
-import { conflictsFromError } from "../lib/bookingConflicts.js";
+import { conflictsFromError, noShowHistoryFromError } from "../lib/bookingConflicts.js";
 import { Modal } from "./Modal.js";
 import { SlotPicker } from "./SlotPicker.js";
 import { BookingServiceRows } from "./BookingServiceRows.js";
 import { BookingConflictNotice } from "./BookingConflictNotice.js";
-import { Alert, Button, Eyebrow, Field, Icon, Select, TextInput, Textarea } from "./ui/index.js";
+import { Alert, Button, FormHeading, Field, Icon, Select, TextInput, Textarea } from "./ui/index.js";
 
 interface CreateBookingModalProps {
   services: ServiceSummary[];
@@ -54,6 +54,8 @@ export function CreateBookingModal({
   const [phoneNumber, setPhoneNumber] = useState("");
   const [notes, setNotes] = useState("");
   const [conflicts, setConflicts] = useState<BookingConflict[] | null>(null);
+  // R360: read from the same 409 as the conflicts, and shown with them
+  const [conflictHistory, setConflictHistory] = useState<NoShowHistory | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -138,6 +140,7 @@ export function CreateBookingModal({
       const found = conflictsFromError(err);
       if (found) {
         setConflicts(found);
+        setConflictHistory(noShowHistoryFromError(err));
       } else {
         setError(t("bookings.errCreate"));
       }
@@ -169,39 +172,42 @@ export function CreateBookingModal({
           onChange={handleServicesChange}
         />
 
-        {locations.length > 1 && (
-          <Field label={t("bookings.locationLabel")} htmlFor="booking-location">
-            <Select
-              id="booking-location"
-              value={locationId}
-              onChange={(next) => {
-                setConflicts(null);
-                setError(null);
-                setLocationId(next);
-                if (!lockedProfessionalId) setProfessionalId("");
-                setTime("");
-              }}
-              placeholder={t("bookings.locationPlaceholder")}
-              options={locations.map((location) => ({ value: location.id, label: nameOf(location.name, location.nameI18n) }))}
-            />
-          </Field>
-        )}
-
-        <Field label={t("bookings.professionalLabel")} htmlFor="booking-professional">
-          {lockedProfessionalId ? (
-            // R20: a professional books into their own calendar and no other
-
-            <TextInput id="booking-professional" value={lockedProfessional ? nameOf(lockedProfessional.name, lockedProfessional.nameI18n) : ""} readOnly disabled />
-          ) : (
-            <Select
-              id="booking-professional"
-              value={professionalId}
-              onChange={handleProfessionalChange}
-              placeholder={t("bookings.professionalPlaceholder")}
-              options={selectableProfessionals.map((p) => ({ value: p.id, label: nameOf(p.name, p.nameI18n) }))}
-            />
+        {/* Where and who, side by side when both are asked. */}
+        <div className={locations.length > 1 ? "grid gap-x-3 sm:grid-cols-2" : undefined}>
+          {locations.length > 1 && (
+            <Field label={t("bookings.locationLabel")} htmlFor="booking-location">
+              <Select
+                id="booking-location"
+                value={locationId}
+                onChange={(next) => {
+                  setConflicts(null);
+                  setError(null);
+                  setLocationId(next);
+                  if (!lockedProfessionalId) setProfessionalId("");
+                  setTime("");
+                }}
+                placeholder={t("bookings.locationPlaceholder")}
+                options={locations.map((location) => ({ value: location.id, label: nameOf(location.name, location.nameI18n) }))}
+              />
+            </Field>
           )}
-        </Field>
+
+          <Field label={t("bookings.professionalLabel")} htmlFor="booking-professional">
+            {lockedProfessionalId ? (
+              // R20: a professional books into their own calendar and no other
+
+              <TextInput id="booking-professional" value={lockedProfessional ? nameOf(lockedProfessional.name, lockedProfessional.nameI18n) : ""} readOnly disabled />
+            ) : (
+              <Select
+                id="booking-professional"
+                value={professionalId}
+                onChange={handleProfessionalChange}
+                placeholder={t("bookings.professionalPlaceholder")}
+                options={selectableProfessionals.map((p) => ({ value: p.id, label: nameOf(p.name, p.nameI18n) }))}
+              />
+            )}
+          </Field>
+        </div>
 
         <Field label={t("bookings.dateLabel")} htmlFor="booking-date" className="max-w-52">
           <TextInput
@@ -224,27 +230,29 @@ export function CreateBookingModal({
           onChange={reset(setTime)}
         />
 
-        <Eyebrow className="mt-2 mb-2.5 border-t border-base-300 pt-4">{t("bookings.customer")}</Eyebrow>
-        <Field label={t("bookings.nameLabel")} htmlFor="booking-name">
-          <TextInput
-            id="booking-name"
-            value={userName}
-            onChange={(e) => setUserName(e.target.value)}
-            placeholder={t("bookings.namePlaceholder")}
-            required
-          />
-        </Field>
-        {/* R270: no email — a phone is all a booking needs */}
-        <Field label={t("bookings.phoneLabel")} htmlFor="booking-phone">
-          <TextInput
-            id="booking-phone"
-            type="tel"
-            value={phoneNumber}
-            onChange={(e) => setPhoneNumber(e.target.value)}
-            placeholder="+995 555 00 00 00"
-            required
-          />
-        </Field>
+        <FormHeading>{t("bookings.customer")}</FormHeading>
+        <div className="grid gap-x-3 sm:grid-cols-2">
+          <Field label={t("bookings.nameLabel")} htmlFor="booking-name">
+            <TextInput
+              id="booking-name"
+              value={userName}
+              onChange={(e) => setUserName(e.target.value)}
+              placeholder={t("bookings.namePlaceholder")}
+              required
+            />
+          </Field>
+          {/* R270: no email — a phone is all a booking needs */}
+          <Field label={t("bookings.phoneLabel")} htmlFor="booking-phone">
+            <TextInput
+              id="booking-phone"
+              type="tel"
+              value={phoneNumber}
+              onChange={(e) => setPhoneNumber(e.target.value)}
+              placeholder="+995 555 00 00 00"
+              required
+            />
+          </Field>
+        </div>
         <Field label={t("bookings.notesLabel")} htmlFor="booking-notes">
           <Textarea
             id="booking-notes"
@@ -261,7 +269,7 @@ export function CreateBookingModal({
           {t("bookings.noNotificationHint")}
         </p>
 
-        {conflicts && <BookingConflictNotice conflicts={conflicts} timezone={timezone} />}
+        {conflicts && <BookingConflictNotice conflicts={conflicts} noShowHistory={conflictHistory} timezone={timezone} />}
         {error && <Alert>{error}</Alert>}
       </form>
     </Modal>

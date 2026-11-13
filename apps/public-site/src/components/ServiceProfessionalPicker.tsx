@@ -32,7 +32,7 @@ export function ServiceProfessionalPicker({
   return (
     <div className="flex flex-col gap-2 rounded-box border border-base-300 bg-base-100 p-4 sm:flex-row sm:items-center sm:gap-4">
       <label htmlFor={id} className="flex min-w-0 flex-1 items-center gap-2.5 font-semibold">
-        <span className="badge badge-primary badge-sm tabular-nums">{position}</span>
+        <span className="badge badge-secondary badge-sm tabular-nums">{position}</span>
         <span className="truncate">{serviceName}</span>
       </label>
       <select

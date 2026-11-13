@@ -4,6 +4,7 @@ import type { OtpCooldownResponse } from "@booking/shared-types";
 import { RedisService } from "../redis/redis.service.js";
 import { TenantContextService } from "../tenant/tenant-context.service.js";
 import { hashToken } from "../booking/magic-link.js";
+import { phoneKey } from "../common/phone-key.js";
 
 /**
  * Phone verification for public bookings: a one-time code proves the customer
@@ -129,16 +130,16 @@ export class VerificationService {
   }
 
   /**
-   * Digits only, so "+995 555 12 34 56" and "+995555123456" are one number.
-   * Deliberately not full E.164 parsing — that needs a country context this
-   * app doesn't carry, and the value is compared against itself, never dialled.
+   * The number's canonical spelling (common/phone-key.ts), so "555 12 34 56",
+   * "+995 555 12 34 56" and "+995555123456" are one number: one code, and one
+   * hourly allowance that respelling the number can't reset.
    */
   private normalize(phoneNumber: string): string {
-    const digits = String(phoneNumber ?? "").replace(/\D/g, "");
-    if (digits.length < 5) {
+    const key = phoneKey(String(phoneNumber ?? ""));
+    if (key.length < 5) {
       throw new BadRequestException("A valid phone number is required");
     }
-    return hashToken(digits);
+    return hashToken(key);
   }
 
   private codeKey(tenantId: string, phone: string): string {

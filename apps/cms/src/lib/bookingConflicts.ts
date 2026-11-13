@@ -1,5 +1,5 @@
 import { ApiError } from "@booking/api-client";
-import type { BookingConflict, BookingConflictResponse } from "@booking/shared-types";
+import type { BookingConflict, BookingConflictResponse, NoShowHistory } from "@booking/shared-types";
 
 /**
  * R60: the API refuses an unconfirmed booking with 409 + the conflicts it found.
@@ -13,4 +13,12 @@ export function conflictsFromError(err: unknown): BookingConflict[] | null {
   }
   const body = err.body as Partial<BookingConflictResponse> | undefined;
   return body?.code === "booking_conflict" && Array.isArray(body.conflicts) ? body.conflicts : null;
+}
+
+/** R360: the same 409 also carries the record of the customer being booked. */
+export function noShowHistoryFromError(err: unknown): NoShowHistory | null {
+  if (conflictsFromError(err) === null) {
+    return null;
+  }
+  return ((err as ApiError).body as Partial<BookingConflictResponse>).noShowHistory ?? null;
 }

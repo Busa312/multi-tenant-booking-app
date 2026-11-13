@@ -1,9 +1,15 @@
+import type { Metadata } from "next";
 import { getPublicApiClient } from "@/lib/api";
 import { loadPageContext } from "@/lib/page-context";
 import { getMessages } from "@/i18n/locales";
 import { isValidTimezone } from "@/lib/tenant-time";
 import { BookingWizard } from "@/components/BookingWizard";
 import { UnavailableNotice } from "@/components/UnavailableNotice";
+
+export async function generateMetadata({ params }: { params: { locale: string } }): Promise<Metadata> {
+  const context = await loadPageContext(params.locale);
+  return { title: context.t("booking.title") };
+}
 
 export default async function BookPage({
   params,

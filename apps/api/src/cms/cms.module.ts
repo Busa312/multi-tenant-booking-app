@@ -8,6 +8,7 @@ import { BusinessHoursController } from "./business-hours.controller.js";
 import { TimeOffController } from "./time-off.controller.js";
 import { AppointmentsController } from "./appointments.controller.js";
 import { DashboardController } from "./dashboard.controller.js";
+import { BlockedPhonesController } from "./blocked-phones.controller.js";
 import { RevalidationService } from "./revalidation.service.js";
 import { DashboardService } from "./dashboard.service.js";
 
@@ -22,6 +23,7 @@ import { DashboardService } from "./dashboard.service.js";
     TimeOffController,
     AppointmentsController,
     DashboardController,
+    BlockedPhonesController,
   ],
   providers: [RevalidationService, DashboardService],
 })

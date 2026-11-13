@@ -78,7 +78,7 @@ describe("summarizePeriod", () => {
   const row = (overrides: Partial<PeriodAppointmentRow>): PeriodAppointmentRow => ({
     id: "a",
     visitId: null,
-    phoneNumber: "+995555000001",
+    phoneKey: "+995555000001",
     status: "completed",
     createdByUserId: null,
     price: new Prisma.Decimal("40.00"),
@@ -86,11 +86,11 @@ describe("summarizePeriod", () => {
   });
 
   const rows = [
-    row({ id: "a1", visitId: "v1", phoneNumber: "+995555000001", price: new Prisma.Decimal("40.10") }),
-    row({ id: "a2", visitId: "v1", phoneNumber: "+995555000001", price: new Prisma.Decimal("20.20") }),
-    row({ id: "a3", phoneNumber: "+995555000002", status: "no_show", createdByUserId: "staff-1" }),
-    row({ id: "a4", phoneNumber: "+995555000003", status: "cancelled" }),
-    row({ id: "a5", phoneNumber: "+995555000004", status: "booked", createdByUserId: "staff-1" }),
+    row({ id: "a1", visitId: "v1", phoneKey: "+995555000001", price: new Prisma.Decimal("40.10") }),
+    row({ id: "a2", visitId: "v1", phoneKey: "+995555000001", price: new Prisma.Decimal("20.20") }),
+    row({ id: "a3", phoneKey: "+995555000002", status: "no_show", createdByUserId: "staff-1" }),
+    row({ id: "a4", phoneKey: "+995555000003", status: "cancelled" }),
+    row({ id: "a5", phoneKey: "+995555000004", status: "booked", createdByUserId: "staff-1" }),
   ];
   const firstSeen = new Map([
     ["+995555000001", at("2026-01-01T00:00:00Z")], // been before: returning

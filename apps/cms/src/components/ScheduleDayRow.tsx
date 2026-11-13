@@ -92,13 +92,15 @@ export function ScheduleDayRow({
             {times}
             <div className={"flex justify-start gap-1.5 @min-[621px]:justify-end"}>
               <Button
-                iconOnly
-                variant="secondary"
+                variant="ghost"
+                size="sm"
                 icon="content_copy"
                 title={t("hours.copyToAll")}
                 disabled={busy || invalid}
                 onClick={() => onCopyToAll(value.startTime, value.endTime)}
-              />
+              >
+                {t("hours.copyToAllShort")}
+              </Button>
             </div>
           </>
         ) : (

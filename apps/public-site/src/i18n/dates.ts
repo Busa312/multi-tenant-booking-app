@@ -17,6 +17,7 @@ export interface DateParts {
 interface DateNames {
   /** Sunday first, as `Date.getUTCDay()` counts. */
   weekdaysShort: readonly string[];
+  weekdays: readonly string[];
   monthsShort: readonly string[];
   /** A day: "Wed, Nov 11" / "ოთხ, 11 ნოე". */
   day: (parts: DateParts) => string;
@@ -25,11 +26,13 @@ interface DateNames {
 export const DATE_NAMES: Record<Locale, DateNames> = {
   en: {
     weekdaysShort: ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"],
+    weekdays: ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"],
     monthsShort: ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"],
     day: ({ weekday, day, month }) => `${weekday}, ${month} ${day}`,
   },
   ka: {
     weekdaysShort: ["კვი", "ორშ", "სამ", "ოთხ", "ხუთ", "პარ", "შაბ"],
+    weekdays: ["კვირა", "ორშაბათი", "სამშაბათი", "ოთხშაბათი", "ხუთშაბათი", "პარასკევი", "შაბათი"],
     monthsShort: ["იან", "თებ", "მარ", "აპრ", "მაი", "ივნ", "ივლ", "აგვ", "სექ", "ოქტ", "ნოე", "დეკ"],
     day: ({ weekday, day, month }) => `${weekday}, ${day} ${month}`,
   },

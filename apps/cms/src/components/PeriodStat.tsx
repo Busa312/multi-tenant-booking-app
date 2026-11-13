@@ -23,7 +23,7 @@ export function PeriodStat({ title, value, detail, change }: PeriodStatProps) {
   return (
     <div className="stat">
       <div className="stat-title">{title}</div>
-      <div className="stat-value tabular-nums">{value}</div>
+      <div className="stat-value font-display font-bold tabular-nums">{value}</div>
       {detail && <div className="stat-desc">{detail}</div>}
       {change && (
         <div className="stat-desc">

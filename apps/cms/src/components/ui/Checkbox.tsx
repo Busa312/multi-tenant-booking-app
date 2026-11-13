@@ -19,7 +19,7 @@ export function Checkbox({ checked, onChange, disabled, children }: CheckboxProp
     >
       <input
         type="checkbox"
-        className="checkbox checkbox-sm checkbox-primary rounded-[0.35rem]"
+        className="checkbox checkbox-sm checkbox-primary"
         checked={checked}
         disabled={disabled}
         onChange={(e) => onChange(e.target.checked)}

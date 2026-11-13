@@ -19,6 +19,8 @@ function setup(context: { role: "owner" | "professional"; professionalId: string
     professional: { findMany: jest.fn().mockResolvedValue([{ id: "dato" }]) },
     businessHours: { findMany: jest.fn().mockResolvedValue([]) },
     timeOff: { findMany: jest.fn().mockResolvedValue([]) },
+    // R380: nobody is blocked
+    blockedPhone: { findMany: jest.fn().mockResolvedValue([]) },
   };
   const prisma = { forTenant: (fn: (t: typeof tx) => unknown) => fn(tx) } as unknown as PrismaService;
   const tenantContext = { current: { tenantId: TENANT_ID, ...context } } as unknown as TenantContextService;
@@ -45,7 +47,7 @@ describe("DashboardService", () => {
     const { tx, service } = setup({ role: "owner", professionalId: null });
     tx.appointment.findMany.mockImplementation(async (args: { select?: { price?: boolean } }) =>
       args.select?.price
-        ? [{ id: "a1", visitId: null, phoneNumber: "+995555000001", status: "completed", createdByUserId: null, price: new Prisma.Decimal("50"), startAt: new Date("2026-11-10T08:00:00Z") }]
+        ? [{ id: "a1", visitId: null, phoneKey: "995555000001", status: "completed", createdByUserId: null, price: new Prisma.Decimal("50"), startAt: new Date("2026-11-10T08:00:00Z") }]
         : [],
     );
     const summary = await service.summary({}, NOW);
@@ -78,5 +80,55 @@ describe("DashboardService", () => {
       expect(args.where.locationId).toBe(LOCATION_ID);
     }
     await expect(service.summary({ locationId: "nope" }, NOW)).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  // R360: only upcoming bookings whose customer missed a recent visit are listed
+  it("lists upcoming bookings from customers with a missed visit, and no others", async () => {
+    const { tx, service } = setup({ role: "owner", professionalId: null });
+    const upcoming = (id: string, phoneNumber: string) => ({
+      id,
+      tenantId: TENANT_ID,
+      professionalId: "dato",
+      locationId: null,
+      userName: id,
+      phoneNumber,
+      phoneKey: phoneNumber.replace("+", ""),
+      email: "",
+      startAt: new Date("2026-11-13T08:00:00Z"),
+      endAt: new Date("2026-11-13T09:00:00Z"),
+      price: new Prisma.Decimal("50"),
+      status: "booked",
+      visitId: null,
+      createdByUserId: null,
+      notes: null,
+      createdAt: NOW,
+      updatedAt: NOW,
+      services: [],
+      professional: null,
+      location: null,
+      visit: null,
+    });
+    tx.appointment.findMany.mockImplementation(
+      async (args: { where: { status?: unknown; startAt?: { gte?: Date } }; select?: object; include?: object }) => {
+        // the upcoming list: still booked, from now on
+        if (args.include && args.where.status === "booked" && args.where.startAt?.gte) {
+          return [upcoming("flaky", "+995555000001"), upcoming("reliable", "+995555000002")];
+        }
+        // the history lookup: finished appointments of those phones
+        if (args.select && typeof args.where.status === "object") {
+          return [
+            { id: "h1", visitId: null, phoneKey: "995555000001", status: "no_show", startAt: new Date("2026-11-01T08:00:00Z") },
+            { id: "h2", visitId: null, phoneKey: "995555000002", status: "completed", startAt: new Date("2026-11-01T08:00:00Z") },
+          ];
+        }
+        return [];
+      },
+    );
+
+    const summary = await service.summary({}, NOW);
+
+    expect(summary.atRisk.map((appointment) => appointment.userName)).toEqual(["flaky"]);
+    expect(summary.atRisk[0]?.noShowHistory).toEqual({ missed: 1, of: 1 });
+    expect(summary.atRiskCount).toBe(1);
   });
 });

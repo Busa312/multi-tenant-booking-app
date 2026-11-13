@@ -1,7 +1,7 @@
 import type { ServiceSummary } from "@booking/shared-types";
 import { useI18n } from "../i18n/I18nContext.js";
 import { BookingServiceRow } from "./BookingServiceRow.js";
-import { Button, Eyebrow } from "./ui/index.js";
+import { Button, GroupLabel } from "./ui/index.js";
 
 interface BookingServiceRowsProps {
   /** Every service the tenant has; this component does the filtering. */
@@ -67,7 +67,7 @@ export function BookingServiceRows({
 
   return (
     <div className="mb-4">
-      <Eyebrow className="mb-2.5">{t("bookings.servicesLabel")}</Eyebrow>
+      <GroupLabel>{t("bookings.servicesLabel")}</GroupLabel>
 
       {value.map((serviceId, index) => (
         <BookingServiceRow

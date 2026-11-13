@@ -26,7 +26,7 @@ export function WeekAheadCard({ days, isOwnOnly }: WeekAheadCardProps) {
   return (
     <Card>
       <Eyebrow>{t("dashboard.weekTitle")}</Eyebrow>
-      <div className="mt-0.5 font-display text-lg font-semibold">
+      <div className="mt-0.5 font-display text-2xl leading-tight font-bold">
         {share === null
           ? t("dashboard.weekSummaryNoHours", { bookings })
           : t("dashboard.weekSummary", { bookings, percent: formatPercent(share, lang) })}

@@ -8,6 +8,8 @@ import { ApiError } from "@booking/api-client";
 import { cachedApi } from "../lib/cache.js";
 import { useI18n } from "../i18n/I18nContext.js";
 import { useLocalizedName } from "../lib/useLocalizedName.js";
+import { ConfirmModal, type ConfirmRequest } from "../components/ConfirmModal.js";
+import { usePagination } from "../lib/usePagination.js";
 import { AppShell } from "../components/AppShell.js";
 import { Modal } from "../components/Modal.js";
 import { CardSkeleton } from "../components/CardSkeleton.js";
@@ -20,7 +22,7 @@ import {
   Button,
   Pill,
   type PillTone,
-  Table,
+  Pagination, Table,
   TableHead,
   TableRow,
   TableEmpty,
@@ -33,7 +35,7 @@ const TABLE_ROW = "46px";
 const LOGIN_STATUS_KEY: Record<ProfessionalSummary["cmsLoginStatus"], string> = {
   none: "professionals.statusNoLogin",
   invited: "professionals.statusInvited",
-  active: "professionals.statusActive",
+  active: "professionals.statusCanSignIn",
 };
 const LOGIN_STATUS_TONE: Record<ProfessionalSummary["cmsLoginStatus"], PillTone> = {
   none: "neutral",
@@ -41,8 +43,13 @@ const LOGIN_STATUS_TONE: Record<ProfessionalSummary["cmsLoginStatus"], PillTone>
   active: "success",
 };
 
+// Rows per page; a pager appears only once there are more.
+const PAGE_SIZE = 10;
+
 export function ProfessionalsPage() {
   const { t } = useI18n();
+  // The question waiting on an answer, if any (see ConfirmModal).
+  const [confirmRequest, setConfirmRequest] = useState<ConfirmRequest | null>(null);
   const nameOf = useLocalizedName();
   const [professionals, setProfessionals] = useState<ProfessionalSummary[] | null>(null);
   const [services, setServices] = useState<Service[] | null>(null);
@@ -121,8 +128,17 @@ export function ProfessionalsPage() {
     }
   }
 
-  async function handleDelete(p: ProfessionalSummary) {
-    if (!window.confirm(t("professionals.confirmDelete", { name: nameOf(p.name, p.nameI18n) }))) return;
+  function handleDelete(p: ProfessionalSummary) {
+    setConfirmRequest({
+      title: t("professionals.delete"),
+      message: t("professionals.confirmDelete", { name: nameOf(p.name, p.nameI18n) }),
+      confirmLabel: t("professionals.delete"),
+      danger: true,
+      run: () => void handleDeleteConfirmed(p),
+    });
+  }
+
+  async function handleDeleteConfirmed(p: ProfessionalSummary) {
     setListError(null);
     try {
       await cachedApi.deleteProfessional(p.id);
@@ -149,13 +165,12 @@ export function ProfessionalsPage() {
     ];
   }
 
+  const pager = usePagination(professionals ?? [], PAGE_SIZE);
+
   return (
     <AppShell title={t("professionals.title")} subtitle={t("professionals.subtitle")}>
-      <div className="animate-fade-up motion-reduce:animate-none">
-        <div className="mb-5 flex flex-wrap items-center gap-3">
-          <div className="text-[13px] text-base-content/60">
-            {professionals ? t("professionals.count", { count: professionals.length }) : t("common.loading")}
-          </div>
+      <div>
+        <div className="mb-5 flex flex-wrap items-center justify-end gap-3">
           <Button className="ml-auto" icon="person_add" onClick={() => setEditTarget("new")}>
             {t("professionals.add")}
           </Button>
@@ -173,7 +188,7 @@ export function ProfessionalsPage() {
                 <div>{t("professionals.colStatus")}</div>
                 <div></div>
               </TableHead>
-              {professionals.map((p) => (
+              {pager.pageItems.map((p) => (
                 <TableRow key={p.id} columns={COLUMNS}>
                   <div className="font-semibold">{nameOf(p.name, p.nameI18n)}</div>
                   <div className="text-[13px] text-base-content/60">{serviceNames(p)}</div>
@@ -192,6 +207,7 @@ export function ProfessionalsPage() {
               ))}
               {professionals.length === 0 && <TableEmpty>{t("professionals.empty")}</TableEmpty>}
             </Table>
+            <Pagination {...pager} />
           </div>
         )}
         {!professionals && <CardSkeleton rows={5} rowHeight={TABLE_ROW} />}
@@ -242,6 +258,7 @@ export function ProfessionalsPage() {
           )}
         </Modal>
       )}
+      {confirmRequest && <ConfirmModal request={confirmRequest} onClose={() => setConfirmRequest(null)} />}
     </AppShell>
   );
 }

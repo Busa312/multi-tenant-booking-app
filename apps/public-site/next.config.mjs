@@ -19,6 +19,13 @@ const nextConfig = {
     // cleanly; loaded from node_modules at runtime instead.
     serverComponentsExternalPackages: ["@sentry/nextjs", "@sentry/node", "@sentry/opentelemetry"],
   },
+  async redirects() {
+    return [
+      // Browsers and crawlers ask for /favicon.ico whatever the page declares:
+      // send them to the salon's own icon (app/tenant-icon.svg) rather than a page.
+      { source: "/favicon.ico", destination: "/tenant-icon.svg", permanent: true },
+    ];
+  },
   async headers() {
     return [
       {
@@ -34,6 +41,11 @@ const nextConfig = {
       {
         // The manage link *is* the credential; it must never leave in a Referer.
         source: "/manage/:path*",
+        headers: [{ key: "Referrer-Policy", value: "no-referrer" }],
+      },
+      {
+        // R160: the same page under a language prefix (/ka/manage/…)
+        source: "/:locale/manage/:path*",
         headers: [{ key: "Referrer-Policy", value: "no-referrer" }],
       },
     ];

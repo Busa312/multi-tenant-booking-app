@@ -10,7 +10,7 @@ import { cachedApi } from "../lib/cache.js";
 import { useAuth } from "../auth/AuthContext.js";
 import { useI18n } from "../i18n/I18nContext.js";
 import { dashboardRange, todaysAgenda, type DashboardRange } from "../lib/dashboardStats.js";
-import { tenantDateString } from "../lib/tenantTime.js";
+import { formatDateLabel, tenantDateString } from "../lib/tenantTime.js";
 import { AppShell } from "../components/AppShell.js";
 import { LocationTabs } from "../components/LocationTabs.js";
 import { CreateBookingModal } from "../components/CreateBookingModal.js";
@@ -18,6 +18,7 @@ import { DashboardQuickActions, type BookingBlocker } from "../components/Dashbo
 import { TodayAgendaCard } from "../components/TodayAgendaCard.js";
 import { NeedsMarkingCard } from "../components/NeedsMarkingCard.js";
 import { WeekAheadCard } from "../components/WeekAheadCard.js";
+import { NoShowRiskCard } from "../components/NoShowRiskCard.js";
 import { PeriodStatsCard } from "../components/PeriodStatsCard.js";
 import { CardSkeleton } from "../components/CardSkeleton.js";
 import { Alert } from "../components/ui/index.js";
@@ -27,8 +28,6 @@ const WEEK_ROW = "28px";
 const STAT_GROUP = "112px";
 
 interface PageContext {
-  tenantName: string;
-  subdomain: string;
   timezone: string;
   services: ServiceSummary[];
   professionals: ProfessionalSummary[];
@@ -42,7 +41,7 @@ interface PageContext {
 const TICK_MS = 60_000;
 
 export function DashboardPage() {
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
   const { role, professionalId } = useAuth();
 
   const [context, setContext] = useState<PageContext | null>(null);
@@ -67,8 +66,6 @@ export function DashboardPage() {
     ])
       .then(([tenant, services, professionals, locations]) => {
         setContext({
-          tenantName: tenant.name,
-          subdomain: tenant.subdomain,
           timezone: tenant.timezone,
           services,
           professionals,
@@ -169,21 +166,15 @@ export function DashboardPage() {
   const canBook = context !== null && canBookAsRole && blocker === null;
 
   return (
-    <AppShell
-      title={context ? t("dashboard.welcome") : t("common.loading")}
-      subtitle={context?.tenantName}
-      tenantSubdomain={context?.subdomain}
-    >
-      <div className="grid animate-fade-up items-start gap-4 motion-reduce:animate-none xl:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)] xl:gap-5">
-        {error && <Alert flush className="xl:col-span-2">{error}</Alert>}
+    <AppShell title={t("nav.dashboard")} subtitle={context ? formatDateLabel(context.today, lang) : undefined}>
+      <div className="flex flex-col gap-4 xl:gap-5">
+        {error && <Alert flush>{error}</Alert>}
 
-        {context && (
-          <div className="xl:col-span-2">
-            <LocationTabs locations={context.locations} selectedId={locationId} onSelect={setLocationId} />
+        {/* Which branch, and the one thing people come here to do. */}
+        <div className="flex flex-wrap items-end gap-x-4 gap-y-3">
+          <div className="min-w-0 flex-1 basis-64">
+            {context && <LocationTabs locations={context.locations} selectedId={locationId} onSelect={setLocationId} />}
           </div>
-        )}
-
-        <div className="xl:col-span-2">
           <DashboardQuickActions
             role={role}
             onNewBooking={() => setCreateOpen(true)}
@@ -192,42 +183,46 @@ export function DashboardPage() {
           />
         </div>
 
-        <div className="xl:col-span-2">
-          {agenda && context ? (
-            <TodayAgendaCard agenda={agenda} timezone={context.timezone} isOwnOnly={role === "professional"} />
-          ) : (
-            <CardSkeleton rows={4} rowHeight={AGENDA_ROW} />
-          )}
-        </div>
+        {/* Today on the left, where the eye lands; the week beside it from `xl` up. */}
+        <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)] xl:gap-5">
+          <div className="flex min-w-0 flex-col gap-4 xl:gap-5">
+            {agenda && context ? (
+              <TodayAgendaCard agenda={agenda} timezone={context.timezone} isOwnOnly={role === "professional"} />
+            ) : (
+              <CardSkeleton rows={4} rowHeight={AGENDA_ROW} />
+            )}
 
-        {summary && context && summary.unmarkedCount > 0 && (
-          <div className="xl:col-span-2">
-            <NeedsMarkingCard
-              appointments={summary.unmarked}
-              count={summary.unmarkedCount}
-              timezone={context.timezone}
-              savingId={savingId}
-              error={markError}
-              onMark={markStatus}
-            />
+            {summary && context && summary.unmarkedCount > 0 && (
+              <NeedsMarkingCard
+                appointments={summary.unmarked}
+                count={summary.unmarkedCount}
+                timezone={context.timezone}
+                savingId={savingId}
+                error={markError}
+                onMark={markStatus}
+              />
+            )}
           </div>
+
+          <div className="flex min-w-0 flex-col gap-4 xl:gap-5">
+            {summary ? (
+              <WeekAheadCard days={summary.week} isOwnOnly={role === "professional"} />
+            ) : (
+              <CardSkeleton rows={7} rowHeight={WEEK_ROW} />
+            )}
+
+            {/* R360 */}
+            {summary && context && summary.atRiskCount > 0 && (
+              <NoShowRiskCard appointments={summary.atRisk} count={summary.atRiskCount} timezone={context.timezone} />
+            )}
+          </div>
+        </div>
+
+        {summary ? (
+          <PeriodStatsCard current={summary.current} previous={summary.previous} />
+        ) : (
+          <CardSkeleton rows={2} rowHeight={STAT_GROUP} />
         )}
-
-        <div className="xl:col-span-2">
-          {summary ? (
-            <WeekAheadCard days={summary.week} isOwnOnly={role === "professional"} />
-          ) : (
-            <CardSkeleton rows={7} rowHeight={WEEK_ROW} />
-          )}
-        </div>
-
-        <div className="xl:col-span-2">
-          {summary ? (
-            <PeriodStatsCard current={summary.current} previous={summary.previous} />
-          ) : (
-            <CardSkeleton rows={2} rowHeight={STAT_GROUP} />
-          )}
-        </div>
       </div>
 
       {createOpen && context && (

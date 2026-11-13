@@ -5,6 +5,8 @@ import { ApiError } from "@booking/api-client";
 import { cachedApi } from "../lib/cache.js";
 import { useI18n } from "../i18n/I18nContext.js";
 import { useLocalizedName } from "../lib/useLocalizedName.js";
+import { ConfirmModal, type ConfirmRequest } from "../components/ConfirmModal.js";
+import { usePagination } from "../lib/usePagination.js";
 import { AppShell } from "../components/AppShell.js";
 import { EditLocationModal } from "../components/EditLocationModal.js";
 import { CardSkeleton } from "../components/CardSkeleton.js";
@@ -14,7 +16,7 @@ import {
   Alert,
   Button,
   Pill,
-  Table,
+  Pagination, Table,
   TableHead,
   TableRow,
   TableEmpty,
@@ -29,8 +31,13 @@ interface PageData {
 }
 
 // R150: the tenant's branches
+// Rows per page; a pager appears only once there are more.
+const PAGE_SIZE = 10;
+
 export function LocationsPage() {
   const { t } = useI18n();
+  // The question waiting on an answer, if any (see ConfirmModal).
+  const [confirmRequest, setConfirmRequest] = useState<ConfirmRequest | null>(null);
   const nameOf = useLocalizedName();
   const [data, setData] = useState<PageData | null>(null);
   const [listError, setListError] = useState<string | null>(null);
@@ -62,8 +69,17 @@ export function LocationsPage() {
     }
   }
 
-  async function handleDelete(location: LocationSummary) {
-    if (!window.confirm(t("locations.confirmDelete", { name: nameOf(location.name, location.nameI18n) }))) return;
+  function handleDelete(location: LocationSummary) {
+    setConfirmRequest({
+      title: t("locations.delete"),
+      message: t("locations.confirmDelete", { name: nameOf(location.name, location.nameI18n) }),
+      confirmLabel: t("locations.delete"),
+      danger: true,
+      run: () => void handleDeleteConfirmed(location),
+    });
+  }
+
+  async function handleDeleteConfirmed(location: LocationSummary) {
     setListError(null);
     try {
       await cachedApi.deleteLocation(location.id);
@@ -90,13 +106,12 @@ export function LocationsPage() {
     ];
   }
 
+  const pager = usePagination(data?.locations ?? [], PAGE_SIZE);
+
   return (
     <AppShell title={t("locations.title")} subtitle={t("locations.subtitle")}>
-      <div className="animate-fade-up motion-reduce:animate-none">
-        <div className="mb-5 flex flex-wrap items-center gap-3">
-          <div className="text-[13px] text-base-content/60">
-            {data ? t("locations.count", { count: data.locations.length }) : t("common.loading")}
-          </div>
+      <div>
+        <div className="mb-5 flex flex-wrap items-center justify-end gap-3">
           <Button className="ml-auto" icon="add" disabled={!data} onClick={() => setEditTarget("new")}>
             {t("locations.add")}
           </Button>
@@ -116,7 +131,7 @@ export function LocationsPage() {
                 <div>{t("locations.colStatus")}</div>
                 <div></div>
               </TableHead>
-              {data.locations.map((location) => (
+              {pager.pageItems.map((location) => (
                 <TableRow key={location.id} columns={COLUMNS}>
                   <div className="font-semibold">{nameOf(location.name, location.nameI18n)}</div>
                   <div className="text-[13.5px]">
@@ -140,6 +155,7 @@ export function LocationsPage() {
               ))}
               {data.locations.length === 0 && <TableEmpty>{t("locations.empty")}</TableEmpty>}
             </Table>
+            <Pagination {...pager} />
           </div>
         )}
         {!data && <CardSkeleton rows={4} rowHeight={TABLE_ROW} />}
@@ -153,6 +169,7 @@ export function LocationsPage() {
           onSaved={handleSaved}
         />
       )}
+      {confirmRequest && <ConfirmModal request={confirmRequest} onClose={() => setConfirmRequest(null)} />}
     </AppShell>
   );
 }

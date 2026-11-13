@@ -9,7 +9,7 @@ interface TableHeadProps {
 export function TableHead({ columns, children }: TableHeadProps) {
   return (
     <div
-      className="grid items-center gap-3 bg-base-200/50 px-5 py-3 text-[11px] font-bold tracking-wider text-base-content/55 uppercase"
+      className="grid items-center gap-3 bg-base-200/60 px-5 py-2.5 text-xs font-semibold text-base-content/65"
       // The column template is supplied per table — a runtime value.
       style={{ gridTemplateColumns: columns }}
     >

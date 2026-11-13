@@ -7,6 +7,7 @@ import type { Translate } from "@/i18n/locales";
 import type { FailureReason } from "@/lib/actions";
 import { BookingSummary } from "./BookingSummary";
 import type { CustomerDetails } from "./BookingWizard";
+import { useLocaleHref } from "@/lib/useLocaleHref";
 import { BTN_BACK, BTN_NEXT, FIELD, FOOTER, INPUT, LABEL, STEP, STEP_HEADING } from "@/lib/wizardClasses";
 
 interface StepDetailsProps {
@@ -47,6 +48,7 @@ export function StepDetails({
   t,
   text,
 }: StepDetailsProps) {
+  const href = useLocaleHref();
   const [userName, setUserName] = useState(initial?.userName ?? "");
   const [phoneNumber, setPhoneNumber] = useState(initial?.phoneNumber ?? "");
 
@@ -113,18 +115,18 @@ export function StepDetails({
 
         {error && (
           <p className="alert alert-soft alert-error" role="alert">
-            {t("common.somethingWrong")}
+            {t(error === "blocked" ? "booking.blocked" : "common.somethingWrong")}
           </p>
         )}
 
         {/* R340: what booking agrees to, before any data is sent */}
         <p className="text-xs text-base-content/60">
           {t("booking.details.consentBefore")}
-          <Link className="link" href="/terms" target="_blank">
+          <Link className="link" href={href("/terms")} target="_blank">
             {t("legal.termsTitle")}
           </Link>
           {t("booking.details.consentAnd")}
-          <Link className="link" href="/privacy" target="_blank">
+          <Link className="link" href={href("/privacy")} target="_blank">
             {t("legal.privacyTitle")}
           </Link>
           {t("booking.details.consentAfter")}

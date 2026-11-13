@@ -7,12 +7,16 @@ import { getPublicApiClient } from "./api";
 export type ActionResult<T> = ({ ok: true } & T) | { ok: false; reason: FailureReason };
 
 // tooLate (R300): inside the salon's cutoff — changes go through the salon now
-export type FailureReason = "conflict" | "invalid" | "notFound" | "limit" | "tooLate" | "unknown";
+// "blocked" (R380): this salon doesn't take online bookings from the number
+export type FailureReason = "conflict" | "invalid" | "notFound" | "limit" | "tooLate" | "blocked" | "unknown";
 
 function toFailure(error: unknown): { ok: false; reason: FailureReason } {
   if (error instanceof ApiError) {
     if (error.status === 409) return { ok: false, reason: "conflict" };
     if (error.status === 429) return { ok: false, reason: "limit" };
+    if (error.status === 403 && (error.body as { code?: unknown } | null)?.code === "phone_blocked") {
+      return { ok: false, reason: "blocked" };
+    }
     if (error.status === 403) return { ok: false, reason: "tooLate" };
     if (error.status === 404) return { ok: false, reason: "notFound" };
     if (error.status === 400) return { ok: false, reason: "invalid" };

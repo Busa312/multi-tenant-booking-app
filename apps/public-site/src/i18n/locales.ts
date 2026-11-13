@@ -6,7 +6,13 @@ export type Locale = (typeof LOCALES)[number];
 
 export const DEFAULT_LOCALE: Locale = "en";
 
-export const LOCALE_COOKIE = "booking_lang";
+/**
+ * R160: the URL segment that stands for "the salon's main language". A path
+ * with no language prefix is rewritten to it by the middleware; which language
+ * it means is resolved per salon (resolveLocale: anything that isn't an
+ * enabled locale falls back to the salon's first).
+ */
+export const DEFAULT_LOCALE_SEGMENT = "_";
 
 type Widen<T> = T extends string ? string : { [K in keyof T]: Widen<T[K]> };
 export type Messages = Widen<typeof en>;

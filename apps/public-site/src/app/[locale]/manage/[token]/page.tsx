@@ -7,9 +7,11 @@ import { ManageAppointment } from "@/components/ManageAppointment";
 import { UnavailableNotice } from "@/components/UnavailableNotice";
 import { isValidTimezone } from "@/lib/tenant-time";
 
-export const metadata: Metadata = {
-  robots: { index: false, follow: false },
-};
+export async function generateMetadata({ params }: { params: { locale: string } }): Promise<Metadata> {
+  const context = await loadPageContext(params.locale);
+  // The link is a credential: never indexed, never followed.
+  return { title: context.t("manage.heading"), robots: { index: false, follow: false } };
+}
 
 export const dynamic = "force-dynamic";
 
@@ -30,9 +32,9 @@ export default async function ManagePage({ params }: { params: { locale: string;
   if (!result.ok) {
     return (
       <div className="flex flex-col items-start gap-4">
-        <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">{context.t("manage.heading")}</h1>
+        <h1 className="text-3xl font-extrabold tracking-tight text-balance sm:text-4xl">{context.t("manage.heading")}</h1>
         <p className="alert alert-soft alert-warning w-full">{context.t("manage.invalid")}</p>
-        <Link className="btn btn-primary" href="/manage/resend">
+        <Link className="btn btn-primary" href={context.href("/manage/resend")}>
           {context.t("manage.lostLink")}
         </Link>
       </div>

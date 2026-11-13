@@ -14,7 +14,7 @@ export function LegalDocument({ document, salon, updatedLabel }: LegalDocumentPr
   return (
     <article className="flex max-w-2xl flex-col gap-6">
       <header className="flex flex-col gap-2">
-        <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">{document.title}</h1>
+        <h1 className="text-3xl font-extrabold tracking-tight text-balance sm:text-4xl">{document.title}</h1>
         <p className="text-sm text-base-content/60">{updatedLabel}</p>
         <p className="leading-relaxed text-base-content/80">{fill(document.intro, salon)}</p>
       </header>

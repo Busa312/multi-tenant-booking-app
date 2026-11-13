@@ -1,5 +1,5 @@
 import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, Query, ServiceUnavailableException } from "@nestjs/common";
-import { ApiBody, ApiOkResponse, ApiParam, ApiQuery, ApiTags, ApiTooManyRequestsResponse } from "@nestjs/swagger";
+import { ApiBody, ApiForbiddenResponse, ApiOkResponse, ApiParam, ApiQuery, ApiTags, ApiTooManyRequestsResponse } from "@nestjs/swagger";
 import type {
   AvailabilityQuery,
   CreateAppointmentRequest,
@@ -18,6 +18,7 @@ import type {
   Tenant,
   Visit,
   VisitSlot,
+  OpeningHours,
 } from "@booking/shared-types";
 import { PrismaService } from "../prisma/prisma.service.js";
 import { TenantContextService } from "../tenant/tenant-context.service.js";
@@ -45,7 +46,9 @@ import {
   ResendMagicLinkRequestDto,
   ServiceDto,
   StartVerificationRequestDto,
+  OpeningHoursDto,
   OtpCooldownResponseDto,
+  PhoneBlockedResponseDto,
   StartVerificationResponseDto,
   TenantDto,
   VerifyPhoneRequestDto,
@@ -62,6 +65,9 @@ import { HOLD_MAX_PER_VISITOR, HOLD_VISITOR_WINDOW_SECONDS, parseHoldId } from "
 const LIMIT_READ = { max: 120, windowSeconds: 60 };
 import { NotificationService } from "../notifications/notification.service.js";
 import { VerificationService } from "./verification.service.js";
+import { BlockedPhoneService } from "../booking/blocked-phone.service.js";
+import { phoneKey } from "../common/phone-key.js";
+import { openingHours } from "../booking/working-hours.js";
 
 const RESEND_WINDOW_SECONDS = 60 * 60;
 const RESEND_MAX_PER_PHONE = 3;
@@ -78,6 +84,7 @@ export class PublicController {
     private readonly notifications: NotificationService,
     private readonly limits: RateLimitService,
     private readonly verification: VerificationService,
+    private readonly blockedPhones: BlockedPhoneService,
   ) {}
 
   @Get("tenant")
@@ -97,6 +104,26 @@ export class PublicController {
       tx.service.findMany({ where: { tenantId, isActive: true } }),
     );
     return services.map(serializeService);
+  }
+
+  // R390: when the salon is open, for the home page
+  @Get("hours")
+  @ApiOkResponse({ type: [OpeningHoursDto] })
+  async listOpeningHours(): Promise<OpeningHours[]> {
+    const { tenantId } = this.tenantContext.current;
+    return this.prisma.forTenant(async (tx) => {
+      const [rows, professionals] = await Promise.all([
+        tx.businessHours.findMany({
+          where: { tenantId },
+          select: { professionalId: true, dayOfWeek: true, startTime: true, endTime: true },
+        }),
+        tx.professional.findMany({ where: { tenantId, isActive: true }, select: { id: true } }),
+      ]);
+      return openingHours(
+        rows,
+        professionals.map((professional) => professional.id),
+      );
+    });
   }
 
   @Get("locations")
@@ -231,7 +258,10 @@ export class PublicController {
   @ApiBody({ type: StartVerificationRequestDto })
   @ApiOkResponse({ type: StartVerificationResponseDto })
   @ApiTooManyRequestsResponse({ type: OtpCooldownResponseDto })
+  @ApiForbiddenResponse({ type: PhoneBlockedResponseDto, description: "R380: this salon doesn't take online bookings from the number" })
   async startVerification(@Body() body: StartVerificationRequest): Promise<StartVerificationResponse> {
+    // R380: checked before a code is sent — a blocked number costs the salon no SMS
+    await this.blockedPhones.assertNotBlocked(body.phoneNumber);
     const { expiresAt, devCode } = await this.verification.start(body.phoneNumber);
     if (!this.notifications.canDeliverSms()) {
       return { expiresAt: expiresAt.toISOString(), devCode };
@@ -255,6 +285,8 @@ export class PublicController {
   @ApiBody({ type: CreateAppointmentRequestDto })
   @ApiOkResponse({ type: CreateAppointmentResponseDto })
   async createAppointment(@Body() body: CreateAppointmentRequest): Promise<CreateAppointmentResponse> {
+    // R380: again here, in case the number was blocked after its code went out
+    await this.blockedPhones.assertNotBlocked(body.phoneNumber);
     // Consumed before anything is written: the token proves this phone number
     // was verified, is single-use, and is bound to the number being booked —
     // so verifying one number can't authorize a booking under another.
@@ -388,7 +420,7 @@ export class PublicController {
    */
   private async withinResendLimits(tenantId: string, phoneNumber: string): Promise<boolean> {
     const perPhone = await this.limits.hit(
-      `resend:${tenantId}:${hashToken(phoneNumber)}`,
+      `resend:${tenantId}:${hashToken(phoneKey(phoneNumber))}`,
       RESEND_MAX_PER_PHONE,
       RESEND_WINDOW_SECONDS,
     );

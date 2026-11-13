@@ -49,6 +49,7 @@ const prismaAppointment = (overrides: Partial<Parameters<typeof serializeAppoint
   locationId: null,
   userName: "ნინო",
   phoneNumber: "+995555123456",
+  phoneKey: "995555123456",
   email: "nino@example.com",
   startAt: new Date("2026-08-05T05:00:00Z"),
   endAt: new Date("2026-08-05T05:30:00Z"),
@@ -227,9 +228,12 @@ describe("serializeAppointment", () => {
 
 });
 
+// A customer the salon knows nothing about.
+const NO_RECORD = { noShowHistory: null, phoneBlocked: false };
+
 describe("serializeAppointmentSummary", () => {
   it("flattens the joined professional name", () => {
-    const result = serializeAppointmentSummary(prismaAppointmentSummary());
+    const result = serializeAppointmentSummary(prismaAppointmentSummary(), NO_RECORD);
 
     expect(result.professionalName).toBe("Levan");
   });
@@ -238,15 +242,30 @@ describe("serializeAppointmentSummary", () => {
   it("carries the professional's and the branch's name translations", () => {
     const result = serializeAppointmentSummary(
       prismaAppointmentSummary({ location: { name: "Vake", nameI18n: { ka: "ვაკე" } } }),
+      NO_RECORD,
     );
 
     expect(result.professionalNameI18n).toEqual({ ka: "ლევანი" });
     expect(result.locationNameI18n).toEqual({ ka: "ვაკე" });
   });
 
+  // R360: supplied by the caller, passed through untouched
+  it("carries the customer's no-show history it was handed", () => {
+    expect(serializeAppointmentSummary(prismaAppointmentSummary(), { noShowHistory: { missed: 2, of: 3 }, phoneBlocked: false }).noShowHistory).toEqual({ missed: 2, of: 3 });
+    expect(serializeAppointmentSummary(prismaAppointmentSummary(), NO_RECORD).noShowHistory).toBeNull();
+  });
+
+  // R380
+  it("carries whether the salon has blocked the customer's number", () => {
+    const blocked = serializeAppointmentSummary(prismaAppointmentSummary(), { noShowHistory: null, phoneBlocked: true });
+    expect(blocked.phoneBlocked).toBe(true);
+    expect(serializeAppointmentSummary(prismaAppointmentSummary(), NO_RECORD).phoneBlocked).toBe(false);
+  });
+
   it("reports an unassigned appointment's professional as null", () => {
     const result = serializeAppointmentSummary(
       prismaAppointmentSummary({ ...prismaAppointment({ professionalId: null }), professional: null }),
+      NO_RECORD,
     );
 
     expect(result.professionalName).toBeNull();
@@ -256,11 +275,13 @@ describe("serializeAppointmentSummary", () => {
   it("reduces the visit's magic link to a boolean and leaks no token hash", () => {
     const withLink = serializeAppointmentSummary(
       prismaAppointmentSummary({ ...prismaAppointment({ visitId: "v1" }), visit: { accessTokenHash: "deadbeef" } }),
+      NO_RECORD,
     );
     const cancelledVisit = serializeAppointmentSummary(
       prismaAppointmentSummary({ ...prismaAppointment({ visitId: "v1" }), visit: { accessTokenHash: null } }),
+      NO_RECORD,
     );
-    const staffBooking = serializeAppointmentSummary(prismaAppointmentSummary());
+    const staffBooking = serializeAppointmentSummary(prismaAppointmentSummary(), NO_RECORD);
 
     expect(withLink.hasMagicLink).toBe(true);
     expect(cancelledVisit.hasMagicLink).toBe(false);
@@ -270,8 +291,8 @@ describe("serializeAppointmentSummary", () => {
 
   // R200: staff can see an appointment is one segment of a customer visit
   it("carries the visit id, null for a staff booking", () => {
-    expect(serializeAppointmentSummary(prismaAppointmentSummary({ visitId: "v1" })).visitId).toBe("v1");
-    expect(serializeAppointmentSummary(prismaAppointmentSummary()).visitId).toBeNull();
+    expect(serializeAppointmentSummary(prismaAppointmentSummary({ visitId: "v1" }), NO_RECORD).visitId).toBe("v1");
+    expect(serializeAppointmentSummary(prismaAppointmentSummary(), NO_RECORD).visitId).toBeNull();
   });
 
   it("carries the staff-only fields the plain appointment shape omits", () => {
@@ -279,6 +300,7 @@ describe("serializeAppointmentSummary", () => {
       prismaAppointmentSummary({
         ...prismaAppointment({ createdByUserId: "uuuuuuuu-uuuu-uuuu-uuuu-uuuuuuuuuuuu", notes: "regular client" }),
       }),
+      NO_RECORD,
     );
 
     expect(result.createdByUserId).toBe("uuuuuuuu-uuuu-uuuu-uuuu-uuuuuuuuuuuu");

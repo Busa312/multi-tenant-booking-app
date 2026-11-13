@@ -1,4 +1,4 @@
-import { useId, useState, type ReactNode } from "react";
+import { useEffect, useId, useState, type ReactNode } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext.js";
 import { useI18n } from "../i18n/I18nContext.js";
@@ -6,7 +6,9 @@ import { Brand } from "./ui/Brand.js";
 import { Icon } from "./ui/Icon.js";
 import { LanguageSwitcher } from "./LanguageSwitcher.js";
 import { ThemeToggle } from "./ThemeToggle.js";
+import { cachedApi } from "../lib/cache.js";
 import { cx } from "../lib/cx.js";
+import { publicSiteUrl } from "../lib/publicSiteUrl.js";
 import type { IconName } from "../lib/iconNames.js";
 
 interface NavItem {
@@ -15,37 +17,83 @@ interface NavItem {
   labelKey: string;
 }
 
+interface NavGroup {
+  /** Heading above the group; the first group (the daily work) has none. */
+  labelKey?: string;
+  items: NavItem[];
+}
+
 interface AppShellProps {
   title: string;
   subtitle?: string;
-  tenantSubdomain?: string;
   children: ReactNode;
 }
 
 // daisyUI drawer: the sidebar is pinned open from `lg` up and slides over the
 // content below it.
-export function AppShell({ title, subtitle, tenantSubdomain, children }: AppShellProps) {
+export function AppShell({ title, subtitle, children }: AppShellProps) {
   const { role, logout } = useAuth();
   const { t } = useI18n();
   const location = useLocation();
   const drawerId = useId();
 
   const [navOpen, setNavOpen] = useState(false);
+  // Whose CMS this is, on every page: the cached tenant at once, then the fresh one.
+  const [tenant, setTenant] = useState(cachedApi.peekTenant);
 
-  const navItems: NavItem[] = [
-    { to: "/", icon: "space_dashboard", labelKey: "nav.dashboard" },
-    { to: "/bookings", icon: "event_available", labelKey: "nav.bookings" },
+  useEffect(() => {
+    let live = true;
+    cachedApi
+      .getTenant()
+      .then((fresh) => {
+        if (live) setTenant(fresh);
+      })
+      // The pages report load failures; the sidebar just goes without a name.
+      .catch(() => undefined);
+    return () => {
+      live = false;
+    };
+  }, []);
+
+  // Grouped by what a person comes here to do: run the day, set the salon up,
+  // or change what customers see. The last two are owner-only (as the routes are).
+  const navGroups: NavGroup[] = [
+    {
+      items: [
+        { to: "/", icon: "space_dashboard", labelKey: "nav.dashboard" },
+        { to: "/bookings", icon: "event_available", labelKey: "nav.bookings" },
+      ],
+    },
     ...(role === "owner"
       ? ([
-          { to: "/services", icon: "design_services", labelKey: "nav.services" },
-          { to: "/professionals", icon: "diversity_3", labelKey: "nav.professionals" },
-          // R150: sits next to the roster
-          { to: "/locations", icon: "storefront", labelKey: "nav.locations" },
-          { to: "/settings/colors", icon: "palette", labelKey: "nav.colors" },
-          { to: "/settings/public-site", icon: "edit_note", labelKey: "nav.publicSite" },
-        ] satisfies NavItem[])
+          {
+            labelKey: "nav.groupSetup",
+            items: [
+              { to: "/services", icon: "design_services", labelKey: "nav.services" },
+              { to: "/professionals", icon: "diversity_3", labelKey: "nav.professionals" },
+              // R150: sits next to the roster
+              { to: "/locations", icon: "storefront", labelKey: "nav.locations" },
+              { to: "/hours", icon: "schedule", labelKey: "nav.hours" },
+              // R380
+              { to: "/blocked-numbers", icon: "block", labelKey: "nav.blockedNumbers" },
+            ],
+          },
+          {
+            labelKey: "nav.groupSite",
+            items: [
+              { to: "/settings/colors", icon: "palette", labelKey: "nav.colors" },
+              { to: "/settings/public-site", icon: "edit_note", labelKey: "nav.publicSite" },
+            ],
+          },
+          {
+            labelKey: "nav.groupAccount",
+            items: [{ to: "/settings/subscription", icon: "credit_card", labelKey: "nav.subscription" }],
+          },
+        ] satisfies NavGroup[])
       : []),
   ];
+
+  const siteUrl = tenant ? publicSiteUrl(tenant.subdomain) : null;
 
   return (
     <div className="drawer lg:drawer-open">
@@ -58,7 +106,7 @@ export function AppShell({ title, subtitle, tenantSubdomain, children }: AppShel
       />
 
       <div className="drawer-content flex min-h-dvh min-w-0 flex-col">
-        <header className="sticky top-0 z-30 flex items-center gap-3 border-b border-base-300 bg-base-200/85 px-4 py-3 backdrop-blur-md sm:px-6 lg:px-8">
+        <header className="sticky top-0 z-30 flex items-center gap-3 border-b border-base-300 bg-base-200 px-4 py-3 sm:px-6 lg:px-8">
           <button
             type="button"
             className="btn btn-square btn-ghost btn-sm lg:hidden"
@@ -69,17 +117,11 @@ export function AppShell({ title, subtitle, tenantSubdomain, children }: AppShel
           </button>
 
           <div className="min-w-0 flex-1">
-            <h1 className="truncate font-display text-xl leading-tight font-semibold sm:text-2xl">{title}</h1>
+            <h1 className="truncate font-display text-2xl leading-tight font-bold sm:text-3xl">{title}</h1>
             {subtitle && <p className="truncate text-sm text-base-content/60">{subtitle}</p>}
           </div>
 
           <div className="flex items-center gap-1.5 sm:gap-2">
-            {tenantSubdomain && (
-              <span className="badge hidden gap-1.5 border-base-300 bg-base-100 py-3 font-semibold md:inline-flex">
-                <Icon name="storefront" size={16} className="text-primary" />
-                {tenantSubdomain}
-              </span>
-            )}
             <LanguageSwitcher />
             <ThemeToggle />
           </div>
@@ -90,55 +132,83 @@ export function AppShell({ title, subtitle, tenantSubdomain, children }: AppShel
 
       <div className="drawer-side z-40">
         <label htmlFor={drawerId} aria-label={t("common.close")} className="drawer-overlay" />
-        <aside className="flex min-h-full w-64 flex-col border-r border-base-300 bg-base-100">
-          <div className="px-5 pt-6 pb-5">
+        <aside className="flex h-full w-60 flex-col border-r border-base-300 bg-base-200">
+          <div className="flex-none px-5 pt-5 pb-4">
             <Brand />
           </div>
 
-          <nav className="flex-1 px-3">
-            <ul className="menu w-full gap-1 p-0">
-              {navItems.map((item) => {
-                const active = location.pathname === item.to;
-                return (
-                  <li key={item.to}>
-                    <Link
-                      to={item.to}
-                      aria-current={active ? "page" : undefined}
-                      className={cx(
-                        "gap-3 rounded-field px-3 py-2.5 font-medium text-base-content/75",
-                        // shadow-none: daisyUI styles an aria-current item as its
-                        // neutral "active" pill, shadow included; we keep only our tint.
-                        active && "bg-primary/10 font-semibold text-primary shadow-none hover:bg-primary/15",
-                      )}
-                      onClick={() => setNavOpen(false)}
-                    >
-                      <Icon name={item.icon} />
-                      {t(item.labelKey)}
-                    </Link>
-                  </li>
-                );
-              })}
-            </ul>
+          {/* Scrolls on a short screen, so the last item never sits against the footer. */}
+          <nav className="min-h-0 flex-1 overflow-y-auto px-3 pb-6">
+            {navGroups.map((group) => (
+              <div key={group.labelKey ?? "daily"}>
+                {group.labelKey && (
+                  <h2 className="px-3 pt-4 pb-1 text-xs font-semibold text-base-content/55">{t(group.labelKey)}</h2>
+                )}
+                <ul className="menu w-full gap-0.5 p-0">
+                  {group.items.map((item) => {
+                    const active = location.pathname === item.to;
+                    return (
+                      <li key={item.to}>
+                        <Link
+                          to={item.to}
+                          aria-current={active ? "page" : undefined}
+                          className={cx(
+                            "gap-3 rounded-field px-3 py-2",
+                            // The highlighter marks where you are. One color and one
+                            // weight per state, never both (Tailwind doesn't resolve
+                            // them by order). shadow-none: daisyUI styles an
+                            // aria-current item as its neutral "active" pill, shadow
+                            // included; we keep only the highlight.
+                            active
+                              ? "bg-accent font-semibold text-accent-content shadow-none hover:bg-accent"
+                              : "font-medium text-base-content/70",
+                          )}
+                          onClick={() => setNavOpen(false)}
+                        >
+                          <Icon name={item.icon} />
+                          {t(item.labelKey)}
+                        </Link>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            ))}
           </nav>
 
-          <div className="m-3 flex items-center gap-3 rounded-box bg-base-200/70 p-3">
-            <div className="avatar avatar-placeholder">
-              <div className="w-9 rounded-full bg-primary/15 text-primary">
-                <Icon name="person" size={18} />
-              </div>
-            </div>
-            <div className="min-w-0 flex-1">
-              <div className="truncate text-sm font-semibold">
+          {/* Whose CMS this is, then the two things to do about it — rows like the menu above. */}
+          <div className="flex-none border-t border-base-300 px-3 pt-3 pb-3">
+            <div className="px-3 pb-1.5">
+              <div className="truncate text-sm font-semibold">{tenant?.name ?? "\u00a0"}</div>
+              <div className="truncate text-xs text-base-content/55">
                 {t(role === "owner" ? "roles.owner" : "roles.professional")}
               </div>
-              <button
-                type="button"
-                onClick={() => void logout()}
-                className="text-xs font-medium text-base-content/60 hover:text-primary"
-              >
-                {t("shell.signOut")}
-              </button>
             </div>
+            <ul className="menu w-full gap-0.5 p-0">
+              {siteUrl && (
+                <li>
+                  <a
+                    href={siteUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="gap-3 rounded-field px-3 py-2 font-medium text-base-content/70"
+                  >
+                    <Icon name="open_in_new" />
+                    {t("nav.viewSite")}
+                  </a>
+                </li>
+              )}
+              <li>
+                <button
+                  type="button"
+                  className="gap-3 rounded-field px-3 py-2 font-medium text-base-content/70"
+                  onClick={() => void logout()}
+                >
+                  <Icon name="logout" />
+                  {t("shell.signOut")}
+                </button>
+              </li>
+            </ul>
           </div>
         </aside>
       </div>

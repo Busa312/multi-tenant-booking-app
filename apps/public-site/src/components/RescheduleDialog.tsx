@@ -4,7 +4,8 @@ import { useEffect, useRef, useState } from "react";
 import type { Visit, VisitSlot } from "@booking/shared-types";
 import type { Translate } from "@/i18n/locales";
 import { fetchRescheduleAvailability } from "@/lib/actions";
-import { addDays, dateStringInTimezone, formatDay, todayInTimezone, wallClock } from "@/lib/tenant-time";
+import { dateStringInTimezone, todayInTimezone, wallClock } from "@/lib/tenant-time";
+import { DayPicker } from "./DayPicker";
 import { SlotGrid } from "./SlotGrid";
 
 interface RescheduleDialogProps {
@@ -86,27 +87,18 @@ export function RescheduleDialog({ visit, token, timezone, lastDate, locale, onC
         {/* R110: the link they followed to get here dies the moment this saves */}
         <p className="-mt-2 text-sm text-base-content/65">{t("manage.rescheduleNote")}</p>
 
-        <div className="flex items-center gap-2 rounded-box border border-base-300 bg-base-200/60 p-1.5">
-          <button
-            type="button"
-            className={"btn btn-square btn-ghost text-xl"}
-            onClick={() => setDate(addDays(date, -1))}
-            disabled={date <= today}
-            aria-label={t("booking.time.previousDay")}
-          >
-            ‹
-          </button>
-          <p className="flex-1 text-center font-semibold" aria-live="polite">{formatDay(date, timezone, locale)}</p>
-          <button
-            type="button"
-            className={"btn btn-square btn-ghost text-xl"}
-            onClick={() => setDate(addDays(date, 1))}
-            disabled={date >= lastDate}
-            aria-label={t("booking.time.nextDay")}
-          >
-            ›
-          </button>
-        </div>
+        <DayPicker
+          date={date}
+          today={today}
+          lastDate={lastDate}
+          timezone={timezone}
+          locale={locale}
+          onPick={(picked) => {
+            setStartAt(null);
+            setDate(picked);
+          }}
+          t={t}
+        />
 
         {slots === null ? (
           <p className="flex items-center gap-2 py-6 text-base-content/65">
@@ -122,6 +114,7 @@ export function RescheduleDialog({ visit, token, timezone, lastDate, locale, onC
             timezone={timezone}
             locale={locale}
             onPick={(picked) => setStartAt(picked.startAt)}
+            t={t}
           />
         )}
 

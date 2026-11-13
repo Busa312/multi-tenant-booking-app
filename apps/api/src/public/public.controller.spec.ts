@@ -1,4 +1,10 @@
-import { BadRequestException, ConflictException, HttpException, ServiceUnavailableException } from "@nestjs/common";
+import {
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+  HttpException,
+  ServiceUnavailableException,
+} from "@nestjs/common";
 import { Prisma } from "../../generated/prisma/index.js";
 import { PublicController } from "./public.controller.js";
 import { HoldLimitError } from "../booking/visit.service.js";
@@ -8,6 +14,7 @@ import type { NotificationService } from "../notifications/notification.service.
 import type { PrismaService } from "../prisma/prisma.service.js";
 import type { RateLimitService } from "../rate-limit/rate-limit.service.js";
 import type { VerificationService } from "./verification.service.js";
+import type { BlockedPhoneService } from "../booking/blocked-phone.service.js";
 import type { TenantContextService } from "../tenant/tenant-context.service.js";
 
 // The visit rules themselves (token lookup, cancel, reschedule, create) are
@@ -106,6 +113,9 @@ const setup = (overrides: Overrides = {}) => {
     hit: jest.fn(() => Promise.resolve({ allowed: verdicts[call++] ?? true, retryAfterSeconds: 0 })),
   };
 
+  // R380: nobody is blocked unless a test says so
+  const blockedPhones = { assertNotBlocked: jest.fn().mockResolvedValue(undefined) };
+
   const controller = new PublicController(
     prisma,
     tenantContext,
@@ -114,9 +124,10 @@ const setup = (overrides: Overrides = {}) => {
     notifications as unknown as NotificationService,
     limits as unknown as RateLimitService,
     verification as unknown as VerificationService,
+    blockedPhones as unknown as BlockedPhoneService,
   );
 
-  return { controller, availability, visits, notifications, limits, verification };
+  return { controller, availability, visits, notifications, limits, verification, blockedPhones };
 };
 
 const bookingInput = (overrides: Record<string, unknown> = {}) => ({
@@ -327,6 +338,41 @@ describe("creating a visit", () => {
     const result = await controller.createAppointment(bookingInput());
 
     expect(result.visit).toMatchObject({ id: "v1", segments: [expect.objectContaining({ professionalName: "Nina" })] });
+  });
+});
+
+// R380: a number this salon has blocked can't book online
+describe("a blocked phone number", () => {
+  const blocked = () => {
+    const ctx = setup();
+    ctx.blockedPhones.assertNotBlocked.mockRejectedValue(new ForbiddenException({ code: "phone_blocked" }));
+    return ctx;
+  };
+
+  it("is refused before a code is generated or texted", async () => {
+    const { controller, verification, notifications } = blocked();
+
+    await expect(controller.startVerification({ phoneNumber: "+995555123456" })).rejects.toThrow(ForbiddenException);
+
+    expect(verification.start).not.toHaveBeenCalled();
+    expect(notifications.sendOtp).not.toHaveBeenCalled();
+  });
+
+  it("is refused at booking too, before the verification is spent or anything is written", async () => {
+    const { controller, verification, visits } = blocked();
+
+    await expect(controller.createAppointment(bookingInput())).rejects.toThrow(ForbiddenException);
+
+    expect(verification.consume).not.toHaveBeenCalled();
+    expect(visits.create).not.toHaveBeenCalled();
+  });
+
+  it("is checked by the number being booked", async () => {
+    const { controller, blockedPhones } = setup();
+
+    await controller.createAppointment(bookingInput());
+
+    expect(blockedPhones.assertNotBlocked).toHaveBeenCalledWith("+995555123456");
   });
 });
 

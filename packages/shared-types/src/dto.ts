@@ -1,6 +1,6 @@
 
 
-import type { AppointmentStatus, AppointmentSummary, TenantUserRole, Visit, VisitSlot } from "./entities";
+import type { AppointmentStatus, AppointmentSummary, TenantUserRole, Visit, VisitSlot, NoShowHistory } from "./entities";
 import type { TenantColors } from "./colors";
 import type { LocalizedText } from "./i18n";
 
@@ -197,6 +197,12 @@ export interface DashboardSummary {
   /** Past appointments still `booked`, oldest first; the first few only — `unmarkedCount` has the total. */
   unmarked: AppointmentSummary[];
   unmarkedCount: number;
+  /**
+   * R360: bookings in the next 7 days from customers who missed one of their
+   * last visits, soonest first; the first few only — `atRiskCount` has the total.
+   */
+  atRisk: AppointmentSummary[];
+  atRiskCount: number;
   /** Today and the 6 days after it. */
   week: DashboardDay[];
   /** The last 30 days, up to now. */
@@ -257,6 +263,8 @@ export interface BookingConflict {
 export interface BookingConflictResponse {
   code: "booking_conflict";
   conflicts: BookingConflict[];
+  // R360: the record of the customer being booked, shown beside the conflicts
+  noShowHistory: NoShowHistory | null;
 }
 
 export interface ResendMagicLinkRequest {
@@ -416,4 +424,21 @@ export interface OnboardTenantResponse {
   subdomain: string;
   ownerUserId: string;
   ownerEmail: string;
+}
+
+// R380
+export interface BlockPhoneRequest {
+  phoneNumber: string;
+  /** Why, for the salon's own reference; never shown to the customer. */
+  reason?: string;
+}
+
+export interface UnblockPhoneRequest {
+  /** Matched however it is spelled ("598 55 05 94" = "+995598550594"). */
+  phoneNumber: string;
+}
+
+/** R380: 403 from the public booking flow — this salon doesn't take online bookings from the number. */
+export interface PhoneBlockedResponse {
+  code: "phone_blocked";
 }

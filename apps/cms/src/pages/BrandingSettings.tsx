@@ -3,7 +3,9 @@ import type { Tenant, TenantColors } from "@booking/shared-types";
 import { DEFAULT_TENANT_COLORS, isValidColor, meetsWcagAA } from "@booking/shared-types";
 import { ApiError } from "@booking/api-client";
 import { cachedApi } from "../lib/cache.js";
+import { publicSiteUrl } from "../lib/publicSiteUrl.js";
 import { useI18n } from "../i18n/I18nContext.js";
+import { ConfirmModal, type ConfirmRequest } from "../components/ConfirmModal.js";
 import { AppShell } from "../components/AppShell.js";
 import { CardSkeleton } from "../components/CardSkeleton.js";
 import { Alert, Button, Card, Eyebrow, Field, Icon, Skeleton, TextInput } from "../components/ui/index.js";
@@ -20,11 +22,10 @@ const FIELDS: { key: ColorField; labelKey: string }[] = [
 // Must match apps/public-site's PreviewColorListener MESSAGE_TYPE constant.
 const PREVIEW_MESSAGE_TYPE = "booking:preview-colors";
 
-const PUBLIC_SITE_BASE_DOMAIN = import.meta.env.VITE_PUBLIC_SITE_BASE_DOMAIN as string | undefined;
-const PUBLIC_SITE_PROTOCOL = (import.meta.env.VITE_PUBLIC_SITE_PROTOCOL as string | undefined) ?? "http";
-
 export function BrandingSettingsPage() {
   const { t } = useI18n();
+  // The question waiting on an answer, if any (see ConfirmModal).
+  const [confirmRequest, setConfirmRequest] = useState<ConfirmRequest | null>(null);
   const [tenant, setTenant] = useState<Tenant | null>(null);
   const [colors, setColors] = useState<Required<TenantColors>>(DEFAULT_TENANT_COLORS);
   const [fieldErrors, setFieldErrors] = useState<Partial<Record<ColorField, string>>>({});
@@ -42,8 +43,7 @@ export function BrandingSettingsPage() {
     });
   }, []);
 
-  const previewOrigin =
-    tenant && PUBLIC_SITE_BASE_DOMAIN ? `${PUBLIC_SITE_PROTOCOL}://${tenant.subdomain}.${PUBLIC_SITE_BASE_DOMAIN}` : null;
+  const previewOrigin = tenant ? publicSiteUrl(tenant.subdomain) : null;
 
   // Live, unsaved-edit preview (R80): postMessage draft colors into the
   // embedded public site on every change — no save/revalidation round-trip.
@@ -93,11 +93,17 @@ export function BrandingSettingsPage() {
     }
   }
 
-  async function handleReset() {
-    if (!window.confirm(t("branding.confirmReset"))) {
-      return;
-    }
+  function handleReset() {
+    setConfirmRequest({
+      title: t("branding.resetBtn"),
+      message: t("branding.confirmReset"),
+      confirmLabel: t("branding.resetBtn"),
+      danger: true,
+      run: () => void handleResetConfirmed(),
+    });
+  }
 
+  async function handleResetConfirmed() {
     setSaveError(null);
     setResetting(true);
     try {
@@ -117,7 +123,7 @@ export function BrandingSettingsPage() {
   const previewHost = previewOrigin?.replace(/^https?:\/\//, "");
 
   return (
-    <AppShell title={t("branding.title")} subtitle={t("branding.subtitle")} tenantSubdomain={tenant?.subdomain}>
+    <AppShell title={t("branding.title")} subtitle={t("branding.subtitle")}>
       {!tenant && (
         // Mirrors the real two-column layout from the same constants.
         <div className={LAYOUT}>
@@ -128,7 +134,7 @@ export function BrandingSettingsPage() {
         </div>
       )}
       {tenant && (
-        <div className={`${LAYOUT} animate-fade-up motion-reduce:animate-none`}>
+        <div className={`${LAYOUT}`}>
           <Card as="form" onSubmit={handleSubmit} className={FORM}>
             <div className="text-[15px] font-bold">{t("branding.formTitle")}</div>
             <div className="mt-0.5 mb-5 text-xs text-base-content/60">
@@ -202,6 +208,7 @@ export function BrandingSettingsPage() {
           )}
         </div>
       )}
+      {confirmRequest && <ConfirmModal request={confirmRequest} onClose={() => setConfirmRequest(null)} />}
     </AppShell>
   );
 }

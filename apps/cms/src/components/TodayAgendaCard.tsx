@@ -21,7 +21,7 @@ export function TodayAgendaCard({ agenda, timezone, isOwnOnly }: TodayAgendaCard
       <div className="mb-4 flex flex-wrap items-start gap-x-3 gap-y-2">
         <div className="min-w-0">
           <Eyebrow>{t("dashboard.agendaTitle")}</Eyebrow>
-          <div className="mt-0.5 font-display text-lg font-semibold">{t("dashboard.agendaCount", { count: heldCount })}</div>
+          <div className="mt-0.5 font-display text-2xl leading-tight font-bold">{t("dashboard.agendaCount", { count: heldCount })}</div>
         </div>
         <ButtonLink to="/bookings" variant="secondary" size="sm" className="ml-auto flex-none">
           {t("dashboard.agendaOpenCalendar")}

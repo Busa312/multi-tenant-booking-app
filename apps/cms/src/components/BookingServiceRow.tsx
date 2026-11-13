@@ -32,8 +32,9 @@ export function BookingServiceRow({
   const id = `booking-service-${index}`;
 
   return (
-    <div className="grid grid-cols-[1fr_auto] items-center gap-2 [&+&]:mt-2">
+    <div className="flex items-center gap-2 [&+&]:mt-2">
       <Select
+        className="min-w-0 flex-1"
         id={id}
         value={value}
         onChange={onChange}
@@ -43,20 +44,19 @@ export function BookingServiceRow({
           label: t("bookings.serviceOption", { name: nameOf(s.name, s.nameI18n), minutes: s.durationMinutes, price: s.price }),
         }))}
       />
-      {/* Kept mounted but invisible on the single-row case, so the select
-          doesn't change width the moment a second service is added. */}
-      <Button
-        type="button"
-        variant="secondary"
-        size="sm"
-        iconOnly
-        icon="delete"
-        title={t("bookings.removeService")}
-        aria-label={t("bookings.removeService")}
-        onClick={onRemove}
-        className={canRemove ? undefined : "invisible"}
-        disabled={!canRemove}
-      />
+      {/* Only once there is something to remove: with a single service the
+          select lines up with every other field in the form. */}
+      {canRemove && (
+        <Button
+          type="button"
+          variant="ghost"
+          iconOnly
+          icon="delete"
+          title={t("bookings.removeService")}
+          aria-label={t("bookings.removeService")}
+          onClick={onRemove}
+        />
+      )}
     </div>
   );
 }

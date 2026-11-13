@@ -53,6 +53,7 @@ export async function dropTenant(owner: PrismaClient, tenantId: string): Promise
   await owner.appointment.deleteMany({ where: { tenantId } });
   await owner.visit.deleteMany({ where: { tenantId } });
   await owner.slotHold.deleteMany({ where: { tenantId } });
+  await owner.blockedPhone.deleteMany({ where: { tenantId } });
   await owner.tenant.delete({ where: { id: tenantId } });
 }
 

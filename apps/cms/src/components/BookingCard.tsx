@@ -5,6 +5,8 @@ import { useLocalizedName } from "../lib/useLocalizedName.js";
 import { cx } from "../lib/cx.js";
 import { formatTimeLabel } from "../lib/tenantTime.js";
 import { BookingStatusPill } from "./BookingStatusPill.js";
+import { NoShowBadge } from "./NoShowBadge.js";
+import { BlockedBadge } from "./BlockedBadge.js";
 import { ActionMenu, type ActionMenuItem } from "./ui/index.js";
 
 interface BookingCardProps {
@@ -26,7 +28,7 @@ export function BookingCard({ appointment, timezone, actions }: BookingCardProps
     // R90: a cancelled booking stays on the calendar as history, visibly out of play.
     <article
       className={cx(
-        "rounded-field border border-l-[3px] border-base-300 bg-base-100 px-2 py-1.5 shadow-xs",
+        "rounded-field border border-l-[3px] border-base-300 bg-base-100 px-2 py-1.5",
         appointment.status === "cancelled" ? "border-l-error opacity-60" : "border-l-primary",
       )}
     >
@@ -53,6 +55,9 @@ export function BookingCard({ appointment, timezone, actions }: BookingCardProps
           <BookingStatusPill status={appointment.status} />
         </div>
       )}
+      {/* R360: only worth the room on a booking that is still to happen */}
+      {appointment.status === "booked" && <NoShowBadge history={appointment.noShowHistory} className="mt-1 max-w-full" />}
+      {appointment.status === "booked" && <BlockedBadge blocked={appointment.phoneBlocked} className="mt-1" />}
     </article>
   );
 }

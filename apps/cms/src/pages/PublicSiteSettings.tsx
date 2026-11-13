@@ -77,7 +77,7 @@ export function PublicSiteSettingsPage() {
 
   return (
     <AppShell title={t("publicSite.title")} subtitle={t("publicSite.subtitle")}>
-      <div className="animate-fade-up motion-reduce:animate-none">
+      <div>
         {error && <Alert>{error}</Alert>}
         {!data && <CardSkeleton rows={2} rowHeight="86px" />}
 

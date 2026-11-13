@@ -14,6 +14,7 @@ import {
 import { useAuth } from "../auth/AuthContext.js";
 import { useI18n } from "../i18n/I18nContext.js";
 import { useLocalizedName } from "../lib/useLocalizedName.js";
+import { ConfirmModal, type ConfirmRequest } from "../components/ConfirmModal.js";
 import { AppShell } from "../components/AppShell.js";
 import { HoursScopePicker } from "../components/HoursScopePicker.js";
 import { WeeklyScheduleEditor } from "../components/WeeklyScheduleEditor.js";
@@ -49,6 +50,8 @@ interface PageData {
  */
 export function HoursPage() {
   const { t } = useI18n();
+  // The question waiting on an answer, if any (see ConfirmModal).
+  const [confirmRequest, setConfirmRequest] = useState<ConfirmRequest | null>(null);
   const nameOf = useLocalizedName();
   const { role, professionalId: ownProfessionalId } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -180,8 +183,17 @@ export function HoursPage() {
     }
   }
 
-  async function deleteTimeOff(block: TimeOff) {
-    if (!window.confirm(t("hours.confirmDeleteTimeOff"))) return;
+  function deleteTimeOff(block: TimeOff) {
+    setConfirmRequest({
+      title: t("hours.deleteTimeOff"),
+      message: t("hours.confirmDeleteTimeOff"),
+      confirmLabel: t("hours.deleteTimeOff"),
+      danger: true,
+      run: () => void deleteTimeOffConfirmed(block),
+    });
+  }
+
+  async function deleteTimeOffConfirmed(block: TimeOff) {
     setError(null);
     setDeletingId(block.id);
     try {
@@ -207,7 +219,7 @@ export function HoursPage() {
       title={t("hours.title")}
       subtitle={scopedProfessional ? t("hours.subtitleScoped", { name: nameOf(scopedProfessional.name, scopedProfessional.nameI18n) }) : t("hours.subtitle")}
     >
-      <div className="grid animate-fade-up items-start gap-4 motion-reduce:animate-none 2xl:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)] 2xl:gap-5">
+      <div className="grid max-w-4xl items-start gap-4 2xl:max-w-none 2xl:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)] 2xl:gap-5">
         {error && <Alert flush className="2xl:col-span-2">{error}</Alert>}
 
         {!locked && data && (
@@ -219,9 +231,21 @@ export function HoursPage() {
                 // The draft is per-scope, so switching away drops it. Ask first
                 // — silently discarding a week someone just laid out would be
                 // the worst failure mode this change introduces.
-                if (dirty && !window.confirm(t("hours.confirmDiscard"))) return;
-                setError(null);
-                setSearchParams(next ? { professionalId: next } : {}, { replace: true });
+                const switchScope = () => {
+                  setError(null);
+                  setSearchParams(next ? { professionalId: next } : {}, { replace: true });
+                };
+                if (!dirty) {
+                  switchScope();
+                  return;
+                }
+                setConfirmRequest({
+                  title: t("hours.discardChanges"),
+                  message: t("hours.confirmDiscard"),
+                  confirmLabel: t("hours.discardChanges"),
+                  danger: true,
+                  run: switchScope,
+                });
               }}
             />
           </div>
@@ -266,7 +290,7 @@ export function HoursPage() {
 
       {/* R220: an organisation-wide booking rule, so only in organisation scope */}
       {!locked && !professionalId && (
-        <div className="mt-4 2xl:mt-5">
+        <div className="mt-4 max-w-4xl 2xl:mt-5 2xl:max-w-none">
           <BookingPoliciesCard />
         </div>
       )}
@@ -284,6 +308,7 @@ export function HoursPage() {
           }}
         />
       )}
+      {confirmRequest && <ConfirmModal request={confirmRequest} onClose={() => setConfirmRequest(null)} />}
     </AppShell>
   );
 }

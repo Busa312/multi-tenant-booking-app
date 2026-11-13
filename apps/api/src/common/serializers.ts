@@ -3,6 +3,8 @@ import type {
   Appointment,
   AppointmentServiceLine,
   AppointmentSummary,
+  BlockedPhone,
+  NoShowHistory,
   LocalizedText,
   Location,
   Professional,
@@ -18,6 +20,7 @@ type PrismaTenant = Prisma.TenantGetPayload<Record<string, never>>;
 type PrismaProfessional = Prisma.ProfessionalGetPayload<Record<string, never>>;
 type PrismaService = Prisma.ServiceGetPayload<Record<string, never>>;
 type PrismaTimeOff = Prisma.TimeOffGetPayload<Record<string, never>>;
+type PrismaBlockedPhone = Prisma.BlockedPhoneGetPayload<Record<string, never>>;
 type PrismaLocation = Prisma.LocationGetPayload<Record<string, never>>;
 
 export const serializeLocalizedText = (value: Prisma.JsonValue | null): LocalizedText | null => {
@@ -140,6 +143,14 @@ export const serializeTimeOff = (t: PrismaTimeOff): TimeOff => ({
   reason: t.reason,
 });
 
+// R380
+export const serializeBlockedPhone = (b: PrismaBlockedPhone): BlockedPhone => ({
+  id: b.id,
+  phoneNumber: b.phoneNumber,
+  reason: b.reason,
+  createdAt: b.createdAt.toISOString(),
+});
+
 export const serializeAppointment = (a: PrismaAppointment): Appointment => ({
   id: a.id,
   tenantId: a.tenantId,
@@ -170,8 +181,22 @@ export type PrismaAppointmentSummary = Prisma.AppointmentGetPayload<{
   include: typeof APPOINTMENT_SUMMARY_INCLUDE;
 }>;
 
-export const serializeAppointmentSummary = (a: PrismaAppointmentSummary): AppointmentSummary => ({
+/** What the salon knows about an appointment's customer; read per page of results, not per row. */
+export interface CustomerRecord {
+  // R360
+  noShowHistory: NoShowHistory | null;
+  // R380
+  phoneBlocked: boolean;
+}
+
+// The record is the caller's to supply (see appointment-summaries.ts).
+export const serializeAppointmentSummary = (
+  a: PrismaAppointmentSummary,
+  customer: CustomerRecord,
+): AppointmentSummary => ({
   ...serializeAppointment(a),
+  noShowHistory: customer.noShowHistory,
+  phoneBlocked: customer.phoneBlocked,
   createdByUserId: a.createdByUserId,
   notes: a.notes,
   professionalName: a.professional?.name ?? null,

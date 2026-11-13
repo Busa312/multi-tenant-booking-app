@@ -18,15 +18,16 @@
    Color roles, so new UI picks the right one:
      base-100   cards, modals, inputs          base-200  page background
      base-300   borders, dividers, hover fill  base-content  body text
-     primary    the one main action per view, active nav, links
-     secondary / accent   charts and decorative highlights only
+     primary    ink: the one main action per view, links, selected state
+     accent     the highlighter — marks "you are here / this is next" (active
+                nav item, next appointment, today). Never a status, never a button.
+     secondary  charts only
      neutral    dark surfaces (auth art panel, tooltips)
      info / success / warning / error   status only — never decoration
    ========================================================================== */
 
-/* --radius-selector (2rem below) makes badges and toggles pill-shaped. It
-   would also make checkboxes round, which reads as single-choice radio, so
-   checkboxes add `rounded-[0.35rem]` where they're rendered. */
+/* The look is an appointment book: ink on cool paper, hairline rules, squared
+   corners, one highlighter. `--depth: 0` keeps buttons and inputs flat. */
 @plugin "daisyui/theme" {
   name: "salon";
   default: true;
@@ -34,35 +35,35 @@
   color-scheme: light;
 
   --color-base-100: #ffffff;
-  --color-base-200: #f4f0ea;
-  --color-base-300: #e7dfd4;
-  --color-base-content: #2b2620;
+  --color-base-200: #f2f3f0;
+  --color-base-300: #d9dcd5;
+  --color-base-content: #15181b;
 
-  --color-primary: #b0654e;
+  --color-primary: #15181b;
   --color-primary-content: #ffffff;
-  --color-secondary: #6f8466;
+  --color-secondary: #5b6b7a;
   --color-secondary-content: #ffffff;
-  --color-accent: #c8a15a;
-  --color-accent-content: #2b2620;
-  --color-neutral: #2b2620;
-  --color-neutral-content: #f4f0ea;
+  --color-accent: #ffe45c;
+  --color-accent-content: #15181b;
+  --color-neutral: #15181b;
+  --color-neutral-content: #f2f3f0;
 
-  --color-info: #4b7896;
+  --color-info: #2f6690;
   --color-info-content: #ffffff;
-  --color-success: #4f7d57;
+  --color-success: #2e7d4f;
   --color-success-content: #ffffff;
-  --color-warning: #c08a2e;
-  --color-warning-content: #2b2620;
-  --color-error: #a8483f;
+  --color-warning: #b7791f;
+  --color-warning-content: #15181b;
+  --color-error: #c0362c;
   --color-error-content: #ffffff;
 
-  --radius-selector: 2rem;
-  --radius-field: 0.625rem;
-  --radius-box: 1rem;
+  --radius-selector: 0.25rem;
+  --radius-field: 0.375rem;
+  --radius-box: 0.5rem;
   --size-selector: 0.25rem;
   --size-field: 0.25rem;
   --border: 1px;
-  --depth: 1;
+  --depth: 0;
   --noise: 0;
 }
 
@@ -72,41 +73,49 @@
   prefersdark: true;
   color-scheme: dark;
 
-  --color-base-100: #26211d;
-  --color-base-200: #1c1916;
-  --color-base-300: #3a332c;
-  --color-base-content: #ede6dd;
+  --color-base-100: #1c1f23;
+  --color-base-200: #131518;
+  --color-base-300: #32373d;
+  --color-base-content: #e9eae6;
 
-  --color-primary: #d4846a;
-  --color-primary-content: #1c1916;
-  --color-secondary: #93a889;
-  --color-secondary-content: #1c1916;
-  --color-accent: #d9b673;
-  --color-accent-content: #1c1916;
-  --color-neutral: #120f0d;
-  --color-neutral-content: #ede6dd;
+  --color-primary: #e9eae6;
+  --color-primary-content: #131518;
+  --color-secondary: #9aa8b5;
+  --color-secondary-content: #131518;
+  --color-accent: #ffe45c;
+  --color-accent-content: #15181b;
+  --color-neutral: #0b0c0e;
+  --color-neutral-content: #e9eae6;
 
-  --color-info: #7fa9c6;
-  --color-info-content: #1c1916;
-  --color-success: #7fb087;
-  --color-success-content: #1c1916;
-  --color-warning: #dcae5c;
-  --color-warning-content: #1c1916;
-  --color-error: #e07b70;
-  --color-error-content: #1c1916;
+  --color-info: #7fb2d6;
+  --color-info-content: #131518;
+  --color-success: #7cc496;
+  --color-success-content: #131518;
+  --color-warning: #e0b05a;
+  --color-warning-content: #131518;
+  --color-error: #ef8478;
+  --color-error-content: #131518;
 
-  --radius-selector: 2rem;
-  --radius-field: 0.625rem;
-  --radius-box: 1rem;
+  --radius-selector: 0.25rem;
+  --radius-field: 0.375rem;
+  --radius-box: 0.5rem;
   --size-selector: 0.25rem;
   --size-field: 0.25rem;
   --border: 1px;
-  --depth: 1;
+  --depth: 0;
   --noise: 0;
 }
 
-/* Typography. The font files are self-hosted (@fontsource-variable, imported in index.css). */
+/* Typography. One family at two widths: Archivo at normal width for text, and
+   condensed (`font-display`) for headings and times — the timetable voice.
+   Noto Sans Georgian follows it in both stacks so Georgian is set in a real
+   face at the same widths, not whatever the OS falls back to. The files are
+   self-hosted (@fontsource-variable, imported in index.css) and split by
+   unicode-range, so an English session never downloads the Georgian one.
+   font-sans resets the width so text nested inside a heading isn't condensed. */
 @theme {
-  --font-sans: "Manrope Variable", ui-sans-serif, system-ui, sans-serif;
-  --font-display: "Newsreader Variable", ui-serif, Georgia, serif;
+  --font-sans: "Archivo Variable", "Noto Sans Georgian Variable", ui-sans-serif, system-ui, sans-serif;
+  --font-sans--font-variation-settings: "wdth" 100;
+  --font-display: "Archivo Variable", "Noto Sans Georgian Variable", ui-sans-serif, system-ui, sans-serif;
+  --font-display--font-variation-settings: "wdth" 78;
 }

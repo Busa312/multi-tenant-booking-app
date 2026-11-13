@@ -20,14 +20,14 @@ export function ResendLinkForm({ messages }: { messages: Messages }) {
 
   return (
     <section className="mx-auto flex w-full max-w-md flex-col gap-5">
-      <h1 className="text-2xl font-bold tracking-tight">{t("manage.resend.heading")}</h1>
+      <h1 className="text-3xl font-extrabold tracking-tight text-balance">{t("manage.resend.heading")}</h1>
 
       {isDone ? (
         <p className="alert alert-soft alert-success" role="status">
           {t("manage.resend.done")}
         </p>
       ) : (
-        <form className="card card-border flex flex-col gap-4 border-base-300 bg-base-100 p-5 sm:p-6" onSubmit={submit}>
+        <form className="flex flex-col gap-4 border-t-2 border-accent pt-5" onSubmit={submit}>
           <p className="text-base-content/70">{t("manage.resend.hint")}</p>
           <label className="flex flex-col gap-1.5">
             <span className="text-sm font-medium">{t("manage.resend.phone")}</span>

@@ -29,7 +29,7 @@ export function NeedsMarkingCard({ appointments, count, timezone, savingId, erro
       <div className="flex flex-wrap items-start gap-x-3 gap-y-2">
         <div className="min-w-0">
           <Eyebrow>{t("dashboard.markTitle")}</Eyebrow>
-          <div className="mt-0.5 font-display text-lg font-semibold">{t("dashboard.markCount", { count })}</div>
+          <div className="mt-0.5 font-display text-2xl leading-tight font-bold">{t("dashboard.markCount", { count })}</div>
           <p className="mt-1 text-sm text-base-content/60">{t("dashboard.markHint")}</p>
         </div>
         <ButtonLink to="/bookings" variant="secondary" size="sm" className="ml-auto flex-none">

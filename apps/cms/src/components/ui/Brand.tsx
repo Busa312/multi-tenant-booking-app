@@ -3,7 +3,7 @@ import { Icon } from "./Icon.js";
 
 interface BrandProps {
   size?: "md" | "lg";
-  /** Render for a dark background (light ink, no accent tint on the icon). */
+  /** Render for a dark background (light ink). */
   onDark?: boolean;
   className?: string;
 }
@@ -15,13 +15,13 @@ export function Brand({ size = "md", onDark, className }: BrandProps) {
       <span
         className={cx(
           "grid place-items-center rounded-field",
-          size === "lg" ? "size-10" : "size-9",
-          onDark ? "bg-neutral-content/10" : "bg-primary/10 text-primary",
+          size === "lg" ? "size-9" : "size-8",
+          onDark ? "bg-neutral-content text-neutral" : "bg-neutral text-neutral-content",
         )}
       >
-        <Icon name="content_cut" size={size === "lg" ? 22 : 20} />
+        <Icon name="content_cut" size={size === "lg" ? 20 : 18} />
       </span>
-      <span className={cx("font-display font-semibold tracking-tight", size === "lg" ? "text-2xl" : "text-xl")}>
+      <span className={cx("font-display leading-none font-bold", size === "lg" ? "text-3xl" : "text-2xl")}>
         Booking CMS
       </span>
     </span>

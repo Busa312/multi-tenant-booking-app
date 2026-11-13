@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import type { Translate } from "@/i18n/locales";
-import { startVerification, verifyPhone } from "@/lib/actions";
+import { startVerification, verifyPhone, type FailureReason } from "@/lib/actions";
 import { BTN_BACK, BTN_NEXT, FOOTER, LABEL, STEP, STEP_HEADING, STEP_HINT } from "@/lib/wizardClasses";
 import type { CodeSent } from "@/lib/wizard-storage";
 import { OtpInput } from "./OtpInput";
@@ -14,6 +14,10 @@ interface StepVerifyProps {
   onCodeSent: (sent: CodeSent) => void;
   /** Hands the single-use token back so the booking can present it. */
   onVerified: (verificationToken: string) => void;
+  /** The booking itself is being made with the token just handed back. */
+  isBooking: boolean;
+  /** Why that booking failed, if it did. The token is spent by then, so a new code is needed. */
+  bookingError: FailureReason | null;
   onBack: () => void;
   t: Translate;
 }
@@ -33,7 +37,16 @@ const REUSE_MARGIN_MS = 60_000;
  * screen. That block disappears on its own once a provider is wired in — the
  * response simply stops carrying `devCode` — so nothing here needs revisiting.
  */
-export function StepVerify({ phoneNumber, codeSent, onCodeSent, onVerified, onBack, t }: StepVerifyProps) {
+export function StepVerify({
+  phoneNumber,
+  codeSent,
+  onCodeSent,
+  onVerified,
+  isBooking,
+  bookingError,
+  onBack,
+  t,
+}: StepVerifyProps) {
   const [code, setCode] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isSending, setIsSending] = useState(false);
@@ -42,6 +55,15 @@ export function StepVerify({ phoneNumber, codeSent, onCodeSent, onVerified, onBa
   // The API refused a send as too soon (a refresh lost our own record of the
   // last one): count down to when it allows the next.
   const [blockedUntil, setBlockedUntil] = useState<number | null>(null);
+
+  // The code checked out but the booking after it didn't: say so here, where
+  // the customer is, and clear the spent code so the next one starts clean.
+  useEffect(() => {
+    if (!bookingError) return;
+    setCode("");
+    setError(t(bookingError === "blocked" ? "booking.blocked" : "booking.verify.bookingFailed"));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bookingError]);
 
   // Only a code sent to *this* number counts — the customer may have gone
   // back and changed it.
@@ -68,7 +90,8 @@ export function StepVerify({ phoneNumber, codeSent, onCodeSent, onVerified, onBa
         setBlockedUntil(at + result.retryAfterSeconds * 1000);
         return;
       }
-      setError(t("booking.verify.sendFailed"));
+      // R380: not a failure to retry — the salon wants a call instead
+      setError(t(result.reason === "blocked" ? "booking.blocked" : "booking.verify.sendFailed"));
       return;
     }
     setBlockedUntil(null);
@@ -170,7 +193,7 @@ export function StepVerify({ phoneNumber, codeSent, onCodeSent, onVerified, onBa
             type="button"
             className="btn btn-outline border-base-300 tabular-nums"
             onClick={send}
-            disabled={isSending || isVerifying || cooldownLeft > 0}
+            disabled={isSending || isVerifying || isBooking || cooldownLeft > 0}
           >
             {isSending
               ? t("booking.verify.sending")
@@ -181,9 +204,10 @@ export function StepVerify({ phoneNumber, codeSent, onCodeSent, onVerified, onBa
           <button
             type="submit"
             className={BTN_NEXT}
-            disabled={isVerifying || code.length !== CODE_LENGTH}
+            disabled={isVerifying || isBooking || code.length !== CODE_LENGTH}
           >
-            {isVerifying ? t("booking.verify.verifying") : t("booking.verify.submit")}
+            {/* Still busy while the booking is made with the fresh token */}
+            {isVerifying || isBooking ? t("booking.verify.verifying") : t("booking.verify.submit")}
           </button>
         </div>
       </form>

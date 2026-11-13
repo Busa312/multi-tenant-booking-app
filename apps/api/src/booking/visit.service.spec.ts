@@ -548,7 +548,7 @@ describe("resend lookup", () => {
       accessTokenExpiresAt: { gt: NOW },
       appointments: {
         // R270: the fresh link is texted to this number, so no address is needed
-        some: { phoneNumber: "+995555123456", status: { not: "cancelled" }, startAt: { gt: NOW } },
+        some: { phoneKey: "995555123456", status: { not: "cancelled" }, startAt: { gt: NOW } },
       },
     });
   });

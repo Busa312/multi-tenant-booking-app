@@ -6,6 +6,7 @@ import type { Visit } from "@booking/shared-types";
 import { translator, type Locale, type Messages } from "@/i18n/locales";
 import { cancelBooking, rescheduleBooking } from "@/lib/actions";
 import { addDays, formatInstant, todayInTimezone } from "@/lib/tenant-time";
+import { PAGE_HEADING, SUMMARY, SUMMARY_ROW, SUMMARY_TERM } from "@/lib/wizardClasses";
 import { RescheduleDialog } from "./RescheduleDialog";
 import { VisitPlan } from "./VisitPlan";
 import { CancelDialog } from "./CancelDialog";
@@ -88,25 +89,25 @@ export function ManageAppointment({
 
   return (
     <div className="flex flex-col gap-5">
-      <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">{t("manage.heading")}</h1>
+      <h1 className={PAGE_HEADING}>{t("manage.heading")}</h1>
 
       <p className={`badge badge-soft badge-lg -mt-2 font-semibold ${isCancelled ? "badge-error" : "badge-primary"}`}>
         {t(`manage.status.${current.status}`)}
       </p>
 
-      <dl className="divide-y divide-base-300 rounded-box border border-base-300 bg-base-200/50 px-4">
-        <div className="flex flex-col gap-0.5 py-3 min-[26rem]:flex-row min-[26rem]:gap-4">
-          <dt className="text-sm text-base-content/60 min-[26rem]:w-28 min-[26rem]:flex-none">{t("booking.summary.when")}</dt>
+      <dl className={SUMMARY}>
+        <div className={SUMMARY_ROW}>
+          <dt className={SUMMARY_TERM}>{t("booking.summary.when")}</dt>
           <dd className="min-w-0 font-medium">{formatInstant(current.startAt, timezone, locale)}</dd>
         </div>
         {current.locationName && (
-          <div className="flex flex-col gap-0.5 py-3 min-[26rem]:flex-row min-[26rem]:gap-4">
-            <dt className="text-sm text-base-content/60 min-[26rem]:w-28 min-[26rem]:flex-none">{t("booking.summary.location")}</dt>
+          <div className={SUMMARY_ROW}>
+            <dt className={SUMMARY_TERM}>{t("booking.summary.location")}</dt>
             <dd className="min-w-0 font-medium">{text(current.locationName, current.locationNameI18n)}</dd>
           </div>
         )}
-        <div className="flex flex-col gap-0.5 py-3 min-[26rem]:flex-row min-[26rem]:gap-4">
-          <dt className="text-sm text-base-content/60 min-[26rem]:w-28 min-[26rem]:flex-none">{t("booking.summary.schedule")}</dt>
+        <div className={SUMMARY_ROW}>
+          <dt className={SUMMARY_TERM}>{t("booking.summary.schedule")}</dt>
           <dd className="-mb-3 min-w-0">
             {/* R200: every segment; one staff cancelled stays listed, marked as such */}
             <VisitPlan
@@ -124,9 +125,9 @@ export function ManageAppointment({
             />
           </dd>
         </div>
-        <div className="flex flex-col gap-0.5 py-3 min-[26rem]:flex-row min-[26rem]:gap-4">
-          <dt className="text-sm text-base-content/60 min-[26rem]:w-28 min-[26rem]:flex-none">{t("booking.summary.total")}</dt>
-          <dd className="min-w-0 font-medium">{current.price} ₾</dd>
+        <div className={SUMMARY_ROW}>
+          <dt className={SUMMARY_TERM}>{t("booking.summary.total")}</dt>
+          <dd className="text-xl font-extrabold tabular-nums">{current.price} ₾</dd>
         </div>
       </dl>
 
