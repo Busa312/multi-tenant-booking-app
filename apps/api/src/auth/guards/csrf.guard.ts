@@ -14,7 +14,8 @@ const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
  * origin passes. A second line behind SameSite=Strict, and the only line if a
  * deployment has to relax SameSite.
  *
- * Global, but only /cms: the public API has no cookie to ride on.
+ * Global, but only /cms and /admin (R430, the platform admin's page and its
+ * own cookie): the public API has no cookie to ride on.
  */
 @Injectable()
 export class CsrfGuard implements CanActivate {
@@ -22,7 +23,7 @@ export class CsrfGuard implements CanActivate {
     const request = context.switchToHttp().getRequest<FastifyRequest>();
     if (SAFE_METHODS.has(request.method)) return true;
     const path = request.url.split("?")[0] ?? "";
-    if (!path.startsWith("/cms/")) return true;
+    if (!path.startsWith("/cms/") && !path.startsWith("/admin/")) return true;
     if (request.headers[CSRF_HEADER] !== CSRF_HEADER_VALUE) {
       throw new ForbiddenException({ code: "csrf", message: "Missing request header" });
     }

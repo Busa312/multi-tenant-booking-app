@@ -66,10 +66,12 @@ Locale resolution deliberately does **not** happen in the API. `apps/api` return
 
 ## 6. Authentication & Authorization
 
-Two separate identity systems, deliberately not unified:
+Two separate identity systems, deliberately not unified, plus platform staff:
 
 - **CMS (`TenantUser`)**: email + password, JWT-issued as an httpOnly session cookie (R320). Exactly one `owner` role per tenant (partial unique constraint); any number of `professional` roles, each optionally linked to a `Professional` business record via nullable `professional_id`. `owner` has full CMS access; `professional` is restricted to their own appointments and their own hours/time-off. Role enforcement happens in the API layer, not in Postgres — RLS scopes rows to a tenant, it has no concept of roles within a tenant. Deactivating a `Professional` record does not cascade to disable their login; the owner does that by hand.
 - **Public site customers**: no accounts at all. Each customer booking is a `Visit` (one or more single-professional appointments, R200) carrying a hashed, expiring access token; visiting `/manage/{token}` authorizes actions against that one visit only (details below).
+
+- **Platform admin** (R430): one staff account from the API's environment (`ADMIN_EMAIL`, bcrypt `ADMIN_PASSWORD_HASH`), not a `TenantUser` and not tied to any tenant. Its session is a JWT signed with a key derived from `JWT_SECRET` but distinct from the CMS's, in an httpOnly, SameSite=Strict cookie scoped to `/admin`, with its id held in Redis so signing out revokes it. It can only onboard and list tenants; it never reads tenant-scoped data.
 
 ### Magic Link Flow
 
@@ -105,7 +107,9 @@ Pilot tenants are onboarded by staff, not self-serve:
 5. Custom domain (if wanted): CNAME + TXT verification done by hand; domain added via the TLS provider's dashboard.
 6. Smoke test: subdomain resolves, one end-to-end test booking, confirm branding renders correctly.
 
-Self-serve signup, automated domain verification, and admin dashboards for managing tenants are deliberately deferred until tenant count makes manual onboarding the bottleneck.
+Step 2 is done from the **admin page** (R430): `GET /admin` on the API, a single self-contained page (strict CSP, its own script nonce) that signs platform staff in and calls `/admin/api/*`. It creates the tenant and owner through the same `OnboardingService` as `POST /internal/onboarding/tenants`, which stays for scripts.
+
+Self-serve signup, automated domain verification, and fuller tenant management (suspending, editing, billing) remain deferred until tenant count makes them the bottleneck.
 
 ## 10. Deployment Topology
 

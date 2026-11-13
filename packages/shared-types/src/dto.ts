@@ -475,3 +475,25 @@ export interface UpdateOnboardingRequest {
   /** Finish the setup (the last step). Also hides it. */
   finished?: true;
 }
+
+// R430: the platform admin page
+export interface AdminLoginRequest {
+  email: string;
+  password: string;
+}
+
+export interface AdminSession {
+  email: string;
+  /** ISO timestamp the session ends at. */
+  expiresAt: string;
+}
+
+export interface AdminTenantSummary {
+  id: string;
+  name: string;
+  subdomain: string;
+  timezone: string;
+  createdAt: string;
+  /** R420: how far the owner got with the guided setup. */
+  setup: "in_progress" | "hidden" | "finished";
+}

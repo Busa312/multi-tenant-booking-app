@@ -22,6 +22,12 @@ describe("CsrfGuard", () => {
     expect(guard.canActivate(context("POST", "/cms/auth/login", { [CSRF_HEADER]: CSRF_HEADER_VALUE }))).toBe(true);
   });
 
+  // R430: the admin page's session is a cookie too
+  it("refuses an admin write without the header, and lets one with it through", () => {
+    expect(() => guard.canActivate(context("POST", "/admin/api/tenants"))).toThrow(ForbiddenException);
+    expect(guard.canActivate(context("POST", "/admin/api/login", { [CSRF_HEADER]: CSRF_HEADER_VALUE }))).toBe(true);
+  });
+
   it("leaves the public API alone — it has no cookie to ride on", () => {
     expect(guard.canActivate(context("POST", "/public/appointments"))).toBe(true);
   });

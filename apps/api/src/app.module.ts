@@ -11,6 +11,7 @@ import { CmsModule } from "./cms/cms.module.js";
 import { OnboardingModule } from "./internal/onboarding.module.js";
 import { HealthModule } from "./health/health.module.js";
 import { RateLimitModule } from "./rate-limit/rate-limit.module.js";
+import { AdminModule } from "./admin/admin.module.js";
 
 @Module({
   imports: [
@@ -24,6 +25,7 @@ import { RateLimitModule } from "./rate-limit/rate-limit.module.js";
     PublicModule,
     CmsModule,
     OnboardingModule,
+    AdminModule,
   ],
 })
 export class AppModule implements NestModule {
