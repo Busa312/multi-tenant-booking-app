@@ -12,13 +12,27 @@ import type { BusinessHours } from "@booking/shared-types";
  * it is separable from the form that produced it.
  */
 
+/** A working window, "HH:MM" on the salon's clock. */
+export interface DayWindow {
+  startTime: string;
+  endTime: string;
+}
+
 /**
- * One day's window in the scope being edited. `null` means the day has no row
- * of its own — closed at organisation scope, inherited from the organisation at
+ * One day in the scope being edited. `null` means the day has no row of its
+ * own — closed at organisation scope, inherited from the organisation at
  * professional scope. That absence is meaningful to the availability engine
- * (`AvailabilityService.windowsFor`), so it is modelled rather than flattened.
+ * (`workingWindows`), so it is modelled rather than flattened.
+ *
+ * R460: `"off"` is a professional's day off — a row of their own, so nothing is
+ * inherited, with no window. Never used at organisation scope.
  */
-export type DayHours = { startTime: string; endTime: string } | null;
+export type DayHours = DayWindow | "off" | null;
+
+/** The day's own window, if it has one (not inherited, not off). */
+export function windowOf(day: DayHours): DayWindow | null {
+  return day !== null && day !== "off" ? day : null;
+}
 
 /** The week, keyed by `dayOfWeek` the way the API stores it (Sunday = 0). */
 export type WeekDraft = Record<number, DayHours>;
@@ -38,7 +52,7 @@ export function draftFromHours(hours: readonly BusinessHours[], professionalId: 
   }
   for (const row of hours) {
     if (row.professionalId === professionalId) {
-      draft[row.dayOfWeek] = { startTime: row.startTime, endTime: row.endTime };
+      draft[row.dayOfWeek] = row.isDayOff ? "off" : { startTime: row.startTime, endTime: row.endTime };
     }
   }
   return draft;
@@ -53,9 +67,10 @@ export function draftFromHours(hours: readonly BusinessHours[], professionalId: 
  * being sent as a window starting at midnight.
  */
 export function isValidWindow(day: DayHours): boolean {
-  if (day === null) return true;
-  if (day.startTime === "" || day.endTime === "") return false;
-  return day.endTime > day.startTime;
+  const window = windowOf(day);
+  if (window === null) return true;
+  if (window.startTime === "" || window.endTime === "") return false;
+  return window.endTime > window.startTime;
 }
 
 /** Days that can't be saved, so the form can point at them and block submit. */
@@ -64,7 +79,7 @@ export function invalidDays(draft: WeekDraft): number[] {
 }
 
 export interface WeekChanges {
-  upserts: { dayOfWeek: number; startTime: string; endTime: string }[];
+  upserts: { dayOfWeek: number; startTime: string; endTime: string; isDayOff?: boolean }[];
   /** Full rows, because the delete endpoint takes a row id rather than a day. */
   deletes: BusinessHours[];
 }
@@ -93,7 +108,14 @@ export function diffWeek(
       if (current !== null) changes.deletes.push(current);
       continue;
     }
-    if (current === null || current.startTime !== next.startTime || current.endTime !== next.endTime) {
+    if (next === "off") {
+      // R460: the API stores the times as 00:00 whatever is sent.
+      if (current === null || !current.isDayOff) {
+        changes.upserts.push({ dayOfWeek, startTime: "00:00", endTime: "00:00", isDayOff: true });
+      }
+      continue;
+    }
+    if (current === null || current.isDayOff || current.startTime !== next.startTime || current.endTime !== next.endTime) {
       changes.upserts.push({ dayOfWeek, startTime: next.startTime, endTime: next.endTime });
     }
   }

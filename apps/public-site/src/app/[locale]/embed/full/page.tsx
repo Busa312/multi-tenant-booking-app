@@ -45,6 +45,7 @@ export default async function EmbedFullPage({
         preselectedLocationId={data.preselectedLocationId}
         timezone={context.tenant.timezone}
         maxAdvanceDays={context.tenant.maxBookingAdvanceDays}
+        customersChooseProfessional={context.tenant.customersChooseProfessional}
         locale={context.locale}
         defaultLocale={context.defaultLocale}
         messages={getMessages(context.locale)}

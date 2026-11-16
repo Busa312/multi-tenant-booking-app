@@ -51,6 +51,7 @@ export default async function ManagePage({ params }: { params: { locale: string;
       messages={getMessages(context.locale)}
       changeCutoffHours={context.tenant.changeCutoffHours}
       maxAdvanceDays={context.tenant.maxBookingAdvanceDays}
+      showProfessionals={context.tenant.customersChooseProfessional}
     />
   );
 }

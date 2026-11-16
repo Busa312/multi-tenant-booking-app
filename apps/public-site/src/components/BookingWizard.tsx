@@ -8,7 +8,13 @@ import { fetchProfessionals, holdSlot, releaseHold, submitBooking, type FailureR
 import { addDays, formatInstant, todayInTimezone, wallClock } from "@/lib/tenant-time";
 import { postToHost } from "@/lib/embed";
 import { useLocaleHref } from "@/lib/useLocaleHref";
-import { isBookable, professionalIdsFromSlot } from "@/lib/visit-booking";
+import {
+  bookingSteps,
+  isBookable,
+  onlyBookableService,
+  professionalIdsFromSlot,
+  type BookingStepId,
+} from "@/lib/visit-booking";
 import { clearWizard, loadWizard, saveWizard, type CodeSent, type WizardState } from "@/lib/wizard-storage";
 import { StepProgress } from "./StepProgress";
 import { WizardRecap } from "./WizardRecap";
@@ -31,14 +37,14 @@ interface BookingWizardProps {
   timezone: string;
   /** R290: how many days ahead the salon takes online bookings. */
   maxAdvanceDays: number;
+  /** R440: false = no professional step, and no names anywhere in the flow. */
+  customersChooseProfessional: boolean;
   locale: Locale;
   defaultLocale: string;
   messages: Messages;
   /** R410: framed by a salon's own website (the /embed pages). */
   embedded?: boolean;
 }
-
-type StepId = "services" | "location" | "professional" | "time" | "details" | "verify";
 
 export interface BookingDraft {
   // R210: one to five, in the order they'll be performed
@@ -79,6 +85,7 @@ export function BookingWizard({
   preselectedLocationId,
   timezone,
   maxAdvanceDays,
+  customersChooseProfessional,
   locale,
   defaultLocale,
   messages,
@@ -90,12 +97,18 @@ export function BookingWizard({
     [locale, defaultLocale],
   );
 
-  const steps = useMemo<StepId[]>(
-    () =>
-      locations.length > 1 && !preselectedLocationId
-        ? ["services", "location", "professional", "time", "details", "verify"]
-        : ["services", "professional", "time", "details", "verify"],
-    [locations.length, preselectedLocationId],
+  // R440: only the steps with something to choose, for what's been picked so far
+  const stepsFor = useCallback(
+    (picked: Pick<BookingDraft, "serviceIds" | "locationId">): BookingStepId[] =>
+      bookingSteps({
+        services,
+        professionals: allProfessionals,
+        serviceIds: picked.serviceIds,
+        locationId: picked.locationId,
+        chooseLocation: locations.length > 1 && !preselectedLocationId,
+        customersChooseProfessional,
+      }),
+    [services, allProfessionals, locations.length, preselectedLocationId, customersChooseProfessional],
   );
 
   // R160: "book another" starts over in the language being read
@@ -104,9 +117,11 @@ export function BookingWizard({
   const [stepIndex, setStepIndex] = useState(0);
   const [draft, setDraft] = useState<BookingDraft>(() => {
     // A deep link can't preselect something that can't be booked (R240/R210).
-    const serviceIds = preselectedServiceIds
-      .filter((id) => isBookable(allProfessionals, id))
-      .slice(0, MAX_SERVICES_PER_BOOKING);
+    // R440: with only one service to book, it's chosen already.
+    const only = onlyBookableService(services, allProfessionals);
+    const serviceIds = only
+      ? [only]
+      : preselectedServiceIds.filter((id) => isBookable(allProfessionals, id)).slice(0, MAX_SERVICES_PER_BOOKING);
     return {
       serviceIds,
       locationId: preselectedLocationId ?? (locations.length === 1 ? (locations[0]?.id ?? null) : null),
@@ -137,7 +152,11 @@ export function BookingWizard({
   // pick that's no longer current is released rather than applied.
   const holdRequest = useRef(0);
 
-  const step = steps[stepIndex] ?? "services";
+  const steps = useMemo(
+    () => stepsFor({ serviceIds: draft.serviceIds, locationId: draft.locationId }),
+    [stepsFor, draft.serviceIds, draft.locationId],
+  );
+  const step = steps[stepIndex] ?? steps[0] ?? "time";
 
   // Survive a language switch (and a reload): the page re-mounts under the other
   // locale, so progress is put back from this tab's storage.
@@ -166,28 +185,38 @@ export function BookingWizard({
       skipSave.current = false;
       return;
     }
-    saveWizard({ stepIndex, draft, details, codeSent, confirmation });
-  }, [stepIndex, draft, details, codeSent, confirmation]);
+    saveWizard({ stepIndex, stepId: step, draft, details, codeSent, confirmation });
+  }, [stepIndex, step, draft, details, codeSent, confirmation]);
 
   /** A saved state that still fits this page's services, branches and staff — anything off, and it's dropped. */
   function restorable(saved: WizardState): WizardState | null {
-    const { draft: d } = saved;
+    const shaped = Array.isArray(saved.draft.serviceIds) && Array.isArray(saved.draft.professionalIds);
+    if (!shaped) return null;
+    let d = saved.draft;
+    // R440: a choice the business has since turned off is dropped — "any" instead;
+    // and with one service left to book, it's the one booked.
+    if (!customersChooseProfessional) d = { ...d, professionalIds: d.professionalIds.map(() => null) };
+    const only = onlyBookableService(services, allProfessionals);
+    if (only && d.serviceIds.length === 0) d = { ...d, serviceIds: [only], professionalIds: [null] };
+    // The restored draft's steps, which can differ from this render's.
+    const steps = stepsFor(d);
     const fits =
-      Array.isArray(d.serviceIds) &&
       d.serviceIds.length <= MAX_SERVICES_PER_BOOKING &&
       d.serviceIds.every((id) => services.some((service) => service.id === id) && isBookable(allProfessionals, id)) &&
-      Array.isArray(d.professionalIds) &&
       d.professionalIds.length === d.serviceIds.length &&
       d.professionalIds.every((id) => id === null || allProfessionals.some((p) => p.id === id)) &&
       (d.locationId === null || locations.some((location) => location.id === d.locationId)) &&
       Number.isInteger(saved.stepIndex) &&
       saved.stepIndex >= 0 &&
-      saved.stepIndex < steps.length;
+      (saved.stepId !== undefined || saved.stepIndex < steps.length);
     if (!fits) return null;
 
     const timeStep = steps.indexOf("time");
     const detailsStep = steps.indexOf("details");
-    let stepIndex = saved.stepIndex;
+    // By step, not position: the restored flow can have dropped (or gained) a
+    // step before it. A step no longer offered starts the flow over.
+    const savedStep = saved.stepId === undefined ? saved.stepIndex : steps.indexOf(saved.stepId);
+    let stepIndex = Math.max(savedStep, 0);
     let draft = d;
     // A day that has gone by: back to picking a time, from today.
     if (draft.date < todayInTimezone(timezone)) {
@@ -198,7 +227,10 @@ export function BookingWizard({
     return { ...saved, stepIndex, draft };
   }
 
+  // Only the professional step uses the branch's staff; R440 can leave it out.
+  const offersProfessionalStep = steps.includes("professional");
   useEffect(() => {
+    if (!offersProfessionalStep) return;
     let cancelled = false;
     setProfessionals(null);
     void fetchProfessionals(draft.locationId ?? undefined).then((result) => {
@@ -208,7 +240,7 @@ export function BookingWizard({
     return () => {
       cancelled = true;
     };
-  }, [draft.locationId]);
+  }, [draft.locationId, offersProfessionalStep]);
 
   const selectedServices = useMemo(
     () => draft.serviceIds.map((id) => services.find((service) => service.id === id)).filter((s): s is Service => !!s),
@@ -219,10 +251,12 @@ export function BookingWizard({
   // R160: names resolved once, so every step and the confirmation say the same thing
   const professionalName = useCallback(
     (id: string | null) => {
+      // R440: a business that books services, not people, never names anyone
+      if (!customersChooseProfessional) return null;
       const professional = allProfessionals.find((candidate) => candidate.id === id);
       return professional ? text(professional.name, professional.nameI18n) : null;
     },
-    [allProfessionals, text],
+    [allProfessionals, text, customersChooseProfessional],
   );
   const serviceName = useCallback(
     (id: string) => {
@@ -335,6 +369,7 @@ export function BookingWizard({
         text={text}
         // R410: the manage page belongs in its own tab, not inside the salon's site
         manageInNewTab={embedded}
+        showProfessionals={customersChooseProfessional}
         onBookAnother={() => {
           // A clean start: no saved progress, no deep-link preselection.
           clearWizard();
@@ -362,7 +397,8 @@ export function BookingWizard({
       />
 
       {/* What's been picked so far. The details step shows the full summary instead. */}
-      {stepIndex > 0 && step !== "details" && (
+      {/* R440: also on a first step when the service was picked for the customer. */}
+      {step !== "services" && step !== "details" && (
         <WizardRecap
           label={t("booking.summary.heading")}
           items={[
@@ -404,7 +440,7 @@ export function BookingWizard({
             update({ locationId, professionalIds: draft.serviceIds.map(() => null), slot: null })
           }
           onNext={goNext}
-          onBack={goBack}
+          onBack={stepIndex > 0 ? goBack : undefined}
           t={t}
           text={text}
         />
@@ -418,7 +454,7 @@ export function BookingWizard({
           selectedIds={draft.professionalIds}
           onChange={(professionalIds) => update({ professionalIds, slot: null })}
           onNext={goNext}
-          onBack={goBack}
+          onBack={stepIndex > 0 ? goBack : undefined}
           t={t}
           text={text}
         />
@@ -441,7 +477,7 @@ export function BookingWizard({
           serviceName={serviceName}
           professionalName={professionalName}
           onNext={goNext}
-          onBack={goBack}
+          onBack={stepIndex > 0 ? goBack : undefined}
           t={t}
         />
       )}

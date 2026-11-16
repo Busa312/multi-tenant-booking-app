@@ -1,4 +1,5 @@
 import type { BookingDraft, Confirmation, CustomerDetails } from "@/components/BookingWizard";
+import type { BookingStepId } from "@/lib/visit-booking";
 
 /** A verification code already sent to a number — coming back to the step reuses it rather than sending another. */
 export interface CodeSent {
@@ -11,6 +12,11 @@ export interface CodeSent {
 
 export interface WizardState {
   stepIndex: number;
+  /**
+   * The step itself (R440): the flow leaves out steps with nothing to choose,
+   * so the same index can mean another step by the time it's restored.
+   */
+  stepId?: BookingStepId;
   draft: BookingDraft;
   details: CustomerDetails | null;
   codeSent: CodeSent | null;

@@ -26,6 +26,8 @@ export interface UpdateTenantBookingRulesRequest {
   minBookingNoticeMinutes?: number;
   maxBookingAdvanceDays?: number;
   changeCutoffHours?: number;
+  // R440
+  customersChooseProfessional?: boolean;
 }
 
 export interface UpdateTenantCopyRequest {
@@ -409,6 +411,8 @@ export interface UpsertBusinessHoursRequest {
   dayOfWeek: number;
   startTime: string;
   endTime: string;
+  /** R460: marks the professional's weekday off; the times are then ignored. Requires `professionalId`. */
+  isDayOff?: boolean;
 }
 
 export interface OnboardTenantRequest {

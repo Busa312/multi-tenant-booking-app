@@ -368,14 +368,21 @@ export class VisitService {
     excludeHoldId: string | null,
   ): Promise<PreparedVisit> {
     const { tenantId } = this.tenantContext.current;
-    const { timezone } = await tx.tenant.findUniqueOrThrow({ where: { id: tenantId }, select: { timezone: true } });
+    const { timezone, customersChooseProfessional } = await tx.tenant.findUniqueOrThrow({
+      where: { id: tenantId },
+      select: { timezone: true, customersChooseProfessional: true },
+    });
 
     // R120 + R210: active services only, one to five, no duplicates
     const lines = await resolveServiceLines(tx, tenantId, input.serviceIds);
     if (!Array.isArray(input.professionalIds) || input.professionalIds.length !== lines.length) {
       throw new BadRequestException("professionalIds must have one entry per service");
     }
-    const chosen = input.professionalIds.map((id) => (id === ANY_PROFESSIONAL || id === "" ? null : id));
+    // R440: a business that turned the choice off books every segment as "any"
+    // (assigned by R450), whatever a caller sends — not just what its site shows.
+    const chosen = input.professionalIds.map((id) =>
+      !customersChooseProfessional || id === ANY_PROFESSIONAL || id === "" ? null : id,
+    );
 
     const locationId = await this.booking.resolveLocation(tx, tenantId, input.locationId, null);
     await this.assertChoices(tx, tenantId, lines, chosen, locationId);

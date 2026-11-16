@@ -28,7 +28,8 @@ interface StepDateTimeProps {
   serviceName: (id: string) => string;
   professionalName: (id: string | null) => string | null;
   onNext: () => void;
-  onBack: () => void;
+  /** Absent when this is the first step (R440: the steps before it had nothing to choose). */
+  onBack?: () => void;
   t: Translate;
 }
 
@@ -148,9 +149,11 @@ export function StepDateTime({
       )}
 
       <div className={FOOTER}>
-        <button type="button" className={BTN_BACK} onClick={onBack}>
-          {t("common.back")}
-        </button>
+        {onBack && (
+          <button type="button" className={BTN_BACK} onClick={onBack}>
+            {t("common.back")}
+          </button>
+        )}
         {/* R250: the hold is quiet — Continue just waits the moment it takes */}
         <button type="button" className={BTN_NEXT} onClick={onNext} disabled={!draft.slot || isHolding}>
           {isHolding && <span className="loading loading-spinner loading-xs" aria-hidden="true" />}

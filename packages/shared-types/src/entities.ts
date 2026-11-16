@@ -21,6 +21,8 @@ export interface Tenant {
   minBookingNoticeMinutes: number;
   maxBookingAdvanceDays: number;
   changeCutoffHours: number;
+  // R440: false = the booking site never offers or names a professional
+  customersChooseProfessional: boolean;
   createdAt: string;
 }
 
@@ -141,6 +143,8 @@ export interface BusinessHours {
   dayOfWeek: number;
   startTime: string;
   endTime: string;
+  /** R460: a professional's weekday off (times are "00:00"). Never true on a tenant-wide row. */
+  isDayOff: boolean;
 }
 
 export interface TimeOff {

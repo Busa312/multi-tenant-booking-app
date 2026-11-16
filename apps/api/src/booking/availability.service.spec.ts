@@ -1007,6 +1007,79 @@ describe("AvailabilityService.computeVisitSlots — holds", () => {
   });
 });
 
+// R450: "any professional" goes to whoever has the least of their day booked
+describe("AvailabilityService.computeVisitSlots — fair assignment", () => {
+  beforeEach(() => {
+    jest.useFakeTimers().setSystemTime(new Date("2026-08-05T00:00:00.000Z"));
+  });
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
+  // Hours 09:00–12:00 Tbilisi (05:00–08:00Z) for both; 11:00 local = 07:00Z, when both are free.
+  const fairSetup = (overrides: Overrides) =>
+    setup({
+      assignments: [
+        { professionalId: "p-ana", serviceId: "s1" },
+        { professionalId: "p-zura", serviceId: "s1" },
+      ],
+      professionals: [
+        { id: "p-ana", name: "Ana", isActive: true, locationId: null },
+        { id: "p-zura", name: "Zura", isActive: true, locationId: null },
+      ] as unknown as Overrides["professionals"],
+      ...overrides,
+    });
+  const query = { serviceIds: ["s1"], professionalIds: [null], locationId: null, date: WEDNESDAY };
+  const whoAt = (slots: { startAt: string; segments: { professionalId: string }[] }[], startAt: string) =>
+    slots.find((slot) => slot.startAt === startAt)?.segments[0]?.professionalId;
+
+  it("gives a free time to the less-booked professional, not the first by name", async () => {
+    const { service } = fairSetup({
+      appointments: [
+        { professionalId: "p-ana", startAt: new Date("2026-08-05T05:00:00.000Z"), endAt: new Date("2026-08-05T06:00:00.000Z") },
+      ],
+    });
+
+    const slots = await service.computeVisitSlots(query);
+
+    expect(whoAt(slots, "2026-08-05T07:00:00.000Z")).toBe("p-zura");
+  });
+
+  it("turns to the other one once they're the busier", async () => {
+    const { service } = fairSetup({
+      appointments: [
+        { professionalId: "p-zura", startAt: new Date("2026-08-05T05:00:00.000Z"), endAt: new Date("2026-08-05T06:00:00.000Z") },
+      ],
+    });
+
+    const slots = await service.computeVisitSlots(query);
+
+    expect(whoAt(slots, "2026-08-05T07:00:00.000Z")).toBe("p-ana");
+  });
+
+  it("counts another customer's live hold as booked, so two people booking at once are spread", async () => {
+    const { service } = fairSetup({
+      holds: [{ professionalId: "p-ana", startAt: new Date("2026-08-05T05:00:00.000Z"), endAt: new Date("2026-08-05T05:30:00.000Z") }],
+    });
+
+    const slots = await service.computeVisitSlots(query);
+
+    expect(whoAt(slots, "2026-08-05T07:00:00.000Z")).toBe("p-zura");
+  });
+
+  it("still books a chosen professional however busy they are", async () => {
+    const { service } = fairSetup({
+      appointments: [
+        { professionalId: "p-ana", startAt: new Date("2026-08-05T05:00:00.000Z"), endAt: new Date("2026-08-05T06:00:00.000Z") },
+      ],
+    });
+
+    const slots = await service.computeVisitSlots({ ...query, professionalIds: ["p-ana"] });
+
+    expect(whoAt(slots, "2026-08-05T07:00:00.000Z")).toBe("p-ana");
+  });
+});
+
 describe("AvailabilityService.findConflictsIn — holds", () => {
   // R250 + R60: staff see a hold as a named conflict they may book over
   it("names a live hold on the professional", async () => {

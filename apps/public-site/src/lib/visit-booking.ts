@@ -49,3 +49,48 @@ export function professionalIdsFromSlot(slot: VisitSlot, serviceIds: readonly st
     (serviceId) => slot.segments.find((segment) => segment.serviceIds.includes(serviceId))?.professionalId ?? "any",
   );
 }
+
+export type BookingStepId = "services" | "location" | "professional" | "time" | "details" | "verify";
+
+/**
+ * R440: the booking flow's steps, leaving out any with nothing to choose —
+ * services when only one can be booked (it's picked for the customer), the
+ * branch when there's one (R150), and the professional when the business has
+ * turned that choice off or no chosen service has more than one person who
+ * can do it there. Before any service is picked, the professional step is
+ * counted in if *some* service would need it, so the progress bar doesn't
+ * grow a step the moment one is ticked.
+ */
+export function bookingSteps(input: {
+  services: readonly { id: string }[];
+  professionals: readonly PublicProfessional[];
+  serviceIds: readonly string[];
+  locationId: string | null;
+  /** More than one branch, and none preselected by a "Book at …" link. */
+  chooseLocation: boolean;
+  customersChooseProfessional: boolean;
+}): BookingStepId[] {
+  const bookable = input.services.filter((service) => isBookable(input.professionals, service.id));
+  const considered = input.serviceIds.length > 0 ? input.serviceIds : bookable.map((service) => service.id);
+  const realChoice =
+    input.customersChooseProfessional &&
+    considered.some((id) => qualifiedFor(input.professionals, id, input.locationId).length > 1);
+
+  return [
+    ...(bookable.length === 1 ? [] : (["services"] as const)),
+    ...(input.chooseLocation ? (["location"] as const) : []),
+    ...(realChoice ? (["professional"] as const) : []),
+    "time",
+    "details",
+    "verify",
+  ];
+}
+
+/** R440: with one bookable service the flow skips choosing it — this is the one it picks. */
+export function onlyBookableService(
+  services: readonly { id: string }[],
+  professionals: readonly PublicProfessional[],
+): string | null {
+  const bookable = services.filter((service) => isBookable(professionals, service.id));
+  return bookable.length === 1 ? (bookable[0]?.id ?? null) : null;
+}

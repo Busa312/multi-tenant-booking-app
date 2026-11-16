@@ -23,7 +23,8 @@ interface StepLocationProps {
   selectedId: string | null;
   onSelect: (locationId: string) => void;
   onNext: () => void;
-  onBack: () => void;
+  /** Absent when this is the first step (R440: the steps before it had nothing to choose). */
+  onBack?: () => void;
   t: Translate;
   text: (plain: string, i18n: unknown) => string;
 }
@@ -70,9 +71,11 @@ export function StepLocation({
       </ul>
 
       <div className={FOOTER}>
-        <button type="button" className={BTN_BACK} onClick={onBack}>
-          {t("common.back")}
-        </button>
+        {onBack && (
+          <button type="button" className={BTN_BACK} onClick={onBack}>
+            {t("common.back")}
+          </button>
+        )}
         <button type="button" className={BTN_NEXT} onClick={onNext} disabled={!selectedServes}>
           {t("common.next")}
         </button>

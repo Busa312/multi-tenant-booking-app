@@ -13,6 +13,7 @@ import {
 } from "../common/timezone.js";
 import { resolveServiceLines, totalDurationMinutes, validateServiceIds } from "./service-lines.js";
 import { VISIT_GAP_STEP_MINUTES } from "./booking-rules.js";
+import { dayWorkload, fairOrder, type DayWorkload } from "./fair-assignment.js";
 import { AvailabilityCacheService } from "./availability-cache.service.js";
 import { workingWindows } from "./working-hours.js";
 import {
@@ -445,25 +446,27 @@ export class AvailabilityService {
     ]);
 
     const schedules = new Map<string, ProfessionalSchedule>();
+    const loads = new Map<string, DayWorkload>();
     for (const id of ids) {
-      schedules.set(id, {
-        windows: workingWindows(businessHours, id).map((window) => ({
-          start: zonedTimeToUtc(date, window.startMinutes, timezone).getTime(),
-          end: zonedTimeToUtc(date, window.endMinutes, timezone).getTime(),
-        })),
-        busy: [
-          ...timeOff
-            .filter((block) => block.professionalId === null || block.professionalId === id)
-            .map((block) => ({ start: block.startAt.getTime(), end: block.endAt.getTime() })),
-          ...appointments
-            .filter((appointment) => appointment.professionalId === id)
-            .map((appointment) => ({ start: appointment.startAt.getTime(), end: appointment.endAt.getTime() })),
-          // R250: another customer is finishing a booking here
-          ...holds
-            .filter((hold) => hold.professionalId === id)
-            .map((hold) => ({ start: hold.startAt.getTime(), end: hold.endAt.getTime() })),
-        ],
-      });
+      const windows = workingWindows(businessHours, id).map((window) => ({
+        start: zonedTimeToUtc(date, window.startMinutes, timezone).getTime(),
+        end: zonedTimeToUtc(date, window.endMinutes, timezone).getTime(),
+      }));
+      const away = timeOff
+        .filter((block) => block.professionalId === null || block.professionalId === id)
+        .map((block) => ({ start: block.startAt.getTime(), end: block.endAt.getTime() }));
+      const booked = [
+        ...appointments
+          .filter((appointment) => appointment.professionalId === id)
+          .map((appointment) => ({ start: appointment.startAt.getTime(), end: appointment.endAt.getTime() })),
+        // R250: another customer is finishing a booking here
+        ...holds
+          .filter((hold) => hold.professionalId === id)
+          .map((hold) => ({ start: hold.startAt.getTime(), end: hold.endAt.getTime() })),
+      ];
+      schedules.set(id, { windows, busy: [...away, ...booked] });
+      // R450: how full their day already is, for the fair order below
+      loads.set(id, dayWorkload({ day: { start: dayStart.getTime(), end: dayEnd.getTime() }, windows, timeOff: away, booked }));
     }
 
     const starts: number[] = [];
@@ -474,7 +477,12 @@ export class AvailabilityService {
     return {
       planner: {
         ...emptyPlanner,
-        units: input.units.map((unit, index) => ({ durationMinutes: unit.durationMinutes, candidates: candidates[index] ?? [] })),
+        // R450: "any professional" goes to the least-booked first. A unit with a
+        // chosen professional has one candidate, so this only orders real choices.
+        units: input.units.map((unit, index) => ({
+          durationMinutes: unit.durationMinutes,
+          candidates: fairOrder(candidates[index] ?? [], loads, date),
+        })),
         schedules,
       },
       starts,
@@ -482,7 +490,7 @@ export class AvailabilityService {
     };
   }
 
-  /** For each unit, the professionals allowed to perform it, ordered by name. */
+  /** For each unit, the professionals allowed to perform it (by name; `fairOrder` decides the real order, R450). */
   private async visitCandidates(
     tx: Prisma.TransactionClient,
     tenantId: string,

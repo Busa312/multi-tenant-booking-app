@@ -66,6 +66,7 @@ export const serializeTenant = (t: PrismaTenant): Tenant => ({
   minBookingNoticeMinutes: t.minBookingNoticeMinutes,
   maxBookingAdvanceDays: t.maxBookingAdvanceDays,
   changeCutoffHours: t.changeCutoffHours,
+  customersChooseProfessional: t.customersChooseProfessional,
   createdAt: t.createdAt.toISOString(),
 });
 

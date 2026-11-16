@@ -5,17 +5,26 @@ import {
   CHANGE_CUTOFF_OPTIONS,
   VISIT_GAP_OPTIONS,
 } from "@booking/shared-types";
-import type { UpdateTenantBookingRulesRequest } from "@booking/shared-types";
+import type { Tenant, UpdateTenantBookingRulesRequest } from "@booking/shared-types";
 import { cachedApi } from "../lib/cache.js";
 import { useI18n } from "../i18n/I18nContext.js";
-import { Alert, Button, Card, Eyebrow, Field, Select } from "./ui/index.js";
+import { Alert, Button, Card, Checkbox, Eyebrow, Field, Select } from "./ui/index.js";
 
 type Rules = Required<UpdateTenantBookingRulesRequest>;
+type NumericRule = Exclude<keyof Rules, "customersChooseProfessional">;
+
+const rulesOf = (tenant: Tenant): Rules => ({
+  maxVisitGapMinutes: tenant.maxVisitGapMinutes,
+  minBookingNoticeMinutes: tenant.minBookingNoticeMinutes,
+  maxBookingAdvanceDays: tenant.maxBookingAdvanceDays,
+  changeCutoffHours: tenant.changeCutoffHours,
+  customersChooseProfessional: tenant.customersChooseProfessional,
+});
 
 /**
  * What customers may do on the booking site: R220 (gap between specialists),
  * R280 (minimum notice), R290 (how far ahead), R300 (until when they can change
- * or cancel). Owner only. Staff in the CMS are bound by none of these.
+ * or cancel), R440 (whether they pick who serves them). Owner only. Staff in the CMS are bound by none of these.
  * Self-contained — loads and saves the tenant's rules itself.
  */
 export function BookingPoliciesCard() {
@@ -29,12 +38,7 @@ export function BookingPoliciesCard() {
     cachedApi
       .getTenant()
       .then((tenant) => {
-        const rules: Rules = {
-          maxVisitGapMinutes: tenant.maxVisitGapMinutes,
-          minBookingNoticeMinutes: tenant.minBookingNoticeMinutes,
-          maxBookingAdvanceDays: tenant.maxBookingAdvanceDays,
-          changeCutoffHours: tenant.changeCutoffHours,
-        };
+        const rules = rulesOf(tenant);
         setSaved(rules);
         setDraft(rules);
       })
@@ -49,12 +53,7 @@ export function BookingPoliciesCard() {
     setStatus(null);
     try {
       const tenant = await cachedApi.updateTenantBookingRules(draft);
-      const rules: Rules = {
-        maxVisitGapMinutes: tenant.maxVisitGapMinutes,
-        minBookingNoticeMinutes: tenant.minBookingNoticeMinutes,
-        maxBookingAdvanceDays: tenant.maxBookingAdvanceDays,
-        changeCutoffHours: tenant.changeCutoffHours,
-      };
+      const rules = rulesOf(tenant);
       setSaved(rules);
       setDraft(rules);
       setStatus("saved");
@@ -68,7 +67,7 @@ export function BookingPoliciesCard() {
   const duration = (minutes: number) =>
     minutes < 60 ? t("hours.durationMinutes", { count: minutes }) : t("hours.durationHours", { count: minutes / 60 });
 
-  const fields: { key: keyof Rules; id: string; label: string; options: { value: string; label: string }[] }[] = [
+  const fields: { key: NumericRule; id: string; label: string; options: { value: string; label: string }[] }[] = [
     {
       key: "minBookingNoticeMinutes",
       id: "policy-notice",
@@ -122,6 +121,22 @@ export function BookingPoliciesCard() {
             />
           </Field>
         ))}
+      </div>
+
+      {/* R440: off for a business that books services, not people (a car wash) */}
+      <div className="mb-4">
+        <Checkbox
+          checked={draft?.customersChooseProfessional ?? true}
+          disabled={draft === null || saving}
+          onChange={(checked) => {
+            if (!draft) return;
+            setDraft({ ...draft, customersChooseProfessional: checked });
+            setStatus(null);
+          }}
+        >
+          {t("hours.chooseProfessionalLabel")}
+        </Checkbox>
+        <p className="ml-7.5 max-w-2xl text-[13px] leading-relaxed text-base-content/60">{t("hours.chooseProfessionalHint")}</p>
       </div>
 
       <div className="flex flex-wrap items-center gap-3">

@@ -45,6 +45,9 @@ model Tenant {
   minBookingNoticeMinutes Int @default(0) @map("min_booking_notice_minutes") @db.SmallInt
   maxBookingAdvanceDays   Int @default(365) @map("max_booking_advance_days") @db.SmallInt
   changeCutoffHours       Int @default(0) @map("change_cutoff_hours") @db.SmallInt
+  // R440: false = customers book a service, not a person (a car wash): the
+  // booking site never offers or names a professional.
+  customersChooseProfessional Boolean @default(true) @map("customers_choose_professional")
   // R420: the guided setup's own state. Whether a step is done is read from
   // the salon's data; only skips and finishing/dismissing are kept.
   onboardingSkipped     String[]  @default([]) @map("onboarding_skipped")
@@ -212,6 +215,8 @@ model BusinessHours {
   dayOfWeek      Int     @map("day_of_week") @db.SmallInt
   startTime      DateTime @map("start_time") @db.Time
   endTime        DateTime @map("end_time") @db.Time
+  /// R460: a professional's weekday off; times are 00:00–00:00 (CHECK in the migration).
+  isDayOff       Boolean  @default(false) @map("is_day_off")
 
   tenant       Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   professional Professional? @relation(fields: [professionalId], references: [id], onDelete: Cascade)

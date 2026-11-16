@@ -49,6 +49,8 @@ export class TenantDto {
   @ApiProperty({ description: "R280: minutes" }) minBookingNoticeMinutes!: number;
   @ApiProperty({ description: "R290: days" }) maxBookingAdvanceDays!: number;
   @ApiProperty({ description: "R300: hours" }) changeCutoffHours!: number;
+  @ApiProperty({ description: "R440: false = the booking site never offers or names a professional" })
+  customersChooseProfessional!: boolean;
   @ApiProperty() createdAt!: string;
 }
 
@@ -209,6 +211,8 @@ export class BusinessHoursDto {
   @ApiProperty({ minimum: 0, maximum: 6 }) dayOfWeek!: number;
   @ApiProperty({ example: "09:00" }) startTime!: string;
   @ApiProperty({ example: "17:00" }) endTime!: string;
+  @ApiProperty({ description: "R460: the professional's weekday off (times are 00:00). Never true tenant-wide" })
+  isDayOff!: boolean;
 }
 
 export class UpsertBusinessHoursRequestDto {
@@ -216,6 +220,8 @@ export class UpsertBusinessHoursRequestDto {
   @ApiProperty({ minimum: 0, maximum: 6 }) dayOfWeek!: number;
   @ApiProperty({ example: "09:00" }) startTime!: string;
   @ApiProperty({ example: "17:00" }) endTime!: string;
+  @ApiPropertyOptional({ description: "R460: marks the weekday off; times are ignored. Requires professionalId" })
+  isDayOff?: boolean;
 }
 
 export class TimeOffDto {
@@ -539,6 +545,8 @@ export class UpdateTenantBookingRulesRequestDto {
   @ApiPropertyOptional({ description: "R280: minutes; one of BOOKING_NOTICE_OPTIONS" }) minBookingNoticeMinutes?: number;
   @ApiPropertyOptional({ description: "R290: days; one of BOOKING_ADVANCE_OPTIONS" }) maxBookingAdvanceDays?: number;
   @ApiPropertyOptional({ description: "R300: hours; one of CHANGE_CUTOFF_OPTIONS" }) changeCutoffHours?: number;
+  @ApiPropertyOptional({ description: "R440: whether customers pick who serves them online" })
+  customersChooseProfessional?: boolean;
 }
 
 export class LoginRequestDto {

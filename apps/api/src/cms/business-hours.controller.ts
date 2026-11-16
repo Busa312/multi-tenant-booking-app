@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, ForbiddenException, Get, Param, Post, UseGuards } from "@nestjs/common";
+import { BadRequestException, Body, Controller, Delete, ForbiddenException, Get, Param, Post, UseGuards } from "@nestjs/common";
 import { ApiBearerAuth, ApiBody, ApiOkResponse, ApiParam, ApiTags } from "@nestjs/swagger";
 import type { BusinessHours, UpsertBusinessHoursRequest } from "@booking/shared-types";
 import { PrismaService } from "../prisma/prisma.service.js";
@@ -17,6 +17,7 @@ interface BusinessHoursRow {
   dayOfWeek: number;
   startTime: Date;
   endTime: Date;
+  isDayOff: boolean;
 }
 
 const toWire = (row: BusinessHoursRow): BusinessHours => ({
@@ -26,7 +27,11 @@ const toWire = (row: BusinessHoursRow): BusinessHours => ({
   dayOfWeek: row.dayOfWeek,
   startTime: toHhMm(row.startTime),
   endTime: toHhMm(row.endTime),
+  isDayOff: row.isDayOff,
 });
+
+// R460: what a day off stores — no window, which the migration's CHECK insists on.
+const DAY_OFF_TIME = "00:00";
 
 /**
  * Owner can set tenant-wide or any professional's hours; a `professional`
@@ -57,6 +62,14 @@ export class BusinessHoursController {
   async upsert(@Body() body: UpsertBusinessHoursRequest): Promise<BusinessHours> {
     const { tenantId, role, professionalId: ownProfessionalId } = this.tenantContext.current;
     const professionalId = body.professionalId ?? null;
+    if (body.isDayOff !== undefined && typeof body.isDayOff !== "boolean") {
+      throw new BadRequestException("isDayOff must be a boolean");
+    }
+    const isDayOff = body.isDayOff === true;
+    // R460: a closed salon day is the absence of a row, not a day off.
+    if (isDayOff && professionalId === null) {
+      throw new BadRequestException("only a professional can have a day off");
+    }
 
     if (role === "professional") {
       // Spelled out rather than left to a `!==`: `ownProfessionalId` is
@@ -89,8 +102,9 @@ export class BusinessHoursController {
           tenantId,
           professionalId,
           dayOfWeek: body.dayOfWeek,
-          startTime: toTime(body.startTime),
-          endTime: toTime(body.endTime),
+          startTime: toTime(isDayOff ? DAY_OFF_TIME : body.startTime),
+          endTime: toTime(isDayOff ? DAY_OFF_TIME : body.endTime),
+          isDayOff,
         },
       });
     });

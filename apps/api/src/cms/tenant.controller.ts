@@ -148,16 +148,17 @@ export class TenantController {
   }
 
   /**
-   * R220: the longest idle gap allowed between two segments of a customer's
-   * visit. Only the offered values are accepted — the database CHECK (0–60)
-   * is the backstop, this is the contract.
+   * The online booking rules: R220 (the longest idle gap between two segments
+   * of a visit), R280–R300 (notice, horizon, change cutoff) and R440 (whether
+   * customers pick a professional). Only the offered values are accepted — the
+   * database CHECKs are the backstop, this is the contract.
    */
   @Patch("booking-rules")
   @Roles("owner")
   @ApiBody({ type: UpdateTenantBookingRulesRequestDto })
   @ApiOkResponse({ type: TenantDto })
   async updateBookingRules(@Body() body: UpdateTenantBookingRulesRequest): Promise<Tenant> {
-    // R220, R280–R300: any subset; each must be one of its offered options.
+    // R220, R280–R300, R440: any subset; each must be one of its offered options.
     const pick = (field: keyof UpdateTenantBookingRulesRequest, options: readonly number[]): number | undefined => {
       const value = body?.[field];
       if (value === undefined) return undefined;
@@ -171,6 +172,7 @@ export class TenantController {
       minBookingNoticeMinutes: pick("minBookingNoticeMinutes", BOOKING_NOTICE_OPTIONS),
       maxBookingAdvanceDays: pick("maxBookingAdvanceDays", BOOKING_ADVANCE_OPTIONS),
       changeCutoffHours: pick("changeCutoffHours", CHANGE_CUTOFF_OPTIONS),
+      customersChooseProfessional: pickBoolean(body?.customersChooseProfessional, "customersChooseProfessional"),
     };
     if (Object.values(data).every((value) => value === undefined)) {
       throw new BadRequestException("nothing to update");
@@ -179,7 +181,8 @@ export class TenantController {
     const tenant = await this.prisma.forTenant((tx) => tx.tenant.update({ where: { id: tenantId }, data }));
     const serialized = serializeTenant(tenant);
     // The public site caches tenant settings; R290/R300 shape its pages (the
-    // last bookable day, whether a booking can still be changed online).
+    // last bookable day, whether a booking can still be changed online), and
+    // R440 decides its booking steps.
     await this.revalidation.revalidateTenant(serialized);
     return serialized;
   }
@@ -281,4 +284,10 @@ export class TenantController {
       throw new BadRequestException(invalid.map((field) => `${field} must be a valid hex or rgb color`));
     }
   }
+}
+
+function pickBoolean(value: unknown, field: string): boolean | undefined {
+  if (value === undefined) return undefined;
+  if (typeof value !== "boolean") throw new BadRequestException(`${field} must be true or false`);
+  return value;
 }

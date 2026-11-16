@@ -7,6 +7,7 @@ import {
   hasChanges,
   invalidDays,
   WEEK_DAYS,
+  windowOf,
   type DayHours,
   type WeekDraft,
 } from "./weekSchedule.js";
@@ -96,8 +97,8 @@ export function useWeekScheduleDraft(hours: BusinessHours[] | null, professional
         const next: WeekDraft = { ...current };
         for (const dayOfWeek of WEEK_DAYS) {
           // Only days already open: a copy spreads hours, it doesn't open the
-          // salon on days that were closed.
-          if (next[dayOfWeek]) next[dayOfWeek] = { startTime, endTime };
+          // salon on days that were closed (or end someone's day off).
+          if (windowOf(next[dayOfWeek] ?? null)) next[dayOfWeek] = { startTime, endTime };
         }
         return next;
       });

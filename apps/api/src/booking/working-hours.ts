@@ -16,6 +16,11 @@ export interface BusinessHoursRow {
   /** A Postgres `time`, which Prisma hands over as a Date on 1970-01-01 UTC. */
   startTime: Date;
   endTime: Date;
+  /**
+   * R460: the professional's weekday off. Optional so callers that don't select
+   * it stay correct: a day-off row is stored as 00:00–00:00, an empty window.
+   */
+  isDayOff?: boolean;
 }
 
 export const timeToMinutes = (time: Date): number => time.getUTCHours() * 60 + time.getUTCMinutes();
@@ -24,11 +29,15 @@ export const timeToMinutes = (time: Date): number => time.getUTCHours() * 60 + t
  * A professional's own rows when they have any, otherwise the tenant-wide
  * ones. `rows` must already be narrowed to one weekday. Empty or inverted
  * windows are dropped.
+ *
+ * R460: a day off is one of the professional's own rows, so it stops the
+ * tenant-wide hours being inherited — and contributes no window itself.
  */
 export function workingWindows(rows: readonly BusinessHoursRow[], professionalId: string | null): WorkingWindow[] {
   const own = professionalId ? rows.filter((row) => row.professionalId === professionalId) : [];
   const chosen = own.length > 0 ? own : rows.filter((row) => row.professionalId === null);
   return chosen
+    .filter((row) => row.isDayOff !== true)
     .map((row) => ({ startMinutes: timeToMinutes(row.startTime), endMinutes: timeToMinutes(row.endTime) }))
     .filter((window) => window.endMinutes > window.startMinutes);
 }
@@ -60,7 +69,9 @@ export function openingHours(
   const source =
     tenantWide.length > 0
       ? tenantWide
-      : rows.filter((row) => row.professionalId !== null && activeProfessionalIds.includes(row.professionalId));
+      : rows.filter(
+          (row) => row.professionalId !== null && row.isDayOff !== true && activeProfessionalIds.includes(row.professionalId),
+        );
 
   const days: OpeningHoursDay[] = [];
   for (let dayOfWeek = 0; dayOfWeek < 7; dayOfWeek += 1) {

@@ -14,11 +14,22 @@ interface ConfirmationPanelProps {
   onBookAnother: () => void;
   /** R410: open the manage page in a new tab (when this is framed by another site). */
   manageInNewTab?: boolean;
+  /** R440: false = never name who will do the job. */
+  showProfessionals: boolean;
 }
 
 // Built from what the API actually booked (the Visit), not from the draft —
 // if the plan shifted at the last moment, this shows the truth.
-export function ConfirmationPanel({ confirmation, timezone, locale, t, text, onBookAnother, manageInNewTab = false }: ConfirmationPanelProps) {
+export function ConfirmationPanel({
+  confirmation,
+  timezone,
+  locale,
+  t,
+  text,
+  onBookAnother,
+  manageInNewTab = false,
+  showProfessionals,
+}: ConfirmationPanelProps) {
   const { visit } = confirmation;
 
   return (
@@ -45,7 +56,10 @@ export function ConfirmationPanel({ confirmation, timezone, locale, t, text, onB
           startAt: segment.startAt,
           endAt: segment.endAt,
           services: segment.services.map((line) => text(line.name, line.nameI18n)).join(", "),
-          professional: segment.professionalName && text(segment.professionalName, segment.professionalNameI18n),
+          professional:
+            showProfessionals && segment.professionalName
+              ? text(segment.professionalName, segment.professionalNameI18n)
+              : null,
         }))}
         total={visit.price}
         timezone={timezone}

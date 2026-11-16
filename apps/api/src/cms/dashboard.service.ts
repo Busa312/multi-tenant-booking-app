@@ -90,7 +90,7 @@ export class DashboardService {
             }),
         tx.businessHours.findMany({
           where: { tenantId },
-          select: { professionalId: true, dayOfWeek: true, startTime: true, endTime: true },
+          select: { professionalId: true, dayOfWeek: true, startTime: true, endTime: true, isDayOff: true },
         }),
         tx.timeOff.findMany({
           where: { tenantId, startAt: { lt: weekEnd }, endAt: { gt: weekStart } },

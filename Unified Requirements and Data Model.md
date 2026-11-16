@@ -8,7 +8,7 @@ This document is a source of truth for both client and tenant side apps. System 
 - **User** can choose one or more services — at most five per booking (R210)
 - **User** can have different professionals perform different services in one booking: the booking becomes a *visit* of back-to-back segments, each with its own professional (R200)
 - **User** can see open appointment time slots, filtered by chosen service(s) and duration
-- **User** can choose a specific **Professional** to book with, or "any available"
+- **User** can choose a specific **Professional** to book with, or "any available" — unless the tenant has turned that choice off (R440); "any available" is assigned fairly (R450)
 - **User** can choose which **Location** to book at, when the tenant has more than one (R150)
 - **User** can view, reschedule, or cancel an existing booking via a magic link (see below) — no account/login required. The link covers the whole visit; rescheduling or cancelling moves or cancels every segment together (R230)
 - **User** can read the site in any of the tenant's enabled locales, chosen with a switcher (R160)
@@ -27,6 +27,7 @@ to this one. This is a product decision, not a deferral.
 - **Tenant** can edit list of professionals
 - **Tenant** can edit business hours
 - **Tenant** can set the longest gap allowed between two segments of one visit, 0–60 minutes, 0 = strictly back to back (R220)
+- **Tenant** can turn off customers choosing a professional, for a business that books services rather than people (R440)
 - **Tenant** can block off time (vacation, breaks, holidays) per professional or business-wide
 - **Tenant** can book, reschedule, or cancel appointments on a customer's behalf
 - **Tenant** can monitor booked appointments (calendar/list view)
@@ -73,6 +74,9 @@ as those code comments — they are not written down here yet, and back-filling 
 | R410 | A salon can put its booking on its own website with an embeddable widget (`packages/widget`) in three sizes: *full* (the whole booking flow inline), *medium* (name, today's hours, the first services with prices, a book button) and *small* (name, today's hours, a book button); medium and small open the full flow in an overlay. The widget frames the salon's booking site (`/embed/{full,medium,small}`, in any enabled locale), so its palette, language, services and every booking rule are the site's own, and it needs no key. Only the embed pages may be framed by other sites; they are not indexed. They tell the host page their height, when to open or close the overlay, and that a booking was made (its start time only — never the manage link). |
 | R420 | A salon's owner is guided through setting the salon up, in order: locations, opening hours, services, team, booking-site look, going live. Every step can be skipped and reopened. Whether a step is done is read from the salon's data (a location exists; tenant-wide business hours exist; an active service; an active professional; colours or site text saved), never stored; only the skipped steps and whether the setup was finished or dismissed are kept on the tenant. The first time an owner opens the CMS for a salon with nothing set up, the setup opens; until it is finished or dismissed, the dashboard shows the owner its progress. Professional logins never see it. |
 | R430 | Platform staff onboard new salons from an admin page served by the API (`/admin`): sign in, create a salon with its owner (name, subdomain, time zone, owner email and an initial password, which can be generated), and see every salon with its setup progress. The admin is not a CMS user: one account, configured in the API's environment (`ADMIN_EMAIL` and a bcrypt `ADMIN_PASSWORD_HASH`); with neither set the page doesn't exist. Its session is a separate httpOnly cookie scoped to `/admin`, revocable, expiring after 2 hours; sign-in is rate limited per address and in total, and state-changing requests need the same anti-CSRF header as the CMS. Subdomains are lowercase letters, digits and hyphens, not reserved (`www`, `api`, `cms`, `admin`, …), and owner passwords meet the CMS's minimum length. |
+| R440 | `tenant.customers_choose_professional` (default true): whether customers pick who serves them online. Off — for a business where customers book a service, not a person (a car wash) — the booking site has no professional step and never names who will do the job (time picker, summary, confirmation, manage page); every segment is booked as "any professional" and assigned by R450. The CMS is unchanged: professionals, their hours and services still decide availability, and staff see who is assigned. Independently of the setting, the booking flow leaves out a step with nothing to choose: the services step when exactly one service can be booked (it is picked), the professional step when no chosen service has more than one qualified professional at the chosen location, the location step when there is one location (R150). |
+| R450 | "Any professional" is assigned fairly. Among the qualified professionals free for a segment, the one with the lowest share of their working time that day already booked is chosen — booked appointments and other customers' live holds (R250) over working hours minus time off — so a part-timer is filled in proportion to their hours, not first. Ties go to fewer booked minutes, then to an order that rotates daily, so nobody is first in line every day by name. The professional of the previous segment is still preferred for the next one (R200), so a one-person visit stays one appointment. |
+| R460 | Each professional's week can mark days off, chosen per weekday like the organisation's open days. A professional's weekday is one of: following the organisation's hours (the default; closed when the organisation is closed), their own hours, or a day off — a day off means no bookings with them that weekday even when the organisation is open. Recurring days off are part of the weekly schedule; one-off absences stay time off. |
 
 ## Booking Access — Magic Link
 
@@ -140,6 +144,7 @@ All tables include `tenant_id uuid` + RLS policy scoping to the current tenant, 
 | `min_booking_notice_minutes` | smallint, default 0 | R280: 0–2880 |
 | `max_booking_advance_days` | smallint, default 365 | R290: 1–365 |
 | `change_cutoff_hours` | smallint, default 0 | R300: 0–168 |
+| `customers_choose_professional` | boolean, default true | R440: false = the booking site never offers or names a professional |
 | `created_at` | timestamptz | |
 
 ### Localized content (convention)
@@ -260,6 +265,7 @@ Composite PK on (`service_id`, `professional_id`).
 | `day_of_week`     | smallint           | 0–6                        |
 | `start_time`      | time               |                            |
 | `end_time`        | time               |                            |
+| `is_day_off`      | boolean, default false | R460: the professional doesn't work this weekday. Only on a professional's row (`professional_id` set); its times are stored as 00:00–00:00, so it carries no working window |
 
 ### TimeOff
 | column | type | notes |
@@ -311,7 +317,9 @@ the status of its segments. Staff-created bookings have no visit — they never 
 who performs it (and works at the chosen location, R180), is inside their own hours, and is
 free. Between one segment's end and the next one's start the gap is 0 to
 `max_visit_gap_minutes`, smallest first; the same professional is preferred for consecutive
-segments, so a one-person booking is still one appointment. A visit never spans midnight.
+segments, so a one-person booking is still one appointment. Otherwise "any professional" goes to
+the least-booked qualified professional that day, as a share of their working time (R450). A
+visit never spans midnight.
 
 ### SlotHold
 A customer's claim on the time they just picked, while they type their details and verify

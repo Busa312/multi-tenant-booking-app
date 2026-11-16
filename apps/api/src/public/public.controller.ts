@@ -115,7 +115,7 @@ export class PublicController {
       const [rows, professionals] = await Promise.all([
         tx.businessHours.findMany({
           where: { tenantId },
-          select: { professionalId: true, dayOfWeek: true, startTime: true, endTime: true },
+          select: { professionalId: true, dayOfWeek: true, startTime: true, endTime: true, isDayOff: true },
         }),
         tx.professional.findMany({ where: { tenantId, isActive: true }, select: { id: true } }),
       ]);

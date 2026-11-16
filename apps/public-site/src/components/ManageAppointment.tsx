@@ -23,6 +23,8 @@ interface ManageAppointmentProps {
   changeCutoffHours: number;
   /** R290 */
   maxAdvanceDays: number;
+  /** R440: false = never name who will do the job. */
+  showProfessionals: boolean;
 }
 
 export function ManageAppointment({
@@ -34,6 +36,7 @@ export function ManageAppointment({
   messages,
   changeCutoffHours,
   maxAdvanceDays,
+  showProfessionals,
 }: ManageAppointmentProps) {
   const t = useMemo(() => translator(messages), [messages]);
   // R160: service, branch and specialist names in the visitor's language
@@ -116,7 +119,10 @@ export function ManageAppointment({
                 startAt: segment.startAt,
                 endAt: segment.endAt,
                 services: segment.services.map((line) => text(line.name, line.nameI18n)).join(", "),
-                professional: segment.professionalName && text(segment.professionalName, segment.professionalNameI18n),
+                professional:
+                  showProfessionals && segment.professionalName
+                    ? text(segment.professionalName, segment.professionalNameI18n)
+                    : null,
                 cancelled: segment.status === "cancelled" && !isCancelled,
               }))}
               timezone={timezone}

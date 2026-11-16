@@ -61,6 +61,8 @@ interface Overrides {
   liveHolds?: number;
   /** R300 */
   cutoffHours?: number;
+  /** R440 */
+  customersChooseProfessional?: boolean;
 }
 
 const setup = (overrides: Overrides = {}) => {
@@ -68,7 +70,11 @@ const setup = (overrides: Overrides = {}) => {
     // R260: lockBookingDay
     $executeRaw: jest.fn().mockResolvedValue(1),
     tenant: {
-      findUniqueOrThrow: jest.fn().mockResolvedValue({ timezone: "Asia/Tbilisi", changeCutoffHours: overrides.cutoffHours ?? 0 }),
+      findUniqueOrThrow: jest.fn().mockResolvedValue({
+        timezone: "Asia/Tbilisi",
+        changeCutoffHours: overrides.cutoffHours ?? 0,
+        customersChooseProfessional: overrides.customersChooseProfessional ?? true,
+      }),
     },
     service: {
       findMany: jest.fn(({ where }: { where: { id: { in: string[] } } }) =>
@@ -342,6 +348,35 @@ describe("create", () => {
     await expect(service.create(createInput({ professionalIds: ["dato", "any"] }))).rejects.toThrow(
       "Dato doesn't work at that location",
     );
+  });
+
+  it("plans a chosen professional as chosen", async () => {
+    const { service, availability } = setup();
+
+    await service.create(createInput({ professionalIds: ["dato", "any"] }));
+
+    const units = availability.visitPlanAtIn.mock.calls[0]?.[1]?.units as { professionalId: string | null }[];
+    expect(units.map((unit) => unit.professionalId)).toEqual(["dato", null]);
+  });
+
+  // R440: the choice is the business's to turn off — for every caller, not only its own site
+  it("books every segment as any professional when the business turned the choice off", async () => {
+    const { service, availability } = setup({ customersChooseProfessional: false });
+
+    // Nina doesn't perform Colour: with the choice off that pick is ignored, not refused.
+    await service.create(createInput({ professionalIds: ["nina", "nina"] }));
+
+    const units = availability.visitPlanAtIn.mock.calls[0]?.[1]?.units as { professionalId: string | null }[];
+    expect(units.map((unit) => unit.professionalId)).toEqual([null, null]);
+  });
+
+  it("holds as any professional too when the choice is off", async () => {
+    const { service, availability } = setup({ customersChooseProfessional: false });
+
+    await service.hold({ ...createInput({ professionalIds: ["dato", "nina"] }), replaceHoldId: null });
+
+    const units = availability.visitPlanAtIn.mock.calls[0]?.[1]?.units as { professionalId: string | null }[];
+    expect(units.map((unit) => unit.professionalId)).toEqual([null, null]);
   });
 
   // R210

@@ -22,6 +22,9 @@ pnpm-debug.log*
 !.vscode/extensions.json
 .idea
 
+IMPROVEMENTS.md
+ROADMAP.md
+
 apps/api/generated
 
 # A production build run beside `next dev` (NEXT_DIST_DIR)

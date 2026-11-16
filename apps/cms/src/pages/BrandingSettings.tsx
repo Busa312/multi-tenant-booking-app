@@ -8,6 +8,8 @@ import { useI18n } from "../i18n/I18nContext.js";
 import { ConfirmModal, type ConfirmRequest } from "../components/ConfirmModal.js";
 import { AppShell } from "../components/AppShell.js";
 import { CardSkeleton } from "../components/CardSkeleton.js";
+import { ColorPresetPicker } from "../components/ColorPresetPicker.js";
+import { sameColors } from "../lib/colorPresets.js";
 import { Alert, Button, Card, Eyebrow, Field, Icon, Skeleton, TextInput } from "../components/ui/index.js";
 
 type ColorField = keyof TenantColors;
@@ -39,7 +41,7 @@ export function BrandingSettingsPage() {
   useEffect(() => {
     cachedApi.getTenant().then((tn) => {
       setTenant(tn);
-      setColors({ ...DEFAULT_TENANT_COLORS, ...tn.configJson.colors });
+      setColors(savedColors(tn));
     });
   }, []);
 
@@ -58,6 +60,21 @@ export function BrandingSettingsPage() {
   function handleChange(field: ColorField, value: string) {
     setColors((prev) => ({ ...prev, [field]: value }));
     setFieldErrors((prev) => ({ ...prev, [field]: undefined }));
+    setSavedAt(null);
+  }
+
+  // Throws away unsaved edits: back to what the site shows now.
+  function handleDiscard() {
+    if (!tenant) return;
+    setColors(savedColors(tenant));
+    setFieldErrors({});
+    setSaveError(null);
+  }
+
+  // A preset replaces all four at once; still just a draft until saved.
+  function handlePreset(preset: Required<TenantColors>) {
+    setColors(preset);
+    setFieldErrors({});
     setSavedAt(null);
   }
 
@@ -109,7 +126,7 @@ export function BrandingSettingsPage() {
     try {
       const updated = await cachedApi.resetTenantColors();
       setTenant(updated);
-      setColors({ ...DEFAULT_TENANT_COLORS, ...updated.configJson.colors });
+      setColors(savedColors(updated));
       setFieldErrors({});
       setSavedAt(Date.now());
     } catch {
@@ -120,6 +137,8 @@ export function BrandingSettingsPage() {
   }
 
   const contrastRatioOk = meetsWcagAA(colors.text, colors.background);
+  const saved = tenant ? savedColors(tenant) : null;
+  const dirty = saved !== null && !sameColors(colors, saved);
   const previewHost = previewOrigin?.replace(/^https?:\/\//, "");
 
   return (
@@ -140,6 +159,9 @@ export function BrandingSettingsPage() {
             <div className="mt-0.5 mb-5 text-xs text-base-content/60">
               {previewHost ? t("branding.formSubLive", { host: previewHost }) : t("branding.formSubStatic")}
             </div>
+
+            <Eyebrow className="mb-2.5">{t("branding.presets")}</Eyebrow>
+            <ColorPresetPicker colors={colors} onPick={handlePreset} />
 
             <Eyebrow className="mb-2.5">{t("branding.colors")}</Eyebrow>
             <div className="mb-2">
@@ -170,6 +192,18 @@ export function BrandingSettingsPage() {
 
             <Button type="submit" fullWidth disabled={saving || resetting}>
               {saving ? t("common.saving") : t("branding.saveBtn")}
+            </Button>
+            {/* Always there, greyed out when there's nothing to discard: no jump when it appears. */}
+            <Button
+              type="button"
+              variant="secondary"
+              icon="undo"
+              fullWidth
+              onClick={handleDiscard}
+              disabled={!dirty || saving || resetting}
+              className="mt-2.5"
+            >
+              {t("branding.discardBtn")}
             </Button>
             <Button
               type="button"
@@ -223,3 +257,8 @@ const PREVIEW = "overflow-hidden rounded-box border border-base-300 bg-base-100 
 const FRAME = "block h-[460px] w-full border-0 xl:h-[620px]";
 
 const HEX_ONLY = /^#([0-9a-f]{6})$/i;
+
+/** What the booking site shows now: the saved colours over the platform defaults. */
+function savedColors(tenant: Tenant): Required<TenantColors> {
+  return { ...DEFAULT_TENANT_COLORS, ...tenant.configJson.colors };
+}
