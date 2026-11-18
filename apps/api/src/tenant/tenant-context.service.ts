@@ -20,6 +20,15 @@ export class TenantContextService {
     this.als.run({}, next);
   }
 
+  /**
+   * Runs `fn` as `tenantId`, outside any request — the billing scheduler and
+   * Flitt's callback (system_design.md §12b), which learn the tenant from the
+   * work itself rather than from a host or a session.
+   */
+  runWithTenant<T>(tenantId: string, fn: () => Promise<T>): Promise<T> {
+    return this.als.run({ tenantId }, fn);
+  }
+
   update(patch: TenantContext): void {
     Object.assign(this.store, patch);
   }

@@ -144,3 +144,8 @@ export function formatDateTimeLabel(iso: string, timeZone: string, lang: string)
     minute: "2-digit",
   }).format(new Date(iso));
 }
+
+/** An instant as a tenant-local calendar date with the year, e.g. "22 December 2026" (R470: billing dates). */
+export function formatInstantDate(iso: string, timeZone: string, lang: string): string {
+  return new Intl.DateTimeFormat(lang, { timeZone, day: "numeric", month: "long", year: "numeric" }).format(new Date(iso));
+}

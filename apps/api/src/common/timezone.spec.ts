@@ -7,6 +7,7 @@ import {
   zonedDateString,
   zonedParts,
   zonedTimeToUtc,
+  zonedMonth,
 } from "./timezone.js";
 
 const TBILISI = "Asia/Tbilisi";
@@ -132,6 +133,24 @@ describe("dayOfWeekForDateString", () => {
     expect(dayOfWeekForDateString("2026-08-02")).toBe(0);
     expect(dayOfWeekForDateString("2026-08-05")).toBe(3);
     expect(dayOfWeekForDateString("2026-08-08")).toBe(6);
+  });
+});
+
+// R500
+describe("zonedMonth", () => {
+  it("is the salon's calendar month, not UTC's", () => {
+    // 23:30 UTC on 30 November is already 1 December in Tbilisi (UTC+4).
+    expect(zonedMonth(new Date("2026-11-30T23:30:00Z"), "Asia/Tbilisi")).toEqual({
+      start: new Date("2026-11-30T20:00:00Z"),
+      end: new Date("2026-12-31T20:00:00Z"),
+    });
+  });
+
+  it("rolls over the year", () => {
+    expect(zonedMonth(new Date("2026-12-15T12:00:00Z"), "UTC")).toEqual({
+      start: new Date("2026-12-01T00:00:00Z"),
+      end: new Date("2027-01-01T00:00:00Z"),
+    });
   });
 });
 

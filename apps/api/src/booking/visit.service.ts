@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
 import type { BookingConflictResponse, VisitSlot } from "@booking/shared-types";
 import type { Prisma } from "../../generated/prisma/index.js";
+import { BillingService } from "../billing/billing.service.js";
 import { PrismaService } from "../prisma/prisma.service.js";
 import { TenantContextService } from "../tenant/tenant-context.service.js";
 import { VISIT_INCLUDE, type PrismaVisit } from "../common/serializers.js";
@@ -77,6 +78,7 @@ export class VisitService {
     private readonly tenantContext: TenantContextService,
     private readonly availability: AvailabilityService,
     private readonly booking: BookingService,
+    private readonly billing: BillingService,
   ) {}
 
   async create(input: CreateVisitInput): Promise<VisitResult> {
@@ -372,6 +374,8 @@ export class VisitService {
       where: { id: tenantId },
       select: { timezone: true, customersChooseProfessional: true },
     });
+    // R490: a lapsed salon's booking site takes no new holds or bookings
+    await this.billing.assertBookableIn(tx, tenantId);
 
     // R120 + R210: active services only, one to five, no duplicates
     const lines = await resolveServiceLines(tx, tenantId, input.serviceIds);

@@ -500,4 +500,130 @@ export interface AdminTenantSummary {
   createdAt: string;
   /** R420: how far the owner got with the guided setup. */
   setup: "in_progress" | "hidden" | "finished";
+  /** R480: the salon's subscription. */
+  subscription: {
+    status: SubscriptionStatus;
+    planId: SubscriptionPlanId;
+    /** Trial end or paid-through date, whichever is later. */
+    accessUntil: string;
+    /** null = never paid. */
+    paidThrough: string | null;
+    free: boolean;
+    /** R500: texts in the current usage window, and the plan's allowance. */
+    smsUsed: number;
+    smsIncluded: number;
+  };
+}
+
+/** R430: the platform admin grants (or takes back) free use, or extends a trial. */
+export interface AdminUpdateSubscriptionRequest {
+  free?: boolean;
+  /** Days added to the trial, counted from the later of now and the current trial end. */
+  extendTrialDays?: number;
+  /** Ends a running trial now: the salon pays from today (or enters its grace period). */
+  endTrial?: boolean;
+}
+
+// ---- R470–R490: salons paying the platform ----
+
+export type SubscriptionPlanId = "early" | "standard" | "pro";
+
+/**
+ * Derived, never stored (R480): free (granted by the platform), trial, active
+ * (paid through a future date), past_due (in the grace period after the trial
+ * or paid month ended unpaid), lapsed (grace over, or cancelled and ended).
+ */
+export type SubscriptionStatus = "free" | "trial" | "active" | "past_due" | "lapsed";
+
+export interface SubscriptionPlan {
+  id: SubscriptionPlanId;
+  /** GEL per month, two decimals. */
+  price: string;
+  smsIncluded: number;
+  multipleLocations: boolean;
+  prioritySupport: boolean;
+}
+
+export type SubscriptionPaymentKind = "signup" | "renewal" | "card";
+export type SubscriptionPaymentStatus = "pending" | "approved" | "declined" | "expired";
+
+export interface SubscriptionPaymentSummary {
+  id: string;
+  orderId: string;
+  kind: SubscriptionPaymentKind;
+  planId: SubscriptionPlanId | null;
+  /** GEL, two decimals. */
+  amount: string;
+  status: SubscriptionPaymentStatus;
+  periodStart: string | null;
+  periodEnd: string | null;
+  /** R500: texts beyond the allowance in the month before `periodStart`, charged with this renewal (included in `amount`). */
+  extraTexts: number;
+  extraTextsAmount: string;
+  cardMasked: string | null;
+  failureReason: string | null;
+  createdAt: string;
+}
+
+export interface SubscriptionOverview {
+  status: SubscriptionStatus;
+  planId: SubscriptionPlanId;
+  /** A switch that takes effect at the next renewal. */
+  nextPlanId: SubscriptionPlanId | null;
+  trialEndsAt: string;
+  /** End of the last paid month; null = never paid. */
+  paidThrough: string | null;
+  /** When booking pauses if nothing is paid (past_due), else null. */
+  graceEndsAt: string | null;
+  cancelAtPeriodEnd: boolean;
+  bookingPaused: boolean;
+  card: { masked: string; brand: string | null } | null;
+  /** What the owner can choose now — the current plan included even if no longer offered. */
+  plans: SubscriptionPlan[];
+  /** Newest first. */
+  payments: SubscriptionPaymentSummary[];
+  /**
+   * R500: texts used (SMS parts) in the current usage window against the
+   * plan's allowance — the billing month, or the calendar month outside one.
+   */
+  sms: {
+    used: number;
+    included: number;
+    periodStart: string;
+    /** Exclusive. */
+    periodEnd: string;
+    /** true = the salon's paid month; false = the calendar month (trial, free use, lapsed). */
+    billingMonth: boolean;
+    /** Whether extra texts in this window will be charged, with the renewal at `periodEnd`. */
+    billable: boolean;
+    /** Texts beyond the allowance so far, and their price (GEL). */
+    extra: number;
+    extraAmount: string;
+    /** GEL per extra text. */
+    extraTextPrice: string;
+  };
+  /** false = no payment provider configured here: nothing can be paid. */
+  billingAvailable: boolean;
+}
+
+/** Back from Flitt's page: that payment as it stands now, and the subscription after it. */
+export interface ConfirmPaymentResponse {
+  payment: SubscriptionPaymentSummary;
+  subscription: SubscriptionOverview;
+}
+
+export interface StartCheckoutRequest {
+  planId: SubscriptionPlanId;
+}
+
+export interface CheckoutResponse {
+  /** Flitt's hosted payment page. */
+  checkoutUrl: string;
+  orderId: string;
+}
+
+export interface UpdateSubscriptionRequest {
+  /** Switch at the next renewal (the current plan clears a pending switch). */
+  planId?: SubscriptionPlanId;
+  cancelAtPeriodEnd?: boolean;
 }

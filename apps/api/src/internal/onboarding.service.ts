@@ -2,6 +2,8 @@ import { BadRequestException, ConflictException, Injectable } from "@nestjs/comm
 import * as bcrypt from "bcryptjs";
 import { Prisma } from "../../generated/prisma/index.js";
 import type { AdminTenantSummary, OnboardTenantRequest, OnboardTenantResponse } from "@booking/shared-types";
+import { TRIAL_MS } from "../billing/billing-config.js";
+import { DEFAULT_PLAN } from "../billing/plans.js";
 import { PrismaService } from "../prisma/prisma.service.js";
 import { isValidTimezone } from "../common/timezone.js";
 import { MAX_PASSWORD_BYTES, MIN_PASSWORD_LENGTH } from "../booking/booking-rules.js";
@@ -81,6 +83,11 @@ export class OnboardingService {
           data: { tenantId: tenant.id, email: input.ownerEmail, passwordHash, role: "owner" },
         });
 
+        // R480: every salon starts on a free trial
+        await tx.subscription.create({
+          data: { tenantId: tenant.id, planId: DEFAULT_PLAN, trialEndsAt: new Date(Date.now() + TRIAL_MS) },
+        });
+
         return {
           tenantId: tenant.id,
           subdomain: tenant.subdomain,
@@ -100,7 +107,7 @@ export class OnboardingService {
    * R430: every salon, newest first, with how far its owner got with the setup
    * (R420). Only `tenant` columns — nothing tenant-scoped is read here.
    */
-  async listTenants(): Promise<AdminTenantSummary[]> {
+  async listTenants(): Promise<Omit<AdminTenantSummary, "subscription">[]> {
     const tenants = await this.prisma.client.tenant.findMany({
       orderBy: { createdAt: "desc" },
       select: {

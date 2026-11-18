@@ -68,6 +68,9 @@ model Tenant {
   visits          Visit[]
   slotHolds       SlotHold[]
   blockedPhones   BlockedPhone[]
+  subscription    Subscription?
+  subscriptionPayments SubscriptionPayment[]
+  smsMessages     SmsMessage[]
 
   @@map("tenant")
 }
@@ -391,4 +394,73 @@ model AppointmentService {
   @@index([serviceId])
   @@index([appointmentId])
   @@map("appointment_service")
+}
+
+/// R470/R480: one per tenant. Status is derived (billing/subscription-status.ts), never stored.
+model Subscription {
+  id                String    @id @default(uuid()) @db.Uuid
+  tenantId          String    @unique @map("tenant_id") @db.Uuid
+  planId            String    @map("plan_id")
+  nextPlanId        String?   @map("next_plan_id")
+  trialEndsAt       DateTime  @map("trial_ends_at") @db.Timestamptz
+  paidThrough       DateTime? @map("paid_through") @db.Timestamptz
+  cancelAtPeriodEnd Boolean   @default(false) @map("cancel_at_period_end")
+  free              Boolean   @default(false)
+  /// Flitt's saved-card token: useless without the platform's merchant key.
+  rectoken          String?
+  cardMasked        String?   @map("card_masked")
+  cardBrand         String?   @map("card_brand")
+  failedAttempts    Int       @default(0) @map("failed_attempts")
+  retryAt           DateTime? @map("retry_at") @db.Timestamptz
+  createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt         DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@map("subscription")
+}
+
+/// R470: every payment attempt — the invoices.
+model SubscriptionPayment {
+  id             String    @id @default(uuid()) @db.Uuid
+  tenantId       String    @map("tenant_id") @db.Uuid
+  /// "<tenant id>.<kind>.<suffix>": a callback names its tenant.
+  orderId        String    @unique @map("order_id")
+  kind           String
+  planId         String?   @map("plan_id")
+  amount         Decimal   @db.Decimal(10, 2)
+  periodStart    DateTime? @map("period_start") @db.Timestamptz
+  periodEnd      DateTime? @map("period_end") @db.Timestamptz
+  status         String    @default("pending")
+  flittPaymentId String?   @map("flitt_payment_id")
+  cardMasked     String?   @map("card_masked")
+  failureReason  String?   @map("failure_reason")
+  /// R500: texts beyond the allowance in the month before periodStart, charged with this renewal.
+  extraTexts       Int       @default(0) @map("extra_texts")
+  extraTextsAmount Decimal   @default(0) @map("extra_texts_amount") @db.Decimal(10, 2)
+  extraTextsFrom   DateTime? @map("extra_texts_from") @db.Timestamptz
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  settledAt      DateTime? @map("settled_at") @db.Timestamptz
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([tenantId, createdAt])
+  @@map("subscription_payment")
+}
+
+/// R500: one row per text the SMS provider accepted — the usage count. No number, no text.
+model SmsMessage {
+  id       String   @id @default(uuid()) @db.Uuid
+  tenantId String   @map("tenant_id") @db.Uuid
+  kind     String
+  parts    Int
+  sentAt   DateTime @default(now()) @map("sent_at") @db.Timestamptz
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([tenantId, sentAt])
+  @@map("sms_message")
 }

@@ -636,3 +636,91 @@ export class DashboardSummaryDto {
   @ApiProperty({ type: DashboardPeriodDto, description: "The last 30 days" }) current!: DashboardPeriodDto;
   @ApiProperty({ type: DashboardPeriodDto, description: "The 30 days before" }) previous!: DashboardPeriodDto;
 }
+
+// ---- R470–R490: subscriptions ----
+
+const PLAN_IDS = ["early", "standard", "pro"];
+const SUBSCRIPTION_STATUSES = ["free", "trial", "active", "past_due", "lapsed"];
+
+export class SubscriptionPlanDto {
+  @ApiProperty({ enum: PLAN_IDS }) id!: string;
+  @ApiProperty({ example: "60.00", description: "GEL per month" }) price!: string;
+  @ApiProperty() smsIncluded!: number;
+  @ApiProperty() multipleLocations!: boolean;
+  @ApiProperty() prioritySupport!: boolean;
+}
+
+export class SubscriptionPaymentSummaryDto {
+  @ApiProperty() id!: string;
+  @ApiProperty() orderId!: string;
+  @ApiProperty({ enum: ["signup", "renewal", "card"] }) kind!: string;
+  @ApiProperty({ enum: PLAN_IDS, nullable: true, type: String }) planId!: string | null;
+  @ApiProperty({ example: "60.00" }) amount!: string;
+  @ApiProperty({ enum: ["pending", "approved", "declined", "expired"] }) status!: string;
+  @ApiProperty({ nullable: true, type: String }) periodStart!: string | null;
+  @ApiProperty({ nullable: true, type: String }) periodEnd!: string | null;
+  @ApiProperty({ description: "R500: extra texts from the month before periodStart, charged with this renewal" }) extraTexts!: number;
+  @ApiProperty({ example: "1.40", description: "Included in amount" }) extraTextsAmount!: string;
+  @ApiProperty({ nullable: true, type: String }) cardMasked!: string | null;
+  @ApiProperty({ nullable: true, type: String }) failureReason!: string | null;
+  @ApiProperty() createdAt!: string;
+}
+
+export class SubscriptionCardDto {
+  @ApiProperty({ example: "444455XXXXXX1111" }) masked!: string;
+  @ApiProperty({ nullable: true, type: String }) brand!: string | null;
+}
+
+export class SmsUsageDto {
+  @ApiProperty({ description: "SMS parts accepted by the provider in the usage window" }) used!: number;
+  @ApiProperty({ description: "The plan's monthly allowance" }) included!: number;
+  @ApiProperty() periodStart!: string;
+  @ApiProperty({ description: "Exclusive" }) periodEnd!: string;
+  @ApiProperty({ description: "true = the salon's paid month; false = the calendar month" }) billingMonth!: boolean;
+  @ApiProperty({ description: "Extra texts in this window are charged with the renewal at periodEnd" }) billable!: boolean;
+  @ApiProperty() extra!: number;
+  @ApiProperty({ example: "1.40" }) extraAmount!: string;
+  @ApiProperty({ example: "0.07" }) extraTextPrice!: string;
+}
+
+export class SubscriptionOverviewDto {
+  @ApiProperty({ enum: SUBSCRIPTION_STATUSES, description: "R480: derived, never stored" }) status!: string;
+  @ApiProperty({ enum: PLAN_IDS }) planId!: string;
+  @ApiProperty({ enum: PLAN_IDS, nullable: true, type: String, description: "Takes effect at the next renewal" })
+  nextPlanId!: string | null;
+  @ApiProperty() trialEndsAt!: string;
+  @ApiProperty({ nullable: true, type: String, description: "null = never paid" }) paidThrough!: string | null;
+  @ApiProperty({ nullable: true, type: String, description: "When booking pauses if nothing is paid (past_due only)" })
+  graceEndsAt!: string | null;
+  @ApiProperty() cancelAtPeriodEnd!: boolean;
+  @ApiProperty({ description: "R490" }) bookingPaused!: boolean;
+  @ApiProperty({ type: SubscriptionCardDto, nullable: true }) card!: SubscriptionCardDto | null;
+  @ApiProperty({ type: [SubscriptionPlanDto] }) plans!: SubscriptionPlanDto[];
+  @ApiProperty({ type: [SubscriptionPaymentSummaryDto], description: "Newest first" }) payments!: SubscriptionPaymentSummaryDto[];
+  @ApiProperty({ type: SmsUsageDto, description: "R500" }) sms!: SmsUsageDto;
+  @ApiProperty({ description: "false = no payment provider configured on this server" }) billingAvailable!: boolean;
+}
+
+export class ConfirmPaymentResponseDto {
+  @ApiProperty({ type: SubscriptionPaymentSummaryDto }) payment!: SubscriptionPaymentSummaryDto;
+  @ApiProperty({ type: SubscriptionOverviewDto }) subscription!: SubscriptionOverviewDto;
+}
+
+export class StartCheckoutRequestDto {
+  @ApiProperty({ enum: ["early", "pro"] }) planId!: string;
+  @ApiPropertyOptional({ enum: ["ka", "en"], description: "Language of Flitt's payment page" }) lang?: string;
+}
+
+export class StartCardChangeRequestDto {
+  @ApiPropertyOptional({ enum: ["ka", "en"], description: "Language of Flitt's payment page" }) lang?: string;
+}
+
+export class CheckoutResponseDto {
+  @ApiProperty({ description: "Flitt's hosted payment page" }) checkoutUrl!: string;
+  @ApiProperty() orderId!: string;
+}
+
+export class UpdateSubscriptionRequestDto {
+  @ApiPropertyOptional({ enum: PLAN_IDS, description: "Switch at the next renewal" }) planId?: string;
+  @ApiPropertyOptional() cancelAtPeriodEnd?: boolean;
+}

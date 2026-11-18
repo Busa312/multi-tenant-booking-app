@@ -24,11 +24,14 @@ import type {
   UpsertBusinessHoursRequest,
   Tenant,
   OnboardingStatus,
-  UpdateOnboardingRequest
+  UpdateOnboardingRequest,
+  SubscriptionOverview,
+  SubscriptionPlanId,
+  UpdateSubscriptionRequest
 } from "@booking/shared-types";
 import { cmsApiClient } from "./api.js";
 
-type CacheKey = "tenant" | "services" | "professionals" | "business-hours" | "time-off" | "locations" | "onboarding";
+type CacheKey = "tenant" | "services" | "professionals" | "business-hours" | "time-off" | "locations" | "onboarding" | "subscription";
 
 type InvalidationKey = CacheKey | "appointments";
 
@@ -114,6 +117,16 @@ function rememberOnboarding(status: OnboardingStatus): OnboardingStatus {
   entries.set("onboarding", { value: status, at: Date.now() });
   onboardingListeners.forEach((listener) => listener(status));
   return status;
+}
+
+// R480: the subscription banner hears of every change at once — paying on the
+// subscription page takes the "trial ending" warning away there and then.
+const subscriptionListeners = new Set<(overview: SubscriptionOverview) => void>();
+
+function rememberSubscription(overview: SubscriptionOverview): SubscriptionOverview {
+  entries.set("subscription", { value: overview, at: Date.now() });
+  subscriptionListeners.forEach((listener) => listener(overview));
+  return overview;
 }
 
 export function clearCmsCache(): void {
@@ -213,6 +226,26 @@ export const cachedApi = {
     onboardingListeners.add(listener);
     return () => onboardingListeners.delete(listener);
   },
+  // R470: fetched fresh by the subscription page; each answer is remembered for the banner.
+  getSubscription: () => {
+    if (!inFlight.has("subscription")) entries.delete("subscription");
+    return cached("subscription", () => cmsApiClient.getSubscription()).then(rememberSubscription);
+  },
+  /** As last seen, fetched only when nothing recent is known (the banner on every page). */
+  getSubscriptionCached: () => cached("subscription", () => cmsApiClient.getSubscription()),
+  onSubscriptionChange: (listener: (overview: SubscriptionOverview) => void): (() => void) => {
+    subscriptionListeners.add(listener);
+    return () => subscriptionListeners.delete(listener);
+  },
+  updateSubscription: (payload: UpdateSubscriptionRequest) =>
+    cmsApiClient.updateSubscription(payload).then(rememberSubscription),
+  confirmSubscriptionPayment: (orderId: string) =>
+    cmsApiClient.confirmSubscriptionPayment(orderId).then((result) => {
+      rememberSubscription(result.subscription);
+      return result;
+    }),
+  startCheckout: (planId: SubscriptionPlanId, lang: "ka" | "en") => cmsApiClient.startCheckout({ planId, lang }),
+  startCardChange: (lang: "ka" | "en") => cmsApiClient.startCardChange({ lang }),
   // R380: never cached — a short list, and a block must show the moment it's made.
   // Blocking changes what every listed appointment says about its customer.
   listBlockedPhones: () => cmsApiClient.listBlockedPhones(),

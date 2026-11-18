@@ -28,6 +28,15 @@ export default async function EmbedFullPage({
     );
   }
 
+  // R490: the business's subscription has lapsed
+  if (context.tenant.bookingPaused) {
+    return (
+      <div className="p-5">
+        <UnavailableNotice heading={context.t("booking.pausedHeading")} body={context.t("booking.pausedBody")} />
+      </div>
+    );
+  }
+
   const data = await loadBookingPageData(searchParams);
 
   return (

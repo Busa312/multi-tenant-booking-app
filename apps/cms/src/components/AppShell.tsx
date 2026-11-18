@@ -6,6 +6,7 @@ import { Brand } from "./ui/Brand.js";
 import { Icon } from "./ui/Icon.js";
 import { LanguageSwitcher } from "./LanguageSwitcher.js";
 import { ThemeToggle } from "./ThemeToggle.js";
+import { SubscriptionBanner } from "./SubscriptionBanner.js";
 import { cachedApi } from "../lib/cache.js";
 import { cx } from "../lib/cx.js";
 import { publicSiteUrl } from "../lib/publicSiteUrl.js";
@@ -152,7 +153,11 @@ export function AppShell({ title, subtitle, children }: AppShellProps) {
           </div>
         </header>
 
-        <main className="mx-auto w-full max-w-7xl flex-1 p-4 sm:p-6 lg:p-8">{children}</main>
+        <main className="mx-auto w-full max-w-7xl flex-1 p-4 sm:p-6 lg:p-8">
+          {/* R480/R490: trial ending, payment due, booking paused */}
+          {role === "owner" && <SubscriptionBanner />}
+          {children}
+        </main>
       </div>
 
       <div className="drawer-side z-40">

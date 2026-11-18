@@ -23,6 +23,11 @@ export interface Tenant {
   changeCutoffHours: number;
   // R440: false = the booking site never offers or names a professional
   customersChooseProfessional: boolean;
+  /**
+   * R490: the salon's subscription has lapsed, so its booking site takes no new
+   * online bookings. Only on `GET /public/tenant`.
+   */
+  bookingPaused?: boolean;
   createdAt: string;
 }
 

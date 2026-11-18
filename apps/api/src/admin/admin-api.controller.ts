@@ -1,4 +1,4 @@
-import { Body, Controller, Get, HttpCode, Post, Req, Res, UseGuards } from "@nestjs/common";
+import { BadRequestException, Body, Controller, Get, HttpCode, NotFoundException, Param, Post, Req, Res, UseGuards } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { ApiExcludeController } from "@nestjs/swagger";
 import type { FastifyReply } from "fastify";
@@ -6,11 +6,15 @@ import type {
   AdminLoginRequest,
   AdminSession,
   AdminTenantSummary,
+  AdminUpdateSubscriptionRequest,
   OnboardTenantRequest,
   OnboardTenantResponse,
 } from "@booking/shared-types";
 import { RateLimit } from "../rate-limit/rate-limit.decorator.js";
 import { OnboardingService } from "../internal/onboarding.service.js";
+import { BillingService } from "../billing/billing.service.js";
+import { PrismaService } from "../prisma/prisma.service.js";
+import { TenantContextService } from "../tenant/tenant-context.service.js";
 import { AdminAuthService } from "./admin-auth.service.js";
 import { ADMIN_COOKIE, adminCookieConfig, clearAdminCookie, setAdminCookie, type AdminCookieConfig } from "./admin-cookie.js";
 import { AdminSessionGuard, type AdminRequest } from "./admin-session.guard.js";
@@ -31,6 +35,9 @@ export class AdminApiController {
   constructor(
     private readonly auth: AdminAuthService,
     private readonly onboarding: OnboardingService,
+    private readonly billing: BillingService,
+    private readonly prisma: PrismaService,
+    private readonly tenantContext: TenantContextService,
     config: ConfigService,
   ) {
     this.cookie = adminCookieConfig((key) => config.get<string>(key));
@@ -63,8 +70,30 @@ export class AdminApiController {
   @Get("tenants")
   @UseGuards(AdminSessionGuard)
   @RateLimit({ name: "admin-read", ...LIMIT_READ })
-  listTenants(): Promise<AdminTenantSummary[]> {
-    return this.onboarding.listTenants();
+  async listTenants(): Promise<AdminTenantSummary[]> {
+    const tenants = await this.onboarding.listTenants();
+    // R480: each salon's subscription is read in that salon's own context (RLS).
+    const summaries: AdminTenantSummary[] = [];
+    for (const tenant of tenants) {
+      summaries.push({ ...tenant, subscription: await this.tenantContext.runWithTenant(tenant.id, () => this.billing.adminSummary()) });
+    }
+    return summaries;
+  }
+
+  // R430/R480: free use for a pilot salon, or a longer trial
+  @Post("tenants/:id/subscription")
+  @HttpCode(200)
+  @UseGuards(AdminSessionGuard)
+  @RateLimit({ name: "admin-write", max: 120, windowSeconds: 60 * 60 })
+  async updateSubscription(
+    @Param("id") id: string,
+    @Body() body: AdminUpdateSubscriptionRequest,
+  ): Promise<AdminTenantSummary["subscription"]> {
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(id)) throw new BadRequestException("Invalid salon id");
+    // The tenant table has no RLS: this is the platform checking the salon exists.
+    const tenant = await this.prisma.client.tenant.findUnique({ where: { id }, select: { id: true } });
+    if (!tenant) throw new NotFoundException("No such salon");
+    return this.tenantContext.runWithTenant(id, () => this.billing.adminUpdate(body));
   }
 
   @Post("tenants")

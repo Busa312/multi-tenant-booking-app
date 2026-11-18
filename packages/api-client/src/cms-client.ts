@@ -39,7 +39,12 @@ import type {
   UpdateServiceRequest,
   UpsertBusinessHoursRequest,
   OnboardingStatus,
-  UpdateOnboardingRequest
+  UpdateOnboardingRequest,
+  CheckoutResponse,
+  ConfirmPaymentResponse,
+  StartCheckoutRequest,
+  SubscriptionOverview,
+  UpdateSubscriptionRequest
 } from "@booking/shared-types";
 import { HttpClient, type ApiClientOptions } from "./http";
 
@@ -195,6 +200,30 @@ export class CmsApiClient {
 
   updateOnboarding(payload: UpdateOnboardingRequest) {
     return this.http.patch<OnboardingStatus>("/cms/onboarding", payload);
+  }
+
+  // R470–R490: the owner's subscription
+  getSubscription() {
+    return this.http.get<SubscriptionOverview>("/cms/subscription");
+  }
+
+  updateSubscription(payload: UpdateSubscriptionRequest) {
+    return this.http.patch<SubscriptionOverview>("/cms/subscription", payload);
+  }
+
+  /** Flitt's payment page for a month of the plan; the browser goes there next. */
+  startCheckout(payload: StartCheckoutRequest & { lang?: "ka" | "en" }) {
+    return this.http.post<CheckoutResponse>("/cms/subscription/checkout", payload);
+  }
+
+  /** A refunded 1 GEL check on Flitt's page that replaces the saved card. */
+  startCardChange(payload: { lang?: "ka" | "en" }) {
+    return this.http.post<CheckoutResponse>("/cms/subscription/card", payload);
+  }
+
+  /** Back from Flitt's page: the API asks Flitt how the order went. */
+  confirmSubscriptionPayment(orderId: string) {
+    return this.http.post<ConfirmPaymentResponse>(`/cms/subscription/payments/${encodeURIComponent(orderId)}/confirm`);
   }
 
   // R380

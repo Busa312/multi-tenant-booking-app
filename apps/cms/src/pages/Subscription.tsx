@@ -1,154 +1,246 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
+import type { SubscriptionOverview, SubscriptionPaymentSummary, SubscriptionPlan } from "@booking/shared-types";
 import { useI18n } from "../i18n/I18nContext.js";
-import { MOCK_PLANS, MOCK_SUBSCRIPTION, type Plan, type PlanId } from "../lib/subscriptionMock.js";
-import { formatDateLabel, formatMonthLabel } from "../lib/tenantTime.js";
-import { usePagination } from "../lib/usePagination.js";
+import { cachedApi } from "../lib/cache.js";
+import { formatInstantDate } from "../lib/tenantTime.js";
 import { AppShell } from "../components/AppShell.js";
+import { CardSkeleton } from "../components/CardSkeleton.js";
 import { ConfirmModal, type ConfirmRequest } from "../components/ConfirmModal.js";
+import { PaymentMethodCard } from "../components/PaymentMethodCard.js";
 import { PlanCard } from "../components/PlanCard.js";
-import { Alert, Button, Card, Eyebrow, Icon, Pill, Pagination, Table, TableHead, TableRow } from "../components/ui/index.js";
+import { SmsUsageCard } from "../components/SmsUsageCard.js";
+import { SubscriptionInvoices } from "../components/SubscriptionInvoices.js";
+import { SubscriptionStatusCard } from "../components/SubscriptionStatusCard.js";
+import { Alert, Card, Eyebrow } from "../components/ui/index.js";
 
-const INVOICE_COLUMNS = "minmax(0,1.4fr) minmax(0,1fr) 110px";
+interface Notice {
+  variant: "success" | "warning" | "error";
+  text: string;
+}
+
+// After a return from Flitt, how often (and how many times) to ask again while the payment is still pending.
+const CONFIRM_RETRY_MS = 3000;
+const CONFIRM_TRIES = 6;
 
 /**
- * The owner's subscription: plan, SMS allowance, payment method, invoices.
- *
- * A PREVIEW ON MOCK DATA (lib/subscriptionMock.ts). Nothing here reaches an
- * API or a payment provider — switching plan only changes what this page
- * shows until it is reloaded — and the banner at the top says so.
+ * The owner's subscription (R470–R490): where the salon stands, the plans, the
+ * saved card and every payment. Paying happens on Flitt's page; coming back,
+ * the page asks the API to confirm that payment (`?payment=<order id>`).
  */
-// Rows per page; a pager appears only once there are more.
-const PAGE_SIZE = 12;
-
 export function SubscriptionPage() {
   const { t, lang } = useI18n();
-  const subscription = MOCK_SUBSCRIPTION;
-
-  const [planId, setPlanId] = useState<PlanId>(subscription.planId);
-  const [switched, setSwitched] = useState(false);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [overview, setOverview] = useState<SubscriptionOverview | null>(null);
+  const [timezone, setTimezone] = useState("Asia/Tbilisi");
+  const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<Notice | null>(null);
+  const [busy, setBusy] = useState(false);
   // The question waiting on an answer, if any (see ConfirmModal).
   const [confirmRequest, setConfirmRequest] = useState<ConfirmRequest | null>(null);
-  const pager = usePagination(subscription.invoices, PAGE_SIZE);
+  const returnedOrder = useRef(searchParams.get("payment"));
+  // Set synchronously on the first click, before `busy` disables anything: a
+  // double click must not open two payment pages (two orders) for one month.
+  const leaving = useRef(false);
 
-  const plan = MOCK_PLANS.find((candidate) => candidate.id === planId) ?? MOCK_PLANS[0];
-  if (!plan) {
-    return null;
+  function load() {
+    return Promise.all([cachedApi.getSubscription(), cachedApi.getTenant()])
+      .then(([next, tenant]) => {
+        setOverview(next);
+        setTimezone(tenant.timezone);
+      })
+      .catch(() => setError(t("subscription.errLoad")));
   }
-  const planName = t(`subscription.plan_${plan.id}`);
-  const smsShare = Math.min(100, Math.round((subscription.smsUsed / plan.smsIncluded) * 100));
 
-  function choose(next: Plan) {
-    const name = t(`subscription.plan_${next.id}`);
-    setConfirmRequest({
-      title: t("subscription.switchTo", { plan: name }),
-      message: t("subscription.confirmSwitch", { plan: name, price: next.price }),
-      confirmLabel: t("subscription.switchTo", { plan: name }),
-      run: () => {
-        setPlanId(next.id);
-        setSwitched(true);
-      },
-    });
+  /** The payer is back from Flitt: confirm that order, asking again for a while if it's still pending. */
+  async function confirmReturn(orderId: string) {
+    for (let attempt = 0; attempt < CONFIRM_TRIES; attempt++) {
+      try {
+        const { payment, subscription } = await cachedApi.confirmSubscriptionPayment(orderId);
+        setOverview(subscription);
+        if (payment.status !== "pending") {
+          setNotice(returnNotice(payment));
+          return;
+        }
+        setNotice({ variant: "warning", text: t("subscription.returnPending") });
+      } catch {
+        setNotice({ variant: "warning", text: t("subscription.returnPending") });
+      }
+      await new Promise((resolve) => setTimeout(resolve, CONFIRM_RETRY_MS));
+    }
+  }
+
+  function returnNotice(payment: SubscriptionPaymentSummary): Notice {
+    if (payment.status === "approved") {
+      return { variant: "success", text: t(payment.kind === "card" ? "subscription.returnCard" : "subscription.returnPaid") };
+    }
+    return {
+      variant: "error",
+      text: payment.failureReason
+        ? t("subscription.returnFailedReason", { reason: payment.failureReason })
+        : t("subscription.returnFailed"),
+    };
+  }
+
+  useEffect(() => {
+    const orderId = returnedOrder.current;
+    // Taken once: React's development double-run of effects shouldn't confirm twice.
+    returnedOrder.current = null;
+    if (orderId) {
+      // The order id has done its job; a reload shouldn't confirm it again.
+      setSearchParams({}, { replace: true });
+      void cachedApi.getTenant().then((tenant) => setTimezone(tenant.timezone)).catch(() => undefined);
+      void confirmReturn(orderId);
+    } else {
+      void load();
+    }
+    // Once, on arrival; a language switch shouldn't refetch.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  /** Off to Flitt's page. The button stays busy: this page is being left. */
+  async function goToCheckout(start: () => Promise<{ checkoutUrl: string }>) {
+    if (leaving.current) return;
+    leaving.current = true;
+    setError(null);
+    setBusy(true);
+    try {
+      const { checkoutUrl } = await start();
+      setNotice({ variant: "success", text: t("subscription.redirecting") });
+      window.location.assign(checkoutUrl);
+    } catch {
+      setError(t("subscription.errCheckout"));
+      setBusy(false);
+      leaving.current = false;
+    }
+  }
+
+  async function change(payload: Parameters<typeof cachedApi.updateSubscription>[0]) {
+    setError(null);
+    setNotice(null);
+    setBusy(true);
+    try {
+      setOverview(await cachedApi.updateSubscription(payload));
+    } catch {
+      setError(t("subscription.errSave"));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const date = (iso: string) => formatInstantDate(iso, timezone, lang);
+  const paying = overview !== null && overview.status === "active";
+
+  function planAction(plan: SubscriptionPlan): { label: string; disabled: boolean; onClick: () => void } {
+    const name = t(`subscription.plan_${plan.id}`);
+    if (!overview) return { label: name, disabled: true, onClick: () => undefined };
+    if (overview.status === "free") return { label: name, disabled: true, onClick: () => undefined };
+
+    if (paying && overview.paidThrough) {
+      const paidThrough = overview.paidThrough;
+      if (plan.id === overview.planId) {
+        return overview.nextPlanId
+          ? { label: t("subscription.keepPlanButton", { plan: name }), disabled: busy, onClick: () => void change({ planId: plan.id }) }
+          : { label: t("subscription.currentPlanButton"), disabled: true, onClick: () => undefined };
+      }
+      if (plan.id === overview.nextPlanId) return { label: t("subscription.nextBadge"), disabled: true, onClick: () => undefined };
+      return {
+        label: t("subscription.switchTo", { plan: name }),
+        // A cancelled subscription has no next renewal to switch at; resuming comes first.
+        disabled: busy || overview.cancelAtPeriodEnd,
+        onClick: () =>
+          setConfirmRequest({
+            title: t("subscription.switchTo", { plan: name }),
+            message: t("subscription.confirmSwitch", { plan: name, price: Number(plan.price), date: date(paidThrough) }),
+            confirmLabel: t("subscription.switchTo", { plan: name }),
+            run: () => void change({ planId: plan.id }),
+          }),
+      };
+    }
+
+    return {
+      label: t("subscription.payBtn", { plan: name, price: Number(plan.price) }),
+      disabled: busy || !overview.billingAvailable,
+      onClick: () => void goToCheckout(() => cachedApi.startCheckout(plan.id, lang)),
+    };
+  }
+
+  function planBadge(plan: SubscriptionPlan): string | null {
+    if (!overview?.paidThrough || overview.status === "free") return null;
+    if (plan.id === overview.planId) return t("subscription.currentBadge");
+    if (plan.id === overview.nextPlanId) return t("subscription.nextBadge");
+    return null;
   }
 
   return (
     <AppShell title={t("subscription.title")} subtitle={t("subscription.subtitle")}>
       <div className="flex max-w-5xl flex-col gap-4 xl:gap-5">
-        <Alert variant="warning" flush>
-          {t("subscription.previewNotice")}
-        </Alert>
-        {switched && (
-          <Alert variant="success" flush>
-            {t("subscription.switchedNotice", { plan: planName })}
+        {error && <Alert flush>{error}</Alert>}
+        {notice && (
+          <Alert variant={notice.variant} flush>
+            {notice.text}
+          </Alert>
+        )}
+        {overview && !overview.billingAvailable && overview.status !== "free" && (
+          <Alert variant="warning" flush>
+            {t("subscription.notConfigured")}
           </Alert>
         )}
 
-        <div className="grid items-start gap-4 md:grid-cols-2 xl:gap-5">
-          <Card>
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <Eyebrow>{t("subscription.currentPlan")}</Eyebrow>
-                <div className="mt-0.5 font-display text-2xl leading-tight font-bold">{planName}</div>
-              </div>
-              <Pill tone="success">{t("subscription.statusActive")}</Pill>
-            </div>
-            <p className="mt-3">
-              <span className="font-display text-5xl leading-none font-bold tabular-nums">{plan.price} ₾</span>
-              <span className="ml-1.5 text-sm text-base-content/60">{t("subscription.perMonth")}</span>
-            </p>
-            <p className="mt-3 text-sm text-base-content/60">
-              {t("subscription.renewsOn", { date: formatDateLabel(subscription.renewsOn, lang) })}
-            </p>
-          </Card>
-
-          <Card>
-            <Eyebrow>{t("subscription.smsTitle")}</Eyebrow>
-            <div className="mt-0.5 font-display text-2xl leading-tight font-bold tabular-nums">
-              {t("subscription.smsUsed", { used: subscription.smsUsed, included: plan.smsIncluded })}
-            </div>
-            <progress
-              className="progress progress-primary mt-4 h-2.5 rounded-none"
-              value={smsShare}
-              max={100}
-              aria-label={t("subscription.smsUsed", { used: subscription.smsUsed, included: plan.smsIncluded })}
-            />
-            <p className="mt-3 text-sm text-base-content/60">
-              {t("subscription.smsExtra", { price: subscription.extraSmsPrice })}
-            </p>
-          </Card>
-        </div>
-
-        <Card>
-          <Eyebrow>{t("subscription.plansTitle")}</Eyebrow>
-          <p className="mt-0.5 mb-4 text-sm text-base-content/60">{t("subscription.plansHint")}</p>
-          <ul className="grid gap-3 md:grid-cols-3">
-            {MOCK_PLANS.map((candidate) => (
-              <li key={candidate.id}>
-                <PlanCard plan={candidate} current={candidate.id === planId} onChoose={choose} />
-              </li>
-            ))}
-          </ul>
-        </Card>
-
-        <Card>
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-3">
-            <div className="min-w-0 flex-1 basis-56">
-              <Eyebrow>{t("subscription.paymentTitle")}</Eyebrow>
-              <div className="mt-1 flex items-center gap-2 font-semibold">
-                <Icon name="credit_card" />
-                {t("subscription.cardLine", {
-                  brand: subscription.card.brand,
-                  last4: subscription.card.last4,
-                  expires: subscription.card.expires,
-                })}
+        {overview ? (
+          <>
+            <div className="grid items-start gap-4 md:grid-cols-2 xl:gap-5">
+              <SubscriptionStatusCard
+                overview={overview}
+                timezone={timezone}
+                busy={busy}
+                onCancel={() =>
+                  setConfirmRequest({
+                    title: t("subscription.cancelBtn"),
+                    message: t("subscription.confirmCancel", { date: overview.paidThrough ? date(overview.paidThrough) : "" }),
+                    confirmLabel: t("subscription.cancelBtn"),
+                    danger: true,
+                    run: () => void change({ cancelAtPeriodEnd: true }),
+                  })
+                }
+                onResume={() => void change({ cancelAtPeriodEnd: false })}
+              />
+              <div className="flex flex-col gap-4 xl:gap-5">
+                <PaymentMethodCard
+                  overview={overview}
+                  busy={busy}
+                  onUpdateCard={() => void goToCheckout(() => cachedApi.startCardChange(lang))}
+                />
+                <SmsUsageCard overview={overview} timezone={timezone} />
               </div>
             </div>
-            {/* No payment provider yet, so there is nowhere to send a new card. */}
-            <Button variant="secondary" disabled title={t("subscription.notYet")}>
-              {t("subscription.updateCard")}
-            </Button>
-          </div>
-        </Card>
 
-        <div>
-          <Eyebrow className="mb-2">{t("subscription.invoicesTitle")}</Eyebrow>
-          <Table>
-            <TableHead columns={INVOICE_COLUMNS}>
-              <div>{t("subscription.colPeriod")}</div>
-              <div>{t("subscription.colAmount")}</div>
-              <div>{t("subscription.colStatus")}</div>
-            </TableHead>
-            {pager.pageItems.map((invoice) => (
-              <TableRow key={invoice.id} columns={INVOICE_COLUMNS}>
-                <div className="font-semibold">{formatMonthLabel(invoice.period, lang)}</div>
-                <div className="tabular-nums">{invoice.amount} ₾</div>
-                <div>
-                  <Pill tone="success">{t("subscription.invoicePaid")}</Pill>
-                </div>
-              </TableRow>
-            ))}
-          </Table>
-            <Pagination {...pager} />
-        </div>
+            {overview.status !== "free" && (
+              <Card>
+                <Eyebrow>{t("subscription.plansTitle")}</Eyebrow>
+                <p className="mt-0.5 mb-4 text-sm text-base-content/60">
+                  {t(paying ? "subscription.plansHintSwitch" : "subscription.plansHintPay")}
+                </p>
+                <ul className="grid gap-3 md:grid-cols-2">
+                  {overview.plans.map((plan) => (
+                    <li key={plan.id}>
+                      <PlanCard
+                        plan={plan}
+                        current={overview.paidThrough !== null && plan.id === overview.planId}
+                        badge={planBadge(plan)}
+                        action={planAction(plan)}
+                      />
+                    </li>
+                  ))}
+                </ul>
+              </Card>
+            )}
+
+            <SubscriptionInvoices payments={overview.payments} timezone={timezone} />
+          </>
+        ) : (
+          !error && <CardSkeleton rows={4} rowHeight="44px" />
+        )}
       </div>
 
       {confirmRequest && <ConfirmModal request={confirmRequest} onClose={() => setConfirmRequest(null)} />}

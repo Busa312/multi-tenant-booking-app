@@ -105,6 +105,8 @@
     },
     "unavailableHeading": "Online booking is unavailable",
     "unavailableBody": "This business's booking settings need attention, so appointments can't be taken online right now. Please contact them directly.",
+    "pausedHeading": "Online booking is paused",
+    "pausedBody": "This business isn't taking online bookings right now. Please contact them directly to book.",
     "verify": {
       "heading": "Confirm your number",
       "hint": "We've sent a 6-digit code to {phoneNumber}.",

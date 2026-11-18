@@ -1,6 +1,8 @@
 import { Injectable, Logger } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { maskSmsNumber, toSmsNumber } from "./sms-number.js";
+import { smsParts } from "./sms-parts.js";
+import { SmsLogService, type SmsKind } from "./sms-log.service.js";
 
 export interface MagicLinkMessage {
   /** R270: the verified phone the booking was made with. */
@@ -57,7 +59,10 @@ export class NotificationService {
   private readonly logger = new Logger(NotificationService.name);
   private readonly ubill: { url: string; key: string; brandId: number } | null;
 
-  constructor(private readonly config: ConfigService) {
+  constructor(
+    private readonly config: ConfigService,
+    private readonly smsLog: SmsLogService,
+  ) {
     const key = this.config.get<string>("UBILL_API_KEY")?.trim();
     const brandId = Number(this.config.get<string>("UBILL_BRAND_ID"));
     this.ubill =
@@ -86,6 +91,7 @@ export class NotificationService {
     }
     return this.sendSms(message.phoneNumber, `Your booking is confirmed. View, change or cancel it: ${message.manageUrl}`, {
       otp: false,
+      kind: "manage_link",
     });
   }
 
@@ -98,7 +104,7 @@ export class NotificationService {
       this.logger.log(`[stub] verification code — no SMS provider configured`);
       return false;
     }
-    return this.sendSms(message.phoneNumber, `Your booking code is ${message.code}`, { otp: true });
+    return this.sendSms(message.phoneNumber, `Your booking code is ${message.code}`, { otp: true, kind: "otp" });
   }
 
   /**
@@ -118,7 +124,7 @@ export class NotificationService {
   }
 
   /** One text through uBill. Never throws: a failed send is `false`, logged without the text. */
-  private async sendSms(phoneNumber: string, text: string, options: { otp: boolean }): Promise<boolean> {
+  private async sendSms(phoneNumber: string, text: string, options: { otp: boolean; kind: SmsKind }): Promise<boolean> {
     const ubill = this.ubill;
     if (!ubill) return false;
 
@@ -137,6 +143,8 @@ export class NotificationService {
       });
       const body = (await res.json().catch(() => ({}))) as UbillSendResponse;
       if (res.ok && body.statusID === 0 && !body.rejectedCount) {
+        // R500: counted only once the provider has taken it
+        await this.smsLog.record(options.kind, smsParts(text));
         return true;
       }
       this.logger.error(

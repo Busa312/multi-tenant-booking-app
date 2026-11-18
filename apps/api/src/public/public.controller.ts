@@ -68,6 +68,7 @@ import { VerificationService } from "./verification.service.js";
 import { BlockedPhoneService } from "../booking/blocked-phone.service.js";
 import { phoneKey } from "../common/phone-key.js";
 import { openingHours } from "../booking/working-hours.js";
+import { BillingService } from "../billing/billing.service.js";
 
 const RESEND_WINDOW_SECONDS = 60 * 60;
 const RESEND_MAX_PER_PHONE = 3;
@@ -85,15 +86,20 @@ export class PublicController {
     private readonly limits: RateLimitService,
     private readonly verification: VerificationService,
     private readonly blockedPhones: BlockedPhoneService,
+    private readonly billing: BillingService,
   ) {}
 
   @Get("tenant")
   @ApiOkResponse({ type: TenantDto })
   async getTenant(): Promise<Tenant> {
     const { tenantId } = this.tenantContext.current;
-    const tenant = await this.prisma.forTenant((tx) => tx.tenant.findUniqueOrThrow({ where: { id: tenantId } }));
+    const { tenant, bookingPaused } = await this.prisma.forTenant(async (tx) => ({
+      tenant: await tx.tenant.findUniqueOrThrow({ where: { id: tenantId } }),
+      // R490
+      bookingPaused: await this.billing.bookingPausedIn(tx, tenantId),
+    }));
 
-    return serializePublicTenant(tenant);
+    return { ...serializePublicTenant(tenant), bookingPaused };
   }
 
   @Get("services")

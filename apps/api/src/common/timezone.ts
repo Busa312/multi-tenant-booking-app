@@ -108,3 +108,14 @@ export function dayOfWeekForDateString(date: string): number {
   const { year, month, day } = parseDateOnly(date);
   return new Date(Date.UTC(year, month - 1, day)).getUTCDay();
 }
+
+/**
+ * R500: the calendar month `instant` falls in, on the salon's clock, as the
+ * instants it starts and ends (end exclusive).
+ */
+export function zonedMonth(instant: Date, timeZone: string): { start: Date; end: Date } {
+  const { year, month } = zonedParts(instant, timeZone);
+  const first = (y: number, m: number) => `${String(y).padStart(4, "0")}-${String(m).padStart(2, "0")}-01`;
+  const next = month === 12 ? first(year + 1, 1) : first(year, month + 1);
+  return { start: zonedTimeToUtc(first(year, month), 0, timeZone), end: zonedTimeToUtc(next, 0, timeZone) };
+}

@@ -4,6 +4,7 @@ import { HoldLimitError, VisitService } from "./visit.service.js";
 import { hashToken } from "./magic-link.js";
 import type { AvailabilityService } from "./availability.service.js";
 import type { BookingService } from "./booking.service.js";
+import type { BillingService } from "../billing/billing.service.js";
 import type { PlannedVisit } from "./visit-planner.js";
 import type { PrismaService } from "../prisma/prisma.service.js";
 import type { TenantContextService } from "../tenant/tenant-context.service.js";
@@ -63,6 +64,8 @@ interface Overrides {
   cutoffHours?: number;
   /** R440 */
   customersChooseProfessional?: boolean;
+  /** R490 */
+  bookingPaused?: boolean;
 }
 
 const setup = (overrides: Overrides = {}) => {
@@ -132,13 +135,21 @@ const setup = (overrides: Overrides = {}) => {
     rotateVisitToken: jest.fn().mockResolvedValue("fresh"),
   };
 
+  // R490: open for bookings unless a test pauses it
+  const billing = {
+    assertBookableIn: jest.fn(() =>
+      overrides.bookingPaused ? Promise.reject(new ForbiddenException({ code: "booking_paused" })) : Promise.resolve(),
+    ),
+  };
+
   const service = new VisitService(
     prisma,
     tenantContext,
     availability as unknown as AvailabilityService,
     booking as unknown as BookingService,
+    billing as unknown as BillingService,
   );
-  return { service, tx, availability, booking };
+  return { service, tx, availability, booking, billing };
 };
 
 const createInput = (overrides: Record<string, unknown> = {}) => ({
@@ -377,6 +388,21 @@ describe("create", () => {
 
     const units = availability.visitPlanAtIn.mock.calls[0]?.[1]?.units as { professionalId: string | null }[];
     expect(units.map((unit) => unit.professionalId)).toEqual([null, null]);
+  });
+
+  // R490
+  it("refuses a booking — and writes nothing — while the salon's subscription has lapsed", async () => {
+    const { service, tx } = setup({ bookingPaused: true });
+
+    await expect(service.create(createInput())).rejects.toThrow(ForbiddenException);
+    expect(tx.visit.create).not.toHaveBeenCalled();
+  });
+
+  it("refuses a hold too while the salon is paused", async () => {
+    const { service, tx } = setup({ bookingPaused: true });
+
+    await expect(service.hold({ ...createInput(), replaceHoldId: null })).rejects.toThrow(ForbiddenException);
+    expect(tx.slotHold.createMany).not.toHaveBeenCalled();
   });
 
   // R210

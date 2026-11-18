@@ -77,6 +77,10 @@ as those code comments — they are not written down here yet, and back-filling 
 | R440 | `tenant.customers_choose_professional` (default true): whether customers pick who serves them online. Off — for a business where customers book a service, not a person (a car wash) — the booking site has no professional step and never names who will do the job (time picker, summary, confirmation, manage page); every segment is booked as "any professional" and assigned by R450. The CMS is unchanged: professionals, their hours and services still decide availability, and staff see who is assigned. Independently of the setting, the booking flow leaves out a step with nothing to choose: the services step when exactly one service can be booked (it is picked), the professional step when no chosen service has more than one qualified professional at the chosen location, the location step when there is one location (R150). |
 | R450 | "Any professional" is assigned fairly. Among the qualified professionals free for a segment, the one with the lowest share of their working time that day already booked is chosen — booked appointments and other customers' live holds (R250) over working hours minus time off — so a part-timer is filled in proportion to their hours, not first. Ties go to fewer booked minutes, then to an order that rotates daily, so nobody is first in line every day by name. The professional of the previous segment is still preferred for the next one (R200), so a one-person visit stays one appointment. |
 | R460 | Each professional's week can mark days off, chosen per weekday like the organisation's open days. A professional's weekday is one of: following the organisation's hours (the default; closed when the organisation is closed), their own hours, or a day off — a day off means no bookings with them that weekday even when the organisation is open. Recurring days off are part of the weekly schedule; one-off absences stay time off. |
+| R470 | A salon pays the platform a monthly subscription by card, through Flitt's hosted payment page (system_design.md §12b). The owner — never a professional login — picks a plan in the CMS: **Early adopter** (60 GEL, 600 texts) or **Pro** (150 GEL, 1,500 texts, several locations, priority support); **Standard** (90 GEL) exists but isn't offered until SMS reminders ship. Months are paid in advance; the card is saved (Flitt token) and the platform charges it on each renewal date, together with the month just ended's extra texts (R500). A plan switch takes effect at the next renewal. Cancelling stops the next renewal and can be undone until the paid month ends. The card is replaced by a verification payment that is refunded at once. Every payment attempt is listed as an invoice with its outcome. No card number ever reaches the platform. |
+| R480 | A new salon starts with a 14-day free trial (salons that existed before billing: 14 days from its rollout). Paying during the trial keeps the remaining trial days — the first paid month starts when the trial ends. A salon's status is derived, never stored: *free* (granted by the platform admin, R430), *trial*, *active* (paid through a future date), *past due* (up to 7 days after the trial or the paid month ended without payment; a failed renewal is retried daily) or *lapsed*. The platform admin (R430) can grant free use, and extend or end a trial. The CMS tells the owner when the trial is ending, when a payment failed and when booking is paused. |
+| R490 | A lapsed salon's booking site stops taking new online bookings: it says booking is unavailable, and the API refuses holds and bookings. Everything else keeps working — the CMS (so the owner can pay), staff bookings, and customers' manage links. Paying lifts the pause at once. A server with no payment provider configured pauses nobody, since nobody there could pay. |
+| R500 | Texts are counted per **billing month** — the salon's paid month — against the allowance of the plan paid for it (R470), and shown on the subscription page as they're used; outside a paid month (trial, free use, lapsed) the calendar month in the salon's time zone is shown instead and nothing is charged. A text counts once the SMS provider accepts it, by the SMS parts it is billed as (160 Latin characters per part, 153 each when split); only texts sent on the salon's behalf count — booking codes and booking links — and what was sent, and to whom, isn't kept. Texts beyond the allowance cost **0.07 GEL each** and are added to the next renewal: one card payment covers the coming month and the month just ended's extra texts, and the invoice shows both. Texts are never blocked over the allowance — every online booking needs one. A cancelled subscription's last month isn't followed by a renewal, so its extra texts aren't charged. The owner is warned in the CMS at 80% and 100% of the allowance; the platform admin sees each salon's usage. |
 
 ## Booking Access — Magic Link
 
@@ -114,7 +118,7 @@ JWT claims: `sub` (user id), `tenant_id`, `role`, `professional_id` (present onl
 
 ## Out of Scope (for now)
 
-- In-app booking payment collection (see note below)
+- In-app booking payment collection (see note below) — customers paying salons. Salons paying the platform (R470) is in scope.
 - Customer accounts / login
 - Client-side template/layout customization by tenant. The tenant controls colors, logo, title and description (all via `config_json`) — the layout itself is fixed.
 
@@ -372,6 +376,58 @@ professional, which is what lets `Appointment` keep a single `professional_id`,
 Note that `Appointment` therefore has no database-level guarantee of at least one
 service — a join table can't express "≥1 row" without a deferred constraint
 trigger. That invariant is the booking service's to keep.
+
+### Subscription
+One per tenant (R470/R480). Its status is derived from these facts (`billing/subscription-status.ts`), never stored.
+
+| column | type | notes |
+|---|---|---|
+| `id` | uuid, PK | |
+| `tenant_id` | uuid, FK, unique | |
+| `plan_id` | text | `early` / `standard` / `pro` — the plan of the current (or last) paid month |
+| `next_plan_id` | text, nullable | a switch waiting for the next renewal |
+| `trial_ends_at` | timestamptz | |
+| `paid_through` | timestamptz, nullable | end of the last paid month; null = never paid |
+| `cancel_at_period_end` | boolean, default false | the owner cancelled: no renewal at `paid_through` |
+| `free` | boolean, default false | granted by the platform admin (R430): never charged, never paused |
+| `rectoken` | text, nullable | Flitt's token for the saved card — useless without the platform's merchant key |
+| `card_masked` | text, nullable | e.g. `444455XXXXXX1111`, as Flitt returns it |
+| `card_brand` | text, nullable | |
+| `failed_attempts` | integer, default 0 | renewals failed since the last success |
+| `retry_at` | timestamptz, nullable | earliest next renewal attempt; also a short lease while one is in flight |
+| `created_at`, `updated_at` | timestamptz | |
+
+### SmsMessage
+One row per text the SMS provider accepted (R500) — the usage count, nothing more: no phone number, no text.
+
+| column | type | notes |
+|---|---|---|
+| `id` | uuid, PK | |
+| `tenant_id` | uuid, FK | |
+| `kind` | text | `otp` (booking code) or `manage_link` |
+| `parts` | integer | SMS parts billed |
+| `sent_at` | timestamptz | |
+
+### SubscriptionPayment
+Every payment attempt (R470) — the invoices.
+
+| column | type | notes |
+|---|---|---|
+| `id` | uuid, PK | |
+| `tenant_id` | uuid, FK | |
+| `order_id` | text, unique | sent to Flitt; `<tenant id>.<kind>.<suffix>`, so a callback names its tenant |
+| `kind` | text | `signup` (paid on Flitt's page), `renewal` (saved card), `card` (verification, refunded) |
+| `plan_id` | text, nullable | the plan paid for; null for `card` |
+| `amount` | numeric(10,2) | GEL |
+| `period_start`, `period_end` | timestamptz, nullable | the month paid for; null for `card` |
+| `status` | text | `pending`, `approved`, `declined`, `expired` |
+| `flitt_payment_id` | text, nullable | |
+| `card_masked` | text, nullable | |
+| `failure_reason` | text, nullable | Flitt's response description on a decline |
+| `extra_texts` | integer, default 0 | R500: texts beyond the allowance in the month before `period_start`, charged with this renewal |
+| `extra_texts_amount` | numeric(10,2), default 0 | their price (0.07 GEL each), included in `amount` |
+| `extra_texts_from` | timestamptz, nullable | start of the month they were counted in (it ends at `period_start`) |
+| `created_at`, `settled_at` | timestamptz | |
 
 ## ER Diagram
 

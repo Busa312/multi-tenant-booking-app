@@ -116,4 +116,24 @@ describe("TenantContextService", () => {
       expect(service.currentOrNull).toBeNull();
     });
   });
+
+  // system_design.md §12b: the billing scheduler and Flitt's callback have no request
+  describe("runWithTenant", () => {
+    it("runs as that tenant outside any request, and leaves nothing behind", async () => {
+      const seen = await service.runWithTenant("t-billing", async () => service.current.tenantId);
+
+      expect(seen).toBe("t-billing");
+      expect(service.currentOrNull).toBeNull();
+    });
+
+    it("keeps two tenants' work apart when they run at once", async () => {
+      const read = (id: string) =>
+        service.runWithTenant(id, async () => {
+          await new Promise((resolve) => setTimeout(resolve, 5));
+          return service.current.tenantId;
+        });
+
+      await expect(Promise.all([read("a"), read("b")])).resolves.toEqual(["a", "b"]);
+    });
+  });
 });

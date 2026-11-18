@@ -73,6 +73,12 @@ td a { color:var(--ink); }
 .pill { display:inline-block; padding:1px 8px; border-radius:4px; font-size:12px; font-weight:600; background:var(--paper); border:1px solid var(--rule); }
 .pill.finished { background:#e3f1e8; border-color:#b9dcc6; color:var(--ok); }
 .pill.in_progress { background:var(--accent); border-color:var(--accent); }
+.pill.active, .pill.free { background:#e3f1e8; border-color:#b9dcc6; color:var(--ok); }
+.pill.past_due { background:var(--accent); border-color:var(--accent); }
+.pill.lapsed { background:#f6e1df; border-color:#e6b9b4; color:var(--error); }
+.plan small { display:block; color:var(--muted); font-size:12px; margin-top:2px; }
+.plan .row { margin-top:6px; flex-wrap:wrap; }
+.plan button { padding:3px 8px; font-size:12px; }
 .scroll { overflow-x:auto; }
 [hidden] { display:none !important; }
 </style>
@@ -130,11 +136,12 @@ td a { color:var(--ink); }
       <h2>Salons</h2>
       <div class="scroll">
         <table>
-          <thead><tr><th>Salon</th><th>Booking site</th><th>Time zone</th><th>Created</th><th>Setup</th></tr></thead>
+          <thead><tr><th>Salon</th><th>Booking site</th><th>Time zone</th><th>Created</th><th>Setup</th><th>Subscription</th></tr></thead>
           <tbody id="tenants"></tbody>
         </table>
       </div>
       <p class="hint" id="tenants-empty" hidden>No salons yet.</p>
+      <p class="error" id="tenants-error" role="alert" hidden></p>
     </div>
   </section>
 </main>
@@ -145,6 +152,9 @@ const $ = (id) => document.getElementById(id);
 // The anti-CSRF header on every call; a content type only with a body (an empty JSON body is refused).
 const CSRF = { "x-requested-with": "booking-cms" };
 const SETUP = { in_progress: "In progress", hidden: "Hidden by owner", finished: "Finished" };
+// R480: subscription statuses and plans, as the admin reads them
+const STATUS = { free: "Free", trial: "Trial", active: "Active", past_due: "Payment due", lapsed: "Booking paused" };
+const PLAN = { early: "Early adopter", standard: "Standard", pro: "Pro" };
 
 async function api(path, options) {
   const headers = options && options.body !== undefined ? { ...CSRF, "content-type": "application/json" } : CSRF;
@@ -187,6 +197,7 @@ function signedOut() {
 
 async function loadTenants() {
   const body = $("tenants");
+  show($("tenants-error"));
   try {
     const tenants = await api("tenants");
     body.replaceChildren(...tenants.map((tenant) => {
@@ -208,12 +219,62 @@ async function loadTenants() {
       pill.className = "pill " + tenant.setup;
       pill.textContent = SETUP[tenant.setup] || tenant.setup;
       cell("").appendChild(pill);
+      row.appendChild(planCell(tenant));
       return row;
     }));
     $("tenants-empty").hidden = tenants.length > 0;
   } catch (error) {
     if (error.status === 401) signedOut();
   }
+}
+
+// R430/R480: a salon's subscription, with free use and a longer trial one click away.
+function planCell(tenant) {
+  const td = document.createElement("td");
+  td.className = "plan";
+  const sub = tenant.subscription;
+  const pill = document.createElement("span");
+  pill.className = "pill " + sub.status;
+  pill.textContent = STATUS[sub.status] || sub.status;
+  td.appendChild(pill);
+  const detail = document.createElement("small");
+  const until = new Date(sub.accessUntil).toLocaleDateString();
+  detail.textContent = sub.status === "free" ? "Never charged"
+    : sub.status === "trial" ? "Trial until " + until
+    : !sub.paidThrough ? "Trial ended " + until
+    : (PLAN[sub.planId] || sub.planId) + " · paid until " + until;
+  td.appendChild(detail);
+  // R500: who is outgrowing their plan
+  const texts = document.createElement("small");
+  texts.textContent = "Texts " + sub.smsUsed + " / " + sub.smsIncluded + (sub.smsUsed > sub.smsIncluded ? " · over" : "");
+  td.appendChild(texts);
+  const actions = document.createElement("div");
+  actions.className = "row";
+  const button = (label, body) => {
+    const b = document.createElement("button");
+    b.type = "button"; b.className = "secondary"; b.textContent = label;
+    b.addEventListener("click", async () => {
+      b.disabled = true;
+      try {
+        await api("tenants/" + encodeURIComponent(tenant.id) + "/subscription", { method: "POST", body: JSON.stringify(body) });
+        loadTenants();
+      } catch (error) {
+        if (error.status === 401) { signedOut(); return; }
+        b.disabled = false;
+        alertError(error.message);
+      }
+    });
+    actions.appendChild(b);
+  };
+  button(sub.free ? "End free use" : "Make free", { free: !sub.free });
+  if (!sub.free) button("+14 days trial", { extendTrialDays: 14 });
+  if (sub.status === "trial") button("End trial now", { endTrial: true });
+  td.appendChild(actions);
+  return td;
+}
+
+function alertError(message) {
+  show($("tenants-error"), message);
 }
 
 // A subdomain suggested from a Latin salon name; the field stays editable.

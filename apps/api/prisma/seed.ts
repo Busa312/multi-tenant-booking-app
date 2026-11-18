@@ -165,6 +165,8 @@ async function main() {
     });
   }
 
+  await seedSubscription(tenant.id);
+
   // eslint-disable-next-line no-console
   console.log(`Seeded tenant "${tenant.subdomain}" — login as owner@demo.local / password123`);
 
@@ -287,8 +289,19 @@ async function seedCarWash() {
     });
   }
 
+  await seedSubscription(tenant.id);
+
   // eslint-disable-next-line no-console
   console.log(`Seeded tenant "${tenant.subdomain}" — login as owner@carwash.local / password123`);
+}
+
+/** R480: a 14-day trial from when the salon was first seeded; left alone on re-runs. */
+async function seedSubscription(tenantId: string) {
+  await prisma.subscription.upsert({
+    where: { tenantId },
+    update: {},
+    create: { tenantId, planId: "early", trialEndsAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000) },
+  });
 }
 
 main()

@@ -29,6 +29,11 @@ export default async function BookPage({
     );
   }
 
+  // R490: the business's subscription has lapsed
+  if (context.tenant.bookingPaused) {
+    return <UnavailableNotice heading={context.t("booking.pausedHeading")} body={context.t("booking.pausedBody")} />;
+  }
+
   const data = await loadBookingPageData(searchParams);
 
   return (

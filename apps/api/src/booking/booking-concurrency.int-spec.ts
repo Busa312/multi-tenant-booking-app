@@ -1,3 +1,7 @@
+import type { ConfigService } from "@nestjs/config";
+import { BillingService } from "../billing/billing.service.js";
+import { FlittClient } from "../billing/flitt.client.js";
+import { RevalidationService } from "../cms/revalidation.service.js";
 import { ConflictException } from "@nestjs/common";
 import type { PrismaClient } from "../../generated/prisma/index.js";
 import { PrismaService } from "../prisma/prisma.service.js";
@@ -27,7 +31,10 @@ describe("Concurrent bookings (integration)", () => {
     await prisma.onModuleInit();
     const uncached = { get: async () => null, set: async () => undefined } as unknown as AvailabilityCacheService;
     const availability = new AvailabilityService(prisma, context, uncached);
-    visits = new VisitService(prisma, context, availability, new BookingService(prisma, context, availability));
+    // R490: the real check, unconfigured — a fixture salon is on its trial
+    const config = { get: () => undefined } as unknown as ConfigService;
+    const billing = new BillingService(prisma, context, new FlittClient(config), new RevalidationService(config));
+    visits = new VisitService(prisma, context, availability, new BookingService(prisma, context, availability), billing);
     tenant = await createTenant(owner, "race");
   });
 

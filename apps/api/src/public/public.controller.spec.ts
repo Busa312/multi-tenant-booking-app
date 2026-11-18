@@ -14,6 +14,7 @@ import type { NotificationService } from "../notifications/notification.service.
 import type { PrismaService } from "../prisma/prisma.service.js";
 import type { RateLimitService } from "../rate-limit/rate-limit.service.js";
 import type { VerificationService } from "./verification.service.js";
+import type { BillingService } from "../billing/billing.service.js";
 import type { BlockedPhoneService } from "../booking/blocked-phone.service.js";
 import type { TenantContextService } from "../tenant/tenant-context.service.js";
 
@@ -115,6 +116,8 @@ const setup = (overrides: Overrides = {}) => {
 
   // R380: nobody is blocked unless a test says so
   const blockedPhones = { assertNotBlocked: jest.fn().mockResolvedValue(undefined) };
+  // R490: the salon is paid up unless a test says otherwise
+  const billing = { bookingPausedIn: jest.fn().mockResolvedValue(false) };
 
   const controller = new PublicController(
     prisma,
@@ -125,6 +128,7 @@ const setup = (overrides: Overrides = {}) => {
     limits as unknown as RateLimitService,
     verification as unknown as VerificationService,
     blockedPhones as unknown as BlockedPhoneService,
+    billing as unknown as BillingService,
   );
 
   return { controller, availability, visits, notifications, limits, verification, blockedPhones };
