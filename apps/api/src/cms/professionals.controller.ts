@@ -1,4 +1,4 @@
-import { randomBytes, createHash } from "crypto";
+import { randomBytes } from "crypto";
 import {
   Body,
   ConflictException,
@@ -28,6 +28,7 @@ import { TenantContextService } from "../tenant/tenant-context.service.js";
 import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard.js";
 import { RolesGuard } from "../auth/guards/roles.guard.js";
 import { Roles } from "../auth/decorators/roles.decorator.js";
+import { issueInviteToken } from "../auth/invite-token.js";
 import { serializeProfessional } from "../common/serializers.js";
 import { enabledLocalesOf, validateLocalizedText } from "../common/i18n-validation.js";
 import {
@@ -37,7 +38,6 @@ import {
   UpdateProfessionalRequestDto,
 } from "../common/dto.js";
 
-const INVITE_TOKEN_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
 const PROFESSIONAL_SUMMARY_INCLUDE = {
   serviceProfessionals: true,
@@ -213,9 +213,7 @@ export class ProfessionalsController {
     @Body() body: InviteProfessionalRequest,
   ): Promise<InviteProfessionalResponse> {
     const { tenantId } = this.tenantContext.current;
-    const token = randomBytes(32).toString("hex");
-    const tokenHash = createHash("sha256").update(token).digest("hex");
-    const expiresAt = new Date(Date.now() + INVITE_TOKEN_TTL_MS);
+    const { token, hash: tokenHash, expiresAt } = issueInviteToken();
     const placeholderPasswordHash = await bcrypt.hash(randomBytes(16).toString("hex"), 10);
 
     try {

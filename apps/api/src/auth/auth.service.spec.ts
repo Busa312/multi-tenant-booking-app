@@ -9,7 +9,7 @@ import type { PrismaService } from "../prisma/prisma.service.js";
 import type { RedisService } from "../redis/redis.service.js";
 import type { TenantContextService } from "../tenant/tenant-context.service.js";
 import type { TenantResolverService } from "../tenant/tenant-resolver.service.js";
-import type { NotificationService } from "../notifications/notification.service.js";
+import type { MailService } from "../notifications/mail.service.js";
 import type { RateLimitService } from "../rate-limit/rate-limit.service.js";
 
 const TENANT_ID = "11111111-1111-1111-1111-111111111111";
@@ -36,6 +36,7 @@ interface Overrides {
 
 const setup = (overrides: Overrides = {}) => {
   const tx = {
+    tenant: { findUnique: jest.fn().mockResolvedValue({ name: "Salon <Vake>" }) },
     tenantUser: {
       findFirst: jest.fn().mockResolvedValue(overrides.user === undefined ? user() : overrides.user),
       update: jest.fn(({ data }: { data: Record<string, unknown> }) => Promise.resolve({ ...user(), ...data, sessionVersion: 4 })),
@@ -60,7 +61,7 @@ const setup = (overrides: Overrides = {}) => {
     reset: jest.fn().mockResolvedValue(undefined),
   };
   const redis = { client: { set: jest.fn().mockResolvedValue("OK") } };
-  const notifications = { sendPasswordReset: jest.fn().mockResolvedValue(false) };
+  const mail = { send: jest.fn().mockResolvedValue(true) };
   const config = { get: jest.fn((key: string) => (key === "CMS_URL" ? "https://cms.example.com/" : undefined)) };
 
   const service = new AuthService(
@@ -70,10 +71,10 @@ const setup = (overrides: Overrides = {}) => {
     tenantResolver as unknown as TenantResolverService,
     limits as unknown as RateLimitService,
     redis as unknown as RedisService,
-    notifications as unknown as NotificationService,
+    mail as unknown as MailService,
     config as unknown as ConfigService,
   );
-  return { service, tx, jwt, limits, redis, notifications };
+  return { service, tx, jwt, limits, redis, mail };
 };
 
 const login = { subdomain: "demo", email: " Owner@Demo.local ", password: "correct horse battery" };
@@ -131,18 +132,30 @@ describe("login", () => {
 
 // R310
 describe("forgot password", () => {
-  it("stores only the token's hash, for 30 minutes, and sends the link to the account's email", async () => {
-    const { service, tx, notifications } = setup();
+  it("stores only the token's hash, for 30 minutes, and emails the link to the account's address", async () => {
+    const { service, tx, mail } = setup();
 
-    await service.forgotPassword({ subdomain: "demo", email: "owner@demo.local" });
+    await service.forgotPassword({ subdomain: "demo", email: "owner@demo.local", locale: "en" });
 
     const data = tx.tenantUser.update.mock.calls[0]?.[0]?.data as { passwordResetTokenHash: string; passwordResetExpiresAt: Date };
-    const { email, resetUrl } = notifications.sendPasswordReset.mock.calls[0]?.[0] as { email: string; resetUrl: string };
+    const sent = mail.send.mock.calls[0]?.[0] as { to: string; content: { subject: string; text: string } };
+    const resetUrl = sent.content.text.match(/https:\/\/cms\.example\.com\/reset-password\/\S+/)?.[0] ?? "";
     const token = resetUrl.split("/").at(-1) ?? "";
-    expect(email).toBe("owner@demo.local");
+    expect(sent.to).toBe("owner@demo.local");
     expect(resetUrl.startsWith(`https://cms.example.com/reset-password/${TENANT_ID}/`)).toBe(true);
     expect(data.passwordResetTokenHash).toBe(sha256(token));
     expect(data.passwordResetExpiresAt.getTime() - Date.now()).toBeGreaterThan(29 * 60_000);
+    // Names the salon, in the CMS's language
+    expect(sent.content.subject).toBe("Reset your password · Salon <Vake>");
+  });
+
+  it("writes the email in Georgian unless the CMS was showing English", async () => {
+    const { service, mail } = setup();
+
+    await service.forgotPassword({ subdomain: "demo", email: "owner@demo.local" });
+
+    const sent = mail.send.mock.calls[0]?.[0] as { content: { subject: string } };
+    expect(sent.content.subject).toMatch(/^პაროლის აღდგენა/);
   });
 
   it.each([
@@ -150,10 +163,10 @@ describe("forgot password", () => {
     ["no such account", { user: null }],
     ["too many requests for the account", { limitAllowed: false }],
   ])("resolves silently and sends nothing when there's %s", async (_label, overrides) => {
-    const { service, notifications } = setup(overrides as Overrides);
+    const { service, mail } = setup(overrides as Overrides);
 
     await expect(service.forgotPassword({ subdomain: "demo", email: "x@y.z" })).resolves.toBeUndefined();
-    expect(notifications.sendPasswordReset).not.toHaveBeenCalled();
+    expect(mail.send).not.toHaveBeenCalled();
   });
 });
 

@@ -161,6 +161,8 @@ export class SetPasswordRequestDto {
 export class ForgotPasswordRequestDto {
   @ApiProperty() subdomain!: string;
   @ApiProperty() email!: string;
+  @ApiProperty({ required: false, enum: ["en", "ka"], description: "R310: the email's language; Georgian when absent" })
+  locale?: string;
 }
 
 export class ResetPasswordRequestDto {
@@ -619,7 +621,17 @@ export class OnboardTenantRequestDto {
   @ApiProperty({ description: "IANA tz, e.g. Asia/Tbilisi" }) timezone!: string;
   @ApiProperty({ description: 'e.g. "acme" for acme.platform.ge' }) subdomain!: string;
   @ApiProperty() ownerEmail!: string;
-  @ApiProperty() ownerPassword!: string;
+  @ApiProperty({ required: false, description: "R430: set the owner's password now — or send emailSetupLink instead" })
+  ownerPassword?: string;
+  @ApiProperty({ required: false, description: "R430: email the owner a 7-day link to set their own password" })
+  emailSetupLink?: boolean;
+}
+
+export class OwnerSetupLinkDto {
+  @ApiProperty() email!: string;
+  @ApiProperty() emailed!: boolean;
+  @ApiProperty({ nullable: true, type: String, description: "Only when it couldn't be emailed" }) url!: string | null;
+  @ApiProperty() expiresAt!: string;
 }
 
 export class OnboardTenantResponseDto {
@@ -627,6 +639,8 @@ export class OnboardTenantResponseDto {
   @ApiProperty() subdomain!: string;
   @ApiProperty() ownerUserId!: string;
   @ApiProperty() ownerEmail!: string;
+  @ApiProperty({ nullable: true, type: OwnerSetupLinkDto, description: "Null when a password was set" })
+  setupLink!: OwnerSetupLinkDto | null;
 }
 
 // R370: the CMS home page

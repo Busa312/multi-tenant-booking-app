@@ -76,7 +76,7 @@
     "errorLocked": "Too many sign-in attempts. Wait a few minutes and try again."
   },
   "setPassword": {
-    "artHeadline": "Welcome to the team.",
+    "artHeadline": "Welcome.",
     "artSub": "Set a password to finish setting up your CMS login.",
     "title": "Set your password",
     "subtitle": "Choose a password to access your CMS account.",

@@ -1,3 +1,4 @@
+import { randomBytes } from "node:crypto";
 import { BadRequestException, ConflictException, Injectable } from "@nestjs/common";
 import * as bcrypt from "bcryptjs";
 import { Prisma } from "../../generated/prisma/index.js";
@@ -7,6 +8,8 @@ import { DEFAULT_PLAN } from "../billing/plans.js";
 import { PrismaService } from "../prisma/prisma.service.js";
 import { isValidTimezone } from "../common/timezone.js";
 import { MAX_PASSWORD_BYTES, MIN_PASSWORD_LENGTH } from "../booking/booking-rules.js";
+import { issueInviteToken } from "../auth/invite-token.js";
+import { OwnerSetupLinkService } from "./owner-setup-link.service.js";
 
 /**
  * R430: a subdomain is a DNS label the host resolver can match: lowercase
@@ -25,13 +28,23 @@ const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 const text = (value: unknown): string => (typeof value === "string" ? value.trim() : "");
 
+/** A checked request: the owner gets either a password now or an emailed link (R430). */
+export interface ValidOnboarding {
+  name: string;
+  timezone: string;
+  subdomain: string;
+  ownerEmail: string;
+  owner: { password: string } | { emailSetupLink: true };
+}
+
 /** The request, cleaned up and checked; throws 400 naming the first problem. */
-export function validateOnboarding(input: OnboardTenantRequest): OnboardTenantRequest {
+export function validateOnboarding(input: OnboardTenantRequest): ValidOnboarding {
   const name = text(input?.name);
   const timezone = text(input?.timezone);
   const subdomain = text(input?.subdomain);
   const ownerEmail = text(input?.ownerEmail).toLowerCase();
   const ownerPassword = typeof input?.ownerPassword === "string" ? input.ownerPassword : "";
+  const emailSetupLink = input?.emailSetupLink === true;
 
   if (!name || name.length > 120) {
     throw new BadRequestException("name is required (at most 120 characters)");
@@ -50,11 +63,17 @@ export function validateOnboarding(input: OnboardTenantRequest): OnboardTenantRe
   if (!EMAIL.test(ownerEmail)) {
     throw new BadRequestException("ownerEmail must be an email address");
   }
+  // R430: one way or the other, never both — a password nobody was told about
+  // next to a link would leave the owner unsure which one counts.
+  if (emailSetupLink) {
+    if (ownerPassword !== "") throw new BadRequestException("Send either ownerPassword or emailSetupLink, not both");
+    return { name, timezone, subdomain, ownerEmail, owner: { emailSetupLink: true } };
+  }
   // R310: the same rule the CMS applies when the owner sets a password
   if (ownerPassword.length < MIN_PASSWORD_LENGTH || Buffer.byteLength(ownerPassword) > MAX_PASSWORD_BYTES) {
     throw new BadRequestException(`ownerPassword must be ${MIN_PASSWORD_LENGTH} to ${MAX_PASSWORD_BYTES} characters`);
   }
-  return { name, timezone, subdomain, ownerEmail, ownerPassword };
+  return { name, timezone, subdomain, ownerEmail, owner: { password: ownerPassword } };
 }
 
 /**
@@ -65,14 +84,21 @@ export function validateOnboarding(input: OnboardTenantRequest): OnboardTenantRe
  */
 @Injectable()
 export class OnboardingService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly setupLinks: OwnerSetupLinkService,
+  ) {}
 
   async onboardTenant(request: OnboardTenantRequest): Promise<OnboardTenantResponse> {
     const input = validateOnboarding(request);
-    const passwordHash = await bcrypt.hash(input.ownerPassword, 10);
+    // R430: with an emailed link the owner has no password until they choose
+    // one — the stored hash is of random bytes nobody knows (as for a staff invite).
+    const invite = "emailSetupLink" in input.owner ? issueInviteToken() : null;
+    const passwordHash = await bcrypt.hash("password" in input.owner ? input.owner.password : randomBytes(16).toString("hex"), 10);
 
+    let created: Omit<OnboardTenantResponse, "setupLink">;
     try {
-      return await this.prisma.client.$transaction(async (tx) => {
+      created = await this.prisma.client.$transaction(async (tx) => {
         const tenant = await tx.tenant.create({
           data: { name: input.name, timezone: input.timezone, subdomain: input.subdomain },
         });
@@ -80,7 +106,13 @@ export class OnboardingService {
         await tx.$executeRaw`SELECT set_config('app.tenant_id', ${tenant.id}, true)`;
 
         const owner = await tx.tenantUser.create({
-          data: { tenantId: tenant.id, email: input.ownerEmail, passwordHash, role: "owner" },
+          data: {
+            tenantId: tenant.id,
+            email: input.ownerEmail,
+            passwordHash,
+            role: "owner",
+            ...(invite ? { inviteTokenHash: invite.hash, inviteTokenExpiresAt: invite.expiresAt } : {}),
+          },
         });
 
         // R480: every salon starts on a free trial
@@ -101,6 +133,20 @@ export class OnboardingService {
       }
       throw err;
     }
+
+    // Sent after the commit: an email must never announce a salon that was rolled back.
+    const setupLink = invite
+      ? await this.setupLinks.deliver({
+          tenantId: created.tenantId,
+          salonName: input.name,
+          workspace: created.subdomain,
+          email: created.ownerEmail,
+          token: invite.token,
+          expiresAt: invite.expiresAt,
+          firstTime: true,
+        })
+      : null;
+    return { ...created, setupLink };
   }
 
   /**

@@ -421,6 +421,8 @@ export interface SetPasswordRequest {
 export interface ForgotPasswordRequest {
   subdomain: string;
   email: string;
+  /** R310: the CMS's language ("en" | "ka"); the email is written in it. */
+  locale?: string;
 }
 
 export interface ResetPasswordRequest {
@@ -445,12 +447,26 @@ export interface UpsertBusinessHoursRequest {
   isDayOff?: boolean;
 }
 
+/**
+ * R430: the owner's password is either set now (`ownerPassword`) or chosen by
+ * the owner through an emailed link (`emailSetupLink: true`) — exactly one.
+ */
 export interface OnboardTenantRequest {
   name: string;
   timezone: string;
   subdomain: string;
   ownerEmail: string;
-  ownerPassword: string;
+  ownerPassword?: string;
+  emailSetupLink?: boolean;
+}
+
+/** R430: a set-password link for a salon's owner, and whether it reached them. */
+export interface OwnerSetupLink {
+  email: string;
+  emailed: boolean;
+  /** Only when it couldn't be emailed: the admin passes it on by hand. */
+  url: string | null;
+  expiresAt: string;
 }
 
 export interface OnboardTenantResponse {
@@ -458,6 +474,8 @@ export interface OnboardTenantResponse {
   subdomain: string;
   ownerUserId: string;
   ownerEmail: string;
+  /** Null when a password was set. */
+  setupLink: OwnerSetupLink | null;
 }
 
 // R380

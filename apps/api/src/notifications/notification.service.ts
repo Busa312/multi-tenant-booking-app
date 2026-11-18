@@ -26,11 +26,6 @@ export interface OtpMessage {
   code: string;
 }
 
-export interface PasswordResetMessage {
-  email: string;
-  resetUrl: string;
-}
-
 const UBILL_DEFAULT_URL = "https://api.ubill.dev";
 const UBILL_TIMEOUT_MS = 8_000;
 
@@ -50,16 +45,14 @@ interface UbillSendResponse {
  * and `UBILL_BRAND_ID` are set; without them it's a log-only stub, which is
  * what development runs on. Each method returns whether it actually
  * delivered, which is what tells the caller whether it has to fall back (show
- * the link on screen, hand the dev code back). Mail is still a stub.
+ * the link on screen, hand the dev code back). Email is MailService's.
  *
  * Texts are plain Latin (GSM-7) on purpose: one Georgian letter switches the
  * whole message to Unicode, which fits 70 characters per SMS instead of 160,
  * so the link message would be billed as two or three.
  *
  * Credentials — links, codes — are never written to logs: for as long as they
- * live, a log line holding one is as good as the credential. The one
- * exception is the password-reset link outside production, where there is no
- * other way to reach it during development (see sendPasswordReset).
+ * live, a log line holding one is as good as the credential.
  */
 @Injectable()
 export class NotificationService {
@@ -112,22 +105,6 @@ export class NotificationService {
       return false;
     }
     return this.sendSms(message.phoneNumber, `Your booking code is ${message.code}`, { otp: true, kind: "otp" });
-  }
-
-  /**
-   * R310. Unlike the OTP, the reset link can never come back on the response:
-   * the request is unauthenticated, so that would let anyone reset anyone's
-   * password. Until a mail provider is wired in, the link is logged — in
-   * development only — so the flow can be exercised; in production it goes
-   * nowhere, and the owner has to be reset by hand.
-   */
-  async sendPasswordReset(message: PasswordResetMessage): Promise<boolean> {
-    if (this.config.get<string>("NODE_ENV") !== "production") {
-      this.logger.warn(`[stub, development only] password reset link for ${message.email}: ${message.resetUrl}`);
-    } else {
-      this.logger.error(`password reset requested for ${message.email}, but no mail provider is configured`);
-    }
-    return false;
   }
 
   /** One text through uBill. Never throws: a failed send is `false`, logged without the text. */

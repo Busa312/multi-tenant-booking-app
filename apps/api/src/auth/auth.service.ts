@@ -15,7 +15,9 @@ import { PrismaService } from "../prisma/prisma.service.js";
 import { RedisService } from "../redis/redis.service.js";
 import { TenantContextService } from "../tenant/tenant-context.service.js";
 import { TenantResolverService } from "../tenant/tenant-resolver.service.js";
-import { NotificationService } from "../notifications/notification.service.js";
+import { MailService } from "../notifications/mail.service.js";
+import { passwordResetEmail, toMailLang } from "../notifications/mail-templates.js";
+import { cmsBaseUrl } from "../common/cms-url.js";
 import { RateLimitService } from "../rate-limit/rate-limit.service.js";
 import { tooManyRequests } from "../rate-limit/rate-limit.guard.js";
 import { MAX_PASSWORD_BYTES, MIN_PASSWORD_LENGTH } from "../booking/booking-rules.js";
@@ -70,7 +72,7 @@ export class AuthService {
     private readonly tenantResolver: TenantResolverService,
     private readonly limits: RateLimitService,
     private readonly redis: RedisService,
-    private readonly notifications: NotificationService,
+    private readonly mail: MailService,
     private readonly config: ConfigService,
   ) {}
 
@@ -155,7 +157,7 @@ export class AuthService {
    * R310: always resolves the same way — whether the business or the account
    * exists, or a limit was hit — so the answer can't be used to find accounts.
    */
-  async forgotPassword({ subdomain, email }: ForgotPasswordRequest): Promise<void> {
+  async forgotPassword({ subdomain, email, locale }: ForgotPasswordRequest): Promise<void> {
     const normalizedEmail = String(email ?? "").trim().toLowerCase();
     const tenantId = await this.resolveTenant(subdomain);
     if (!tenantId || !normalizedEmail) return;
@@ -167,10 +169,14 @@ export class AuthService {
     );
     if (!perAccount.allowed) return;
 
-    const user = await this.prisma.forTenant((tx) =>
-      tx.tenantUser.findFirst({ where: { tenantId, email: normalizedEmail, isActive: true } }),
-    );
-    if (!user) return;
+    const found = await this.prisma.forTenant(async (tx) => {
+      const user = await tx.tenantUser.findFirst({ where: { tenantId, email: normalizedEmail, isActive: true } });
+      // The salon's name goes in the email, so the user knows which login it's for.
+      const tenant = user ? await tx.tenant.findUnique({ where: { id: tenantId }, select: { name: true } }) : null;
+      return user && tenant ? { user, salonName: tenant.name } : null;
+    });
+    if (!found) return;
+    const { user, salonName } = found;
 
     const token = randomBytes(32).toString("base64url");
     await this.prisma.forTenant((tx) =>
@@ -183,10 +189,13 @@ export class AuthService {
       }),
     );
 
-    const cmsUrl = (this.config.get<string>("CMS_URL") ?? "http://localhost:5173").replace(/\/$/, "");
-    await this.notifications.sendPasswordReset({
-      email: user.email,
-      resetUrl: `${cmsUrl}/reset-password/${tenantId}/${token}`,
+    // Never on the response: the request is unauthenticated, so that would let
+    // anyone reset anyone's password. By email only.
+    const resetUrl = `${cmsBaseUrl(this.config.get<string>("CMS_URL"))}/reset-password/${tenantId}/${token}`;
+    await this.mail.send({
+      to: user.email,
+      kind: "password_reset",
+      content: passwordResetEmail({ lang: toMailLang(locale), salonName, email: user.email, resetUrl }),
     });
   }
 

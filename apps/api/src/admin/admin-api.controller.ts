@@ -11,9 +11,11 @@ import type {
   AdminUpdateSubscriptionRequest,
   OnboardTenantRequest,
   OnboardTenantResponse,
+  OwnerSetupLink,
 } from "@booking/shared-types";
 import { RateLimit } from "../rate-limit/rate-limit.decorator.js";
 import { OnboardingService } from "../internal/onboarding.service.js";
+import { OwnerSetupLinkService } from "../internal/owner-setup-link.service.js";
 import { BillingService } from "../billing/billing.service.js";
 import { PlanCatalog } from "../billing/plan-catalog.service.js";
 import { PrismaService } from "../prisma/prisma.service.js";
@@ -42,6 +44,7 @@ export class AdminApiController {
     private readonly plans: PlanCatalog,
     private readonly prisma: PrismaService,
     private readonly tenantContext: TenantContextService,
+    private readonly setupLinks: OwnerSetupLinkService,
     config: ConfigService,
   ) {
     this.cookie = adminCookieConfig((key) => config.get<string>(key));
@@ -122,5 +125,19 @@ export class AdminApiController {
   @RateLimit({ name: "admin-onboard", max: 60, windowSeconds: 60 * 60 })
   createTenant(@Body() body: OnboardTenantRequest): Promise<OnboardTenantResponse> {
     return this.onboarding.onboardTenant(body);
+  }
+
+  // R430: a fresh set-password link for a salon's owner — an expired or lost
+  // one, or a forgotten password when the owner can't use "Forgot password".
+  @Post("tenants/:id/owner-link")
+  @HttpCode(200)
+  @UseGuards(AdminSessionGuard)
+  @RateLimit({ name: "admin-write", max: 120, windowSeconds: 60 * 60 })
+  async sendOwnerLink(@Param("id") id: string): Promise<OwnerSetupLink> {
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(id)) throw new BadRequestException("Invalid salon id");
+    // The tenant table has no RLS: this is the platform checking the salon exists.
+    const tenant = await this.prisma.client.tenant.findUnique({ where: { id }, select: { id: true } });
+    if (!tenant) throw new NotFoundException("No such salon");
+    return this.tenantContext.runWithTenant(id, () => this.setupLinks.sendFresh());
   }
 }

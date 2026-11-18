@@ -13,7 +13,7 @@ const PUBLIC_SITE_BASE_DOMAIN = import.meta.env.VITE_PUBLIC_SITE_BASE_DOMAIN as 
  * account exists — the API never says, so neither does this page.
  */
 export function ForgotPasswordPage() {
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
   const [subdomain, setSubdomain] = useState("");
   const [email, setEmail] = useState("");
   const [sent, setSent] = useState(false);
@@ -25,7 +25,8 @@ export function ForgotPasswordPage() {
     setError(null);
     setSubmitting(true);
     try {
-      await cmsApiClient.forgotPassword({ subdomain: subdomain.trim(), email: email.trim() });
+      // R310: the email comes in the language the CMS is showing
+      await cmsApiClient.forgotPassword({ subdomain: subdomain.trim(), email: email.trim(), locale: lang });
       setSent(true);
     } catch (err) {
       setError(t(err instanceof ApiError && err.status === 429 ? "forgotPassword.errTooMany" : "common.somethingWrong"));

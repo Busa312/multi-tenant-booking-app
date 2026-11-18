@@ -12,6 +12,8 @@ export interface AdminPageConfig {
   /** e.g. "platform.ge": a salon's booking site is https://<subdomain>.<this>. */
   siteBaseDomain: string | null;
   siteProtocol: "https" | "http";
+  /** R430: whether set-password links are emailed, or handed back to pass on. */
+  mailConfigured: boolean;
 }
 
 /** The policy the page is sent with; `nonce` must be the one rendered into it. */
@@ -86,6 +88,13 @@ td a { color:var(--ink); }
 .plans .note { display:block; color:var(--muted); font-size:12px; margin-top:4px; max-width:220px; }
 .plans .note.warn { color:var(--ink); background:var(--accent); padding:2px 6px; border-radius:4px; }
 .plans .note.bad { color:var(--error); }
+fieldset { border:0; padding:0; margin:16px 0 0; display:grid; gap:8px; min-width:0; }
+legend { font-size:13px; font-weight:600; padding:0; margin-bottom:6px; }
+label.choice { flex-direction:row; align-items:center; gap:8px; font-weight:500; font-size:14px; }
+label.choice input { margin:0; width:16px; height:16px; }
+.owner small { display:block; color:var(--muted); font-size:12px; margin-top:4px; max-width:260px; word-break:break-all; }
+.owner small.bad { color:var(--error); }
+.owner button { padding:3px 8px; font-size:12px; }
 [hidden] { display:none !important; }
 </style>
 </head>
@@ -112,7 +121,7 @@ td a { color:var(--ink); }
   <section id="app" hidden>
     <div class="card done" id="created" hidden>
       <h2>Salon created</h2>
-      <p class="hint">Send this to the owner now. The password isn't shown again; they can change it with "Forgot password" on the sign-in page.</p>
+      <p class="hint" id="created-hint"></p>
       <pre id="handoff"></pre>
       <div class="row"><button class="secondary" type="button" id="copy-handoff">Copy</button><button class="link" type="button" id="close-created">Close</button></div>
     </div>
@@ -128,10 +137,16 @@ td a { color:var(--ink); }
           </label>
           <label>Time zone <input id="f-timezone" required value="Asia/Tbilisi" list="zones" autocomplete="off" spellcheck="false"></label>
           <label>Owner email <input id="f-email" type="email" required autocomplete="off"></label>
-          <label>Owner password <small>At least 10 characters</small>
-            <span class="row"><input id="f-password" required minlength="10" autocomplete="new-password" spellcheck="false"><button class="secondary" type="button" id="generate">Generate</button></span>
-          </label>
         </div>
+        <fieldset>
+          <legend>Owner's password</legend>
+          <label class="choice"><input type="radio" name="owner-access" id="f-access-link" value="link"> Email them a link to set it themselves</label>
+          <label class="choice"><input type="radio" name="owner-access" id="f-access-password" value="password"> Set it now</label>
+          <p class="hint" id="f-link-hint"></p>
+          <label id="f-password-label" hidden>Password <small>At least 10 characters</small>
+            <span class="row"><input id="f-password" minlength="10" autocomplete="new-password" spellcheck="false"><button class="secondary" type="button" id="generate">Generate</button></span>
+          </label>
+        </fieldset>
         <datalist id="zones"><option value="Asia/Tbilisi"><option value="Europe/Istanbul"><option value="Europe/Kyiv"><option value="Europe/Berlin"><option value="Europe/London"><option value="Asia/Yerevan"><option value="Asia/Baku"></datalist>
         <p class="error" id="create-error" role="alert" hidden></p>
         <div class="actions"><button type="submit" id="create-submit">Create salon</button></div>
@@ -154,7 +169,7 @@ td a { color:var(--ink); }
       <h2>Salons</h2>
       <div class="scroll">
         <table>
-          <thead><tr><th>Salon</th><th>Booking site</th><th>Time zone</th><th>Created</th><th>Setup</th><th>Subscription</th></tr></thead>
+          <thead><tr><th>Salon</th><th>Booking site</th><th>Time zone</th><th>Created</th><th>Setup</th><th>Subscription</th><th>Owner login</th></tr></thead>
           <tbody id="tenants"></tbody>
         </table>
       </div>
@@ -245,6 +260,7 @@ async function loadTenants() {
       pill.textContent = SETUP[tenant.setup] || tenant.setup;
       cell("").appendChild(pill);
       row.appendChild(planCell(tenant));
+      row.appendChild(ownerCell(tenant));
       return row;
     }));
     $("tenants-empty").hidden = tenants.length > 0;
@@ -296,6 +312,50 @@ function planCell(tenant) {
   if (sub.status === "trial") button("End trial now", { endTrial: true });
   td.appendChild(actions);
   return td;
+}
+
+// R430: a fresh set-password link for the owner. Two clicks, since it emails them.
+function ownerCell(tenant) {
+  const td = document.createElement("td");
+  td.className = "owner";
+  const send = document.createElement("button");
+  send.type = "button"; send.className = "secondary"; send.textContent = "Email password link";
+  const note = document.createElement("small");
+  note.hidden = true;
+  const say = (text, bad) => { note.textContent = text; note.hidden = !text; note.className = bad ? "bad" : ""; };
+  let confirming = false;
+  send.addEventListener("click", async () => {
+    if (!confirming) {
+      confirming = true;
+      send.textContent = "Confirm: email the owner";
+      say(CONFIG.mailConfigured
+        ? "Replaces any earlier link. Their current password keeps working until they use it."
+        : "Email isn't set up on this server: you'll get the link to send yourself.");
+      return;
+    }
+    send.disabled = true;
+    try {
+      const link = await api("tenants/" + encodeURIComponent(tenant.id) + "/owner-link", { method: "POST" });
+      say(linkNote(link), !link.emailed);
+    } catch (error) {
+      if (error.status === 401) { signedOut(); return; }
+      say(error.message, true);
+    } finally {
+      confirming = false;
+      send.disabled = false;
+      send.textContent = "Email password link";
+    }
+  });
+  td.append(send, note);
+  return td;
+}
+
+/** What happened to a set-password link: emailed, or the link itself to pass on. */
+function linkNote(link) {
+  const until = new Date(link.expiresAt).toLocaleDateString();
+  return link.emailed
+    ? "Emailed to " + link.email + ". The link works once, until " + until + "."
+    : "Couldn't email " + link.email + ". Send them this link yourself (works once, until " + until + "): " + link.url;
 }
 
 // R550: the plans, edited in place
@@ -411,6 +471,27 @@ function preview() {
   $("f-subdomain-hint").textContent = url || "Lowercase letters, digits and hyphens";
 }
 
+// R430: an emailed link by default when mail works; otherwise a password set now.
+function ownerAccess() {
+  return $("f-access-link").checked ? "link" : "password";
+}
+function showOwnerAccess() {
+  const link = ownerAccess() === "link";
+  $("f-password-label").hidden = link;
+  $("f-password").required = !link;
+  $("f-link-hint").textContent = !link ? ""
+    : CONFIG.mailConfigured ? "They get an email in Georgian and English with a link to set their password (works once, for 7 days) and where to sign in."
+    : "Email isn't set up on this server, so the link will be shown here for you to send them yourself (works once, for 7 days).";
+  $("f-link-hint").hidden = !link;
+}
+function resetOwnerAccess() {
+  $(CONFIG.mailConfigured ? "f-access-link" : "f-access-password").checked = true;
+  showOwnerAccess();
+}
+$("f-access-link").addEventListener("change", showOwnerAccess);
+$("f-access-password").addEventListener("change", showOwnerAccess);
+resetOwnerAccess();
+
 $("generate").addEventListener("click", () => {
   const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789";
   const bytes = crypto.getRandomValues(new Uint8Array(16));
@@ -435,27 +516,35 @@ $("login-form").addEventListener("submit", async (event) => {
 $("create-form").addEventListener("submit", async (event) => {
   event.preventDefault();
   show($("create-error"));
+  const byLink = ownerAccess() === "link";
   const request = {
     name: $("f-name").value,
     subdomain: $("f-subdomain").value.trim(),
     timezone: $("f-timezone").value.trim(),
     ownerEmail: $("f-email").value.trim(),
-    ownerPassword: $("f-password").value,
+    ...(byLink ? { emailSetupLink: true } : { ownerPassword: $("f-password").value }),
   };
   $("create-submit").disabled = true;
   try {
     const created = await api("tenants", { method: "POST", body: JSON.stringify(request) });
+    const link = created.setupLink;
     const lines = [
       "Salon: " + request.name.trim(),
       siteUrl(created.subdomain) ? "Booking site: " + siteUrl(created.subdomain) : null,
       CONFIG.cmsUrl ? "Sign in: " + CONFIG.cmsUrl : null,
       "Workspace: " + created.subdomain,
       "Email: " + created.ownerEmail,
-      "Password: " + request.ownerPassword,
+      link ? (link.url ? "Set your password: " + link.url : "Password: set it from the emailed link") : "Password: " + request.ownerPassword,
     ].filter(Boolean);
+    $("created-hint").textContent = !link
+      ? "Send this to the owner now. The password isn't shown again; they can change it with 'Forgot password' on the sign-in page."
+      : link.emailed
+        ? linkNote(link) + " The details below are for your records."
+        : "The email couldn't be sent. Send this to the owner yourself; the link works once, until " + new Date(link.expiresAt).toLocaleDateString() + ".";
     $("handoff").textContent = lines.join("\\n");
     $("created").hidden = false;
     $("create-form").reset();
+    resetOwnerAccess();
     $("f-timezone").value = "Asia/Tbilisi";
     subdomainEdited = false;
     preview();

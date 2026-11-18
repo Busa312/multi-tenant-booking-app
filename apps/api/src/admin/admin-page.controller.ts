@@ -3,6 +3,7 @@ import { Controller, Get, Header, Res } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { ApiExcludeController } from "@nestjs/swagger";
 import type { FastifyReply } from "fastify";
+import { OwnerSetupLinkService } from "../internal/owner-setup-link.service.js";
 import { RateLimit } from "../rate-limit/rate-limit.decorator.js";
 import { AdminAuthService } from "./admin-auth.service.js";
 import { adminPageCsp, renderAdminPage, type AdminPageConfig } from "./admin-page.js";
@@ -15,6 +16,7 @@ export class AdminPageController {
 
   constructor(
     private readonly auth: AdminAuthService,
+    setupLinks: OwnerSetupLinkService,
     config: ConfigService,
   ) {
     const production = config.get<string>("NODE_ENV") === "production";
@@ -23,6 +25,8 @@ export class AdminPageController {
       cmsUrl: config.get<string>("CMS_URL") ?? config.get<string>("CORS_ORIGINS")?.split(",")[0]?.trim() ?? null,
       siteBaseDomain: config.get<string>("PUBLIC_SITE_BASE_DOMAIN") ?? null,
       siteProtocol: production ? "https" : "http",
+      // R430: whether set-password links can be emailed, or come back to pass on by hand
+      mailConfigured: setupLinks.canEmail,
     };
   }
 
