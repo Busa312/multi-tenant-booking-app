@@ -62,6 +62,7 @@ export function ConfirmationPanel({
               : null,
         }))}
         total={visit.price}
+        totalFrom={visit.priceFrom}
         timezone={timezone}
         locale={locale}
         t={t}

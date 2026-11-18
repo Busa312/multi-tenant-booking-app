@@ -6,6 +6,7 @@ import { useI18n } from "../i18n/I18nContext.js";
 import { useLocalizedName } from "../lib/useLocalizedName.js";
 import { Modal } from "./Modal.js";
 import { Alert, Button, Field, InputGroup, TextInput } from "./ui/index.js";
+import { formatShortDate } from "../lib/tenantTime.js";
 
 interface InviteProfessionalModalProps {
   professional: ProfessionalSummary;
@@ -60,7 +61,7 @@ export function InviteProfessionalModal({ professional, onClose }: InviteProfess
           <Alert variant="success">
             {t("professionals.inviteSuccess", {
               email: result.email,
-              date: new Date(result.expiresAt).toLocaleDateString(lang === "ka" ? "ka-GE" : "en-US"),
+              date: formatShortDate(result.expiresAt, lang),
             })}
           </Alert>
           <InputGroup

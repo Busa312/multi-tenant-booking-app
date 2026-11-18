@@ -4,4 +4,6 @@ export * from "./auth";
 export * from "./colors";
 export * from "./i18n";
 export * from "./booking";
+export * from "./services";
+export * from "./dates";
 export * from "./redact";

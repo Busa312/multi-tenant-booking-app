@@ -12,6 +12,7 @@ import type {
   VerifyPhoneRequest,
   VerifyPhoneResponse,
   Service,
+  ServiceCategory,
   PublicProfessional,
   Tenant,
   Visit,
@@ -33,6 +34,11 @@ export class PublicApiClient {
 
   listServices() {
     return this.http.get<Service[]>("/public/services");
+  }
+
+  // R510: the headings services are grouped under, in the salon's order
+  listServiceCategories() {
+    return this.http.get<ServiceCategory[]>("/public/service-categories");
   }
 
   // R390

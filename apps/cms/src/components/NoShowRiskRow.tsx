@@ -5,6 +5,7 @@ import { useLocalizedName } from "../lib/useLocalizedName.js";
 import { formatDateTimeLabel } from "../lib/tenantTime.js";
 import { NoShowBadge } from "./NoShowBadge.js";
 import { BlockedBadge } from "./BlockedBadge.js";
+import { formatPhone, telHref } from "../lib/formatPhone.js";
 
 interface NoShowRiskRowProps {
   appointment: AppointmentSummary;
@@ -34,8 +35,8 @@ export function NoShowRiskRow({ appointment, timezone }: NoShowRiskRowProps) {
           <BlockedBadge blocked={appointment.phoneBlocked} />
         </span>
         {/* The point of the list: staff call to confirm. */}
-        <a className="link text-[13px] font-semibold tabular-nums" href={`tel:${appointment.phoneNumber.replace(/\s/g, "")}`}>
-          {appointment.phoneNumber}
+        <a className="link text-[13px] font-semibold tabular-nums" href={telHref(appointment.phoneNumber)}>
+          {formatPhone(appointment.phoneNumber)}
         </a>
       </div>
     </li>

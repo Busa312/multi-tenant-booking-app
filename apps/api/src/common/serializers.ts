@@ -9,6 +9,7 @@ import type {
   Location,
   Professional,
   Service,
+  ServiceCategory,
   PublicProfessional,
   Tenant,
   TenantConfig,
@@ -19,6 +20,7 @@ import type {
 type PrismaTenant = Prisma.TenantGetPayload<Record<string, never>>;
 type PrismaProfessional = Prisma.ProfessionalGetPayload<Record<string, never>>;
 type PrismaService = Prisma.ServiceGetPayload<Record<string, never>>;
+type PrismaServiceCategory = Prisma.ServiceCategoryGetPayload<Record<string, never>>;
 type PrismaTimeOff = Prisma.TimeOffGetPayload<Record<string, never>>;
 type PrismaBlockedPhone = Prisma.BlockedPhoneGetPayload<Record<string, never>>;
 type PrismaLocation = Prisma.LocationGetPayload<Record<string, never>>;
@@ -52,6 +54,7 @@ const serializeServiceLine = (line: PrismaAppointment["services"][number]): Appo
   nameI18n: serializeLocalizedText(line.service.nameI18n),
   durationMinutes: line.durationMinutes,
   price: line.price.toString(),
+  priceFrom: line.priceFrom,
 });
 
 export const serializeTenant = (t: PrismaTenant): Tenant => ({
@@ -112,8 +115,19 @@ export const serializeService = (s: PrismaService): Service => ({
   descriptionI18n: serializeLocalizedText(s.descriptionI18n),
   durationMinutes: s.durationMinutes,
   price: s.price.toString(),
+  priceFrom: s.priceFrom,
+  categoryId: s.categoryId,
+  position: s.position,
   isActive: s.isActive,
   createdAt: s.createdAt.toISOString(),
+});
+
+// R510
+export const serializeServiceCategory = (c: PrismaServiceCategory): ServiceCategory => ({
+  id: c.id,
+  name: c.name,
+  nameI18n: serializeLocalizedText(c.nameI18n),
+  position: c.position,
 });
 
 // R160: both halves go over the wire
@@ -245,6 +259,8 @@ export const serializeVisit = (v: PrismaVisit): Visit => {
     startAt: first.startAt.toISOString(),
     endAt: new Date(Math.max(...shown.map((appointment) => appointment.endAt.getTime()))).toISOString(),
     price: rest.reduce((sum, appointment) => sum.plus(appointment.price), first.price).toString(),
+    // R520: the total is "from" if any of what it adds up was
+    priceFrom: shown.some((appointment) => appointment.services.some((line) => line.priceFrom)),
     locationId: first.locationId,
     locationName: first.location?.name ?? null,
     locationNameI18n: serializeLocalizedText(first.location?.nameI18n ?? null),

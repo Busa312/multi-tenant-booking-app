@@ -71,6 +71,7 @@ model Tenant {
   subscription    Subscription?
   subscriptionPayments SubscriptionPayment[]
   smsMessages     SmsMessage[]
+  serviceCategories ServiceCategory[]
 
   @@map("tenant")
 }
@@ -186,10 +187,17 @@ model Service {
   descriptionI18n Json?    @map("description_i18n")
   durationMinutes Int      @map("duration_minutes")
   price           Decimal  @db.Decimal(10, 2)
+  /// R520: `price` is a starting price ("from 15 ₾").
+  priceFrom       Boolean  @default(false) @map("price_from")
+  /// R510: null = uncategorized.
+  categoryId      String?  @map("category_id") @db.Uuid
+  /// R510: order within its category.
+  position        Int      @default(0)
   isActive        Boolean  @default(true) @map("is_active")
   createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz
 
   tenant               Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  category             ServiceCategory?      @relation(fields: [categoryId], references: [id], onDelete: SetNull)
   serviceProfessionals ServiceProfessional[]
   appointmentServices  AppointmentService[]
 
@@ -381,6 +389,8 @@ model AppointmentService {
   position        Int     @db.SmallInt
   durationMinutes Int     @map("duration_minutes")
   price           Decimal @db.Decimal(10, 2)
+  /// R520: snapshot of Service.priceFrom.
+  priceFrom       Boolean @default(false) @map("price_from")
 
   tenant      Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   appointment Appointment @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
@@ -463,4 +473,21 @@ model SmsMessage {
   @@index([tenantId])
   @@index([tenantId, sentAt])
   @@map("sms_message")
+}
+
+/// R510: how a salon groups its price list, in its own order.
+model ServiceCategory {
+  id        String   @id @default(uuid()) @db.Uuid
+  tenantId  String   @map("tenant_id") @db.Uuid
+  name      String
+  // R160: non-default locales only, as on Service.
+  nameI18n  Json?    @map("name_i18n")
+  position  Int      @default(0)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  tenant   Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  services Service[]
+
+  @@index([tenantId])
+  @@map("service_category")
 }

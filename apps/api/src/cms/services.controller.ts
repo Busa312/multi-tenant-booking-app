@@ -8,10 +8,11 @@ import {
   Param,
   Patch,
   Post,
+  Put,
   UseGuards,
 } from "@nestjs/common";
 import { ApiBearerAuth, ApiBody, ApiOkResponse, ApiParam, ApiTags } from "@nestjs/swagger";
-import type { CreateServiceRequest, ServiceSummary, UpdateServiceRequest } from "@booking/shared-types";
+import type { CreateServiceRequest, ReorderServicesRequest, ServiceSummary, UpdateServiceRequest } from "@booking/shared-types";
 import { Prisma } from "../../generated/prisma/index.js";
 import { PrismaService } from "../prisma/prisma.service.js";
 import { TenantContextService } from "../tenant/tenant-context.service.js";
@@ -19,7 +20,8 @@ import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard.js";
 import { RolesGuard } from "../auth/guards/roles.guard.js";
 import { Roles } from "../auth/decorators/roles.decorator.js";
 import { serializeService } from "../common/serializers.js";
-import { CreateServiceRequestDto, ServiceSummaryDto, UpdateServiceRequestDto } from "../common/dto.js";
+import { CreateServiceRequestDto, ReorderServicesRequestDto, ServiceSummaryDto, UpdateServiceRequestDto } from "../common/dto.js";
+import { categoryIdIn, nextServicePosition, SERVICE_ORDER, validateOrder } from "./service-order.js";
 import {
   enabledLocalesOf,
   validateLocalizedText,
@@ -62,6 +64,12 @@ function validateDuration(durationMinutes: number): number {
   return durationMinutes;
 }
 
+function validatePriceFrom(value: unknown): boolean | undefined {
+  if (value === undefined) return undefined;
+  if (typeof value !== "boolean") throw new BadRequestException("priceFrom must be true or false");
+  return value;
+}
+
 function validateName(name: string): string {
   const trimmed = typeof name === "string" ? name.trim() : "";
   if (!trimmed) {
@@ -86,7 +94,12 @@ export class ServicesController {
   async list(): Promise<ServiceSummary[]> {
     const { tenantId } = this.tenantContext.current;
     const services = await this.prisma.forTenant((tx) =>
-      tx.service.findMany({ where: { tenantId }, include: SERVICE_SUMMARY_INCLUDE, orderBy: { createdAt: "asc" } }),
+      // R510: in the salon's order; callers group them by category
+      tx.service.findMany({
+        where: { tenantId },
+        include: SERVICE_SUMMARY_INCLUDE,
+        orderBy: SERVICE_ORDER,
+      }),
     );
     return services.map(toSummary);
   }
@@ -100,12 +113,18 @@ export class ServicesController {
     const name = validateName(body.name);
     const price = parsePrice(body.price);
     const durationMinutes = validateDuration(body.durationMinutes);
+    const priceFrom = validatePriceFrom(body.priceFrom) ?? false;
 
     const service = await this.prisma.forTenant(async (tx) => {
       const locales = await this.enabledLocales(tx, tenantId);
+      // R510: a new service goes last in its category
+      const categoryId = await categoryIdIn(tx, tenantId, body.categoryId ?? null);
       return tx.service.create({
         data: {
           tenantId,
+          categoryId,
+          position: await nextServicePosition(tx, tenantId, categoryId),
+          priceFrom,
           name,
           // R160: the plain columns above hold the default locale
 
@@ -138,9 +157,13 @@ export class ServicesController {
   @ApiOkResponse({ type: ServiceSummaryDto })
   async update(@Param("id") id: string, @Body() body: UpdateServiceRequest): Promise<ServiceSummary> {
     const { tenantId } = this.tenantContext.current;
-    const { professionalIds, name, price, durationMinutes, nameI18n, descriptionI18n, ...rest } = body;
+    const { professionalIds, name, price, durationMinutes, nameI18n, descriptionI18n, categoryId, priceFrom, ...rest } = body;
 
-    const data: Prisma.ServiceUpdateInput = { ...rest };
+    const data: Prisma.ServiceUncheckedUpdateInput = { ...rest };
+    const from = validatePriceFrom(priceFrom);
+    if (from !== undefined) {
+      data.priceFrom = from;
+    }
     if (name !== undefined) {
       data.name = validateName(name);
     }
@@ -152,6 +175,15 @@ export class ServicesController {
     }
 
     const service = await this.prisma.forTenant(async (tx) => {
+      // R510: moving to another category puts the service last there
+      if (categoryId !== undefined) {
+        const target = await categoryIdIn(tx, tenantId, categoryId);
+        const current = await tx.service.findFirstOrThrow({ where: { id, tenantId }, select: { categoryId: true } });
+        if (current.categoryId !== target) {
+          data.categoryId = target;
+          data.position = await nextServicePosition(tx, tenantId, target);
+        }
+      }
       if (nameI18n !== undefined || descriptionI18n !== undefined) {
         const locales = await this.enabledLocales(tx, tenantId);
         if (nameI18n !== undefined) {
@@ -179,6 +211,25 @@ export class ServicesController {
 
     await this.revalidate(tenantId);
     return toSummary(service);
+  }
+
+  /** R510: one category's services in their new order (null = the uncategorized ones) — all of them. */
+  @Put("order")
+  @Roles("owner")
+  @ApiBody({ type: ReorderServicesRequestDto })
+  @ApiOkResponse({ type: [ServiceSummaryDto] })
+  async reorder(@Body() body: ReorderServicesRequest): Promise<ServiceSummary[]> {
+    const { tenantId } = this.tenantContext.current;
+    await this.prisma.forTenant(async (tx) => {
+      const categoryId = await categoryIdIn(tx, tenantId, body?.categoryId ?? null);
+      const current = await tx.service.findMany({ where: { tenantId, categoryId }, select: { id: true } });
+      const ids = validateOrder(body?.ids, current.map((service) => service.id));
+      for (const [position, id] of ids.entries()) {
+        await tx.service.update({ where: { id, tenantId }, data: { position } });
+      }
+    });
+    await this.revalidate(tenantId);
+    return this.list();
   }
 
   @Delete(":id")

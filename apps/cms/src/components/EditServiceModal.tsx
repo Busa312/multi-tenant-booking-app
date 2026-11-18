@@ -1,18 +1,22 @@
 import { useState, type FormEvent } from "react";
-import type { LocalizedText, ProfessionalSummary, ServiceSummary } from "@booking/shared-types";
+import type { LocalizedText, ProfessionalSummary, ServiceCategory, ServiceSummary } from "@booking/shared-types";
 import { cachedApi } from "../lib/cache.js";
 import { useI18n } from "../i18n/I18nContext.js";
 import { useLocalizedName } from "../lib/useLocalizedName.js";
 import { Modal } from "./Modal.js";
 import { LocalizedField } from "./LocalizedField.js";
 import { ContentLocaleSelect } from "./ContentLocaleSelect.js";
-import { Alert, Button, Checkbox, GroupLabel, Field, TextInput } from "./ui/index.js";
+import { Alert, Button, Checkbox, GroupLabel, Field, Select, TextInput } from "./ui/index.js";
 
 interface EditServiceModalProps {
   target: ServiceSummary | "new";
   professionals: ProfessionalSummary[];
 
   locales: string[];
+  /** R510: the salon's categories; with none, the form doesn't ask. */
+  categories?: ServiceCategory[];
+  /** R510: where a new service starts. */
+  defaultCategoryId?: string | null;
   onClose: () => void;
   onSaved: (saved: ServiceSummary) => void;
 }
@@ -33,7 +37,15 @@ function validate(name: string, durationMinutes: string, price: string): Record<
   return errors;
 }
 
-export function EditServiceModal({ target, professionals, locales, onClose, onSaved }: EditServiceModalProps) {
+export function EditServiceModal({
+  target,
+  professionals,
+  locales,
+  categories = [],
+  defaultCategoryId = null,
+  onClose,
+  onSaved,
+}: EditServiceModalProps) {
   const { t } = useI18n();
   // R160: one language choice for every translatable field in the form
   const [contentLocale, setContentLocale] = useState(locales[0] ?? "");
@@ -50,6 +62,10 @@ export function EditServiceModal({ target, professionals, locales, onClose, onSa
   );
   const [durationMinutes, setDurationMinutes] = useState(isNew ? "" : String(target.durationMinutes));
   const [price, setPrice] = useState(isNew ? "" : target.price);
+  // R520
+  const [priceFrom, setPriceFrom] = useState(isNew ? false : target.priceFrom);
+  // R510: "" = no category
+  const [categoryId, setCategoryId] = useState(isNew ? (defaultCategoryId ?? "") : (target.categoryId ?? ""));
   const [professionalIds, setProfessionalIds] = useState<string[]>(isNew ? [] : target.professionalIds);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
@@ -78,6 +94,8 @@ export function EditServiceModal({ target, professionals, locales, onClose, onSa
         descriptionI18n,
         durationMinutes: Number(durationMinutes),
         price: price.trim(),
+        priceFrom,
+        ...(categories.length > 0 ? { categoryId: categoryId || null } : {}),
         professionalIds,
       };
 
@@ -136,6 +154,21 @@ export function EditServiceModal({ target, professionals, locales, onClose, onSa
           multiline
         />
 
+        {/* R510 */}
+        {categories.length > 0 && (
+          <Field label={t("services.categoryLabel")} htmlFor="service-category">
+            <Select
+              id="service-category"
+              value={categoryId}
+              onChange={setCategoryId}
+              options={[
+                { value: "", label: t("services.noCategory") },
+                ...categories.map((category) => ({ value: category.id, label: nameOf(category.name, category.nameI18n) })),
+              ]}
+            />
+          </Field>
+        )}
+
         <div className="grid sm:grid-cols-2 sm:gap-3">
           <Field label={t("services.durationLabel")} htmlFor="service-duration">
             <TextInput
@@ -164,6 +197,15 @@ export function EditServiceModal({ target, professionals, locales, onClose, onSa
         </div>
         {fieldErrors.durationMinutes && <Alert className="-mt-2 mb-4 py-2">{t(fieldErrors.durationMinutes)}</Alert>}
         {fieldErrors.price && <Alert className="-mt-2 mb-4 py-2">{t(fieldErrors.price)}</Alert>}
+        {/* R520 */}
+        <div className="-mt-1 mb-4">
+          <Checkbox checked={priceFrom} onChange={setPriceFrom}>
+            {t("services.priceFromLabel")}
+          </Checkbox>
+          <p className="ml-7.5 text-[13px] text-base-content/60">
+            {t("services.priceFromHint", { price: price.trim() || "15" })}
+          </p>
+        </div>
 
         <GroupLabel>{t("services.performedBy")}</GroupLabel>
         {assignable.length === 0 && <p className="mb-3 text-[13px] text-base-content/60">{t("services.noProfessionalsCreated")}</p>}

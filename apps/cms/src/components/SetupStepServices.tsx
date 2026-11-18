@@ -1,5 +1,6 @@
 import { useState } from "react";
 import type { ProfessionalSummary, ServiceSummary } from "@booking/shared-types";
+import { priceLabel } from "../lib/priceLabel.js";
 import { useI18n } from "../i18n/I18nContext.js";
 import { useLocalizedName } from "../lib/useLocalizedName.js";
 import { EditServiceModal } from "./EditServiceModal.js";
@@ -28,7 +29,7 @@ export function SetupStepServices({ services, professionals, locales, onChanged 
             <li key={service.id} className="flex items-baseline justify-between gap-3 py-2.5">
               <span className="min-w-0 truncate font-semibold">{nameOf(service.name, service.nameI18n)}</span>
               <span className="flex-none text-sm text-base-content/60 tabular-nums">
-                {t("services.minutes", { count: service.durationMinutes })} · {t("services.priceValue", { price: service.price })}
+                {t("services.minutes", { count: service.durationMinutes })} · {priceLabel(t, service.price, service.priceFrom)}
               </span>
             </li>
           ))}

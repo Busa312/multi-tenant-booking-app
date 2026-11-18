@@ -1,4 +1,5 @@
 import type { ServiceSummary } from "@booking/shared-types";
+import { priceLabel } from "../lib/priceLabel.js";
 import { useI18n } from "../i18n/I18nContext.js";
 import { BookingServiceRow } from "./BookingServiceRow.js";
 import { Button, GroupLabel } from "./ui/index.js";
@@ -101,7 +102,8 @@ export function BookingServiceRows({
               minutes: totalMinutes,
               // Prices are two-decimal strings on the wire; formatted here only
               // for display, while the API does the real sum in Decimal.
-              price: totalPrice.toFixed(2),
+              // R520: "from" if any of them is a starting price
+              price: priceLabel(t, totalPrice.toFixed(2), picked.some((s) => s.priceFrom)),
             })}
           </span>
         )}

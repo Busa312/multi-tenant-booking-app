@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { MAX_SERVICES_PER_BOOKING, localized } from "@booking/shared-types";
-import type { Location, PublicProfessional, Service, Visit, VisitSlot } from "@booking/shared-types";
+import type { Location, PublicProfessional, Service, ServiceCategory, Visit, VisitSlot } from "@booking/shared-types";
 import { translator, type Locale, type Messages } from "@/i18n/locales";
 import { fetchProfessionals, holdSlot, releaseHold, submitBooking, type FailureReason } from "@/lib/actions";
 import { addDays, formatInstant, todayInTimezone, wallClock } from "@/lib/tenant-time";
@@ -18,6 +18,7 @@ import {
 import { clearWizard, loadWizard, saveWizard, type CodeSent, type WizardState } from "@/lib/wizard-storage";
 import { StepProgress } from "./StepProgress";
 import { WizardRecap } from "./WizardRecap";
+import { UnavailableNotice } from "./UnavailableNotice";
 import { StepServices } from "./StepServices";
 import { StepLocation } from "./StepLocation";
 import { StepProfessional } from "./StepProfessional";
@@ -28,6 +29,8 @@ import { ConfirmationPanel } from "./ConfirmationPanel";
 
 interface BookingWizardProps {
   services: Service[];
+  /** R510: the headings the services step groups under. */
+  serviceCategories: ServiceCategory[];
   locations: Location[];
   /** R240: everyone, with the services they perform. */
   professionals: PublicProfessional[];
@@ -79,6 +82,7 @@ const useBeforePaint = typeof window === "undefined" ? useEffect : useLayoutEffe
 
 export function BookingWizard({
   services,
+  serviceCategories,
   locations,
   professionals: allProfessionals,
   preselectedServiceIds,
@@ -145,6 +149,9 @@ export function BookingWizard({
 
   // R250: a hold request is in flight; Continue waits for it
   const [isHolding, setIsHolding] = useState(false);
+  // R490: the API refused because the salon is paused — the page was rendered
+  // from a cached copy that didn't know yet. Shown instead of the flow.
+  const [paused, setPaused] = useState(false);
   // R250: the picked time went to someone else — say so and refresh the times
   const [slotTaken, setSlotTaken] = useState(false);
   const [slotsVersion, setSlotsVersion] = useState(0);
@@ -306,6 +313,8 @@ export function BookingWizard({
     if (result.ok) {
       // The plan actually held — re-planned just now, so it may name someone else.
       setDraft((current) => ({ ...current, slot: result.slot, hold: { id: result.holdId, expiresAt: result.expiresAt } }));
+    } else if (result.reason === "paused") {
+      setPaused(true);
     } else if (result.reason === "conflict") {
       setDraft((current) => ({ ...current, slot: null, hold: null }));
       setSlotTaken(true);
@@ -340,6 +349,10 @@ export function BookingWizard({
     setIsSubmitting(false);
 
     if (!result.ok) {
+      if (result.reason === "paused") {
+        setPaused(true);
+        return;
+      }
       setSubmitError(result.reason);
 
       if (result.reason === "conflict") {
@@ -358,6 +371,10 @@ export function BookingWizard({
     // R410: lets the salon's own page react (say, thank the customer). No manage link: it is a credential.
     if (embedded) postToHost({ type: "booking-widget:booked", startAt: result.visit.startAt });
   };
+
+  if (paused) {
+    return <UnavailableNotice heading={t("booking.pausedHeading")} body={t("booking.pausedBody")} />;
+  }
 
   if (confirmation) {
     return (
@@ -418,6 +435,7 @@ export function BookingWizard({
       {step === "services" && (
         <StepServices
           services={services}
+          categories={serviceCategories}
           professionals={allProfessionals}
           selectedIds={draft.serviceIds}
           onChange={(serviceIds) =>

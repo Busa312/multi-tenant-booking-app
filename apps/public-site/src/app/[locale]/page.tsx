@@ -1,6 +1,7 @@
 import { getPublicApiClient } from "@/lib/api";
 import { loadPageContext, resolveCopy } from "@/lib/page-context";
 import { todayInTimezone } from "@/lib/tenant-time";
+import { priceText } from "@/lib/price";
 import { TenantIntro } from "@/components/TenantIntro";
 import { BookCta } from "@/components/BookCta";
 import { ServiceList } from "@/components/ServiceList";
@@ -13,8 +14,10 @@ export default async function HomePage({ params }: { params: { locale: string } 
   const context = await loadPageContext(params.locale);
   const api = getPublicApiClient();
 
-  const [services, locations, hours] = await Promise.all([
+  const [services, categories, locations, hours] = await Promise.all([
     api.listServices(),
+    // R510
+    api.listServiceCategories(),
     api.listLocations(),
     // R390: the page still renders if the hours can't be fetched
     api.listOpeningHours().catch(() => []),
@@ -33,10 +36,13 @@ export default async function HomePage({ params }: { params: { locale: string } 
 
       <ServiceList
         services={services}
+        categories={categories}
         heading={context.t("home.servicesTitle")}
         emptyLabel={context.t("home.servicesEmpty")}
+        otherLabel={context.t("home.otherServices")}
         minutesLabel={(count) => context.t("home.minutes", { count })}
         bookLabel={context.t("home.bookService")}
+        priceLabel={(service) => priceText(context.t, service.price, service.priceFrom)}
         href={context.href}
         text={context.text}
       />

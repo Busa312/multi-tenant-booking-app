@@ -14,6 +14,7 @@ import type {
   VerifyPhoneRequest,
   VerifyPhoneResponse,
   Service,
+  ServiceCategory,
   PublicProfessional,
   Tenant,
   Visit,
@@ -30,6 +31,7 @@ import {
   serializePublicProfessional,
   serializePublicTenant,
   serializeService,
+  serializeServiceCategory,
   serializeVisit,
   type PrismaVisit,
 } from "../common/serializers.js";
@@ -45,6 +47,7 @@ import {
   RescheduleAppointmentRequestDto,
   ResendMagicLinkRequestDto,
   ServiceDto,
+  ServiceCategoryDto,
   StartVerificationRequestDto,
   OpeningHoursDto,
   OtpCooldownResponseDto,
@@ -69,6 +72,7 @@ import { BlockedPhoneService } from "../booking/blocked-phone.service.js";
 import { phoneKey } from "../common/phone-key.js";
 import { openingHours } from "../booking/working-hours.js";
 import { BillingService } from "../billing/billing.service.js";
+import { SERVICE_ORDER } from "../cms/service-order.js";
 
 const RESEND_WINDOW_SECONDS = 60 * 60;
 const RESEND_MAX_PER_PHONE = 3;
@@ -107,9 +111,21 @@ export class PublicController {
   async listServices(): Promise<Service[]> {
     const { tenantId } = this.tenantContext.current;
     const services = await this.prisma.forTenant((tx) =>
-      tx.service.findMany({ where: { tenantId, isActive: true } }),
+      // R510: in the salon's order; the site groups them by category
+      tx.service.findMany({ where: { tenantId, isActive: true }, orderBy: SERVICE_ORDER }),
     );
     return services.map(serializeService);
+  }
+
+  // R510: the headings the site groups services under, in the salon's order
+  @Get("service-categories")
+  @ApiOkResponse({ type: [ServiceCategoryDto] })
+  async listServiceCategories(): Promise<ServiceCategory[]> {
+    const { tenantId } = this.tenantContext.current;
+    const categories = await this.prisma.forTenant((tx) =>
+      tx.serviceCategory.findMany({ where: { tenantId }, orderBy: [{ position: "asc" }, { createdAt: "asc" }] }),
+    );
+    return categories.map(serializeServiceCategory);
   }
 
   // R390: when the salon is open, for the home page

@@ -30,6 +30,7 @@ import type {
   UpdateAppointmentStatusRequest,
 } from "@booking/shared-types";
 import type { Prisma } from "../../generated/prisma/index.js";
+import { assertMarkable } from "../booking/status-marking.js";
 import { PrismaService } from "../prisma/prisma.service.js";
 import { TenantContextService } from "../tenant/tenant-context.service.js";
 import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard.js";
@@ -195,6 +196,8 @@ export class AppointmentsController {
 
     return this.prisma.forTenant(async (tx) => {
       const existing = await this.booking.loadOwnAppointment(tx, tenantId, id, professionalScope);
+      // R530: not before it has started
+      assertMarkable(body.status, existing.startAt);
       const appointment = await tx.appointment.update({
         where: { id: existing.id, tenantId },
         data: { status: body.status },

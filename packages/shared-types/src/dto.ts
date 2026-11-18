@@ -303,6 +303,10 @@ export interface CreateServiceRequest {
   descriptionI18n?: LocalizedText;
   durationMinutes: number;
   price: string;
+  /** R520 */
+  priceFrom?: boolean;
+  /** R510: null/omitted = uncategorized. A new service goes last in its category. */
+  categoryId?: string | null;
   professionalIds: string[];
 }
 
@@ -313,10 +317,36 @@ export interface UpdateServiceRequest {
   descriptionI18n?: LocalizedText;
   durationMinutes?: number;
   price?: string;
+  /** R520 */
+  priceFrom?: boolean;
+  /** R510: moving to another category puts the service last there. */
+  categoryId?: string | null;
 
   professionalIds?: string[];
   // R60: deactivation (and reactivation)
   isActive?: boolean;
+}
+
+/** R510 */
+export interface CreateServiceCategoryRequest {
+  name: string;
+  nameI18n?: LocalizedText;
+}
+
+export interface UpdateServiceCategoryRequest {
+  name?: string;
+  nameI18n?: LocalizedText;
+}
+
+/** R510: the full new order — every category's id, first to last. */
+export interface ReorderServiceCategoriesRequest {
+  ids: string[];
+}
+
+/** R510: the new order of one category's services (null = the uncategorized ones), first to last — all of them. */
+export interface ReorderServicesRequest {
+  categoryId: string | null;
+  ids: string[];
 }
 
 export interface CreateProfessionalRequest {

@@ -1,39 +1,4 @@
-// Day and month names for the site's locales, from CLDR (what Node's full ICU
-// prints for each locale), plus the order each language writes a date in.
-//
-// Kept here rather than left to `Intl` because browsers don't all ship every
-// locale's data — Chromium has no Georgian, so `Intl.DateTimeFormat("ka")`
-// silently prints English in client components, and differently from what the
-// server rendered. With these tables server and browser print the same thing.
-
-import type { Locale } from "./locales";
-
-export interface DateParts {
-  weekday: string;
-  day: number;
-  month: string;
-}
-
-interface DateNames {
-  /** Sunday first, as `Date.getUTCDay()` counts. */
-  weekdaysShort: readonly string[];
-  weekdays: readonly string[];
-  monthsShort: readonly string[];
-  /** A day: "Wed, Nov 11" / "ოთხ, 11 ნოე". */
-  day: (parts: DateParts) => string;
-}
-
-export const DATE_NAMES: Record<Locale, DateNames> = {
-  en: {
-    weekdaysShort: ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"],
-    weekdays: ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"],
-    monthsShort: ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"],
-    day: ({ weekday, day, month }) => `${weekday}, ${month} ${day}`,
-  },
-  ka: {
-    weekdaysShort: ["კვი", "ორშ", "სამ", "ოთხ", "ხუთ", "პარ", "შაბ"],
-    weekdays: ["კვირა", "ორშაბათი", "სამშაბათი", "ოთხშაბათი", "ხუთშაბათი", "პარასკევი", "შაბათი"],
-    monthsShort: ["იან", "თებ", "მარ", "აპრ", "მაი", "ივნ", "ივლ", "აგვ", "სექ", "ოქტ", "ნოე", "დეკ"],
-    day: ({ weekday, day, month }) => `${weekday}, ${day} ${month}`,
-  },
-};
+// Day and month names now live in @booking/shared-types (dates.ts), so the CMS
+// writes dates the same way the booking site does. Re-exported here so the
+// site's imports stay where they were.
+export { DATE_NAMES, type DateParts } from "@booking/shared-types";

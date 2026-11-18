@@ -19,6 +19,8 @@ export interface ResolvedServiceLine {
   name: string;
   durationMinutes: number;
   price: Prisma.Decimal;
+  /** R520: `price` is a starting price — snapshotted with it. */
+  priceFrom: boolean;
   position: number;
 }
 
@@ -27,6 +29,8 @@ export interface ExistingServiceLine {
   serviceId: string;
   durationMinutes: number;
   price: Prisma.Decimal;
+  /** R520: absent where only the duration matters (availability). */
+  priceFrom?: boolean;
 }
 
 /** Total wall-clock length of a booking made of these lines. */
@@ -86,7 +90,7 @@ export async function resolveServiceLines(
 
   const services = await tx.service.findMany({
     where: { tenantId, id: { in: [...serviceIds] } },
-    select: { id: true, name: true, durationMinutes: true, price: true, isActive: true },
+    select: { id: true, name: true, durationMinutes: true, price: true, priceFrom: true, isActive: true },
   });
   const byId = new Map(services.map((service) => [service.id, service]));
   const keptById = new Map(existing.map((line) => [line.serviceId, line]));
@@ -107,6 +111,8 @@ export async function resolveServiceLines(
       name: service.name,
       durationMinutes: kept?.durationMinutes ?? service.durationMinutes,
       price: kept?.price ?? service.price,
+      // R520: a kept line keeps what it was booked as, starting price or not
+      priceFrom: kept ? (kept.priceFrom ?? false) : service.priceFrom,
       position,
     };
   });

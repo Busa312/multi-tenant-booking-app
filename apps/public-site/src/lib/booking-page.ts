@@ -1,8 +1,10 @@
-import type { Location, PublicProfessional, Service } from "@booking/shared-types";
+import type { Location, PublicProfessional, Service, ServiceCategory } from "@booking/shared-types";
 import { getPublicApiClient } from "./api";
 
 export interface BookingPageData {
   services: Service[];
+  // R510: the headings the services step groups under
+  serviceCategories: ServiceCategory[];
   locations: Location[];
   professionals: PublicProfessional[];
   preselectedServiceIds: string[];
@@ -21,8 +23,9 @@ export async function loadBookingPageData(searchParams: {
   const api = getPublicApiClient();
   // R240: everyone, with the services they perform — decides which services
   // and branches can be booked at all before the customer picks anything.
-  const [services, locations, professionals] = await Promise.all([
+  const [services, serviceCategories, locations, professionals] = await Promise.all([
     api.listServices(),
+    api.listServiceCategories(),
     api.listLocations(),
     api.listProfessionals(),
   ]);
@@ -36,5 +39,5 @@ export async function loadBookingPageData(searchParams: {
     ? searchParams.locationId
     : undefined;
 
-  return { services, locations, professionals, preselectedServiceIds, preselectedLocationId };
+  return { services, serviceCategories, locations, professionals, preselectedServiceIds, preselectedLocationId };
 }

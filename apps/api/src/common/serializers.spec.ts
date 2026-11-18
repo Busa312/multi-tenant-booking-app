@@ -41,6 +41,7 @@ const line = (overrides: Partial<Parameters<typeof serializeAppointment>[0]["ser
   position: 0,
   durationMinutes: 30,
   price: new Prisma.Decimal("45.50"),
+  priceFrom: false,
   service: { name: "Haircut", nameI18n: null },
   ...overrides,
 });
@@ -128,6 +129,9 @@ describe("serializeService", () => {
     descriptionI18n: null,
     durationMinutes: 30,
     price,
+    priceFrom: false,
+    categoryId: null,
+    position: 0,
     isActive: true,
     createdAt: new Date("2026-01-02T03:04:05Z"),
   });
@@ -190,6 +194,7 @@ describe("serializeAppointment", () => {
           nameI18n: null,
           durationMinutes: 30,
           price: "45.5",
+          priceFrom: false,
         },
       ]);
     });
@@ -355,6 +360,14 @@ describe("serializeVisit", () => {
       ["a1", "Dato"],
       ["a2", "Nina"],
     ]);
+  });
+
+  // R520
+  it("calls the total a starting price when any service in it was booked as one", () => {
+    expect(serializeVisit(visit([colour, cut])).priceFrom).toBe(false);
+
+    const design = segment({ id: "a3", services: [line({ priceFrom: true })] });
+    expect(serializeVisit(visit([colour, design])).priceFrom).toBe(true);
   });
 
   // R160: the public site picks the visitor's language from these

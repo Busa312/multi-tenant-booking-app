@@ -35,6 +35,21 @@ async function fetchTenant(host: string): Promise<Tenant> {
   return api.getTenant();
 }
 
+/**
+ * R490: whether the salon is paused right now, asked of the API directly. The
+ * cached tenant can be up to a minute (and one stale answer) behind a payment
+ * or an admin's change, and a wrongly shown "paused" turns customers away —
+ * so a cached "paused" is confirmed here before it's shown. Pauses are rare;
+ * this costs one request only then.
+ */
+export async function isBookingPausedNow(host: string): Promise<boolean> {
+  try {
+    return (await fetchTenant(host)).bookingPaused === true;
+  } catch {
+    return true;
+  }
+}
+
 export function getCachedTenant(host: string): Promise<Tenant> {
   return unstable_cache(fetchTenant, ["tenant-config", host], {
     tags: [tenantHostTag(host)],

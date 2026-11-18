@@ -1,3 +1,4 @@
+import { headers } from "next/headers";
 import { getMessages } from "@/i18n/locales";
 import { loadBookingPageData } from "@/lib/booking-page";
 import { loadPageContext } from "@/lib/page-context";
@@ -5,6 +6,7 @@ import { isValidTimezone } from "@/lib/tenant-time";
 import { BookingWizard } from "@/components/BookingWizard";
 import { EmbedCloseButton } from "@/components/EmbedCloseButton";
 import { UnavailableNotice } from "@/components/UnavailableNotice";
+import { isBookingPausedNow } from "@/lib/tenant-config";
 
 export const dynamic = "force-dynamic";
 
@@ -28,8 +30,8 @@ export default async function EmbedFullPage({
     );
   }
 
-  // R490: the business's subscription has lapsed
-  if (context.tenant.bookingPaused) {
+  // R490: the business's subscription has lapsed — confirmed live, not just from the cache
+  if (context.tenant.bookingPaused && (await isBookingPausedNow(headers().get("host") ?? ""))) {
     return (
       <div className="p-5">
         <UnavailableNotice heading={context.t("booking.pausedHeading")} body={context.t("booking.pausedBody")} />
@@ -48,6 +50,7 @@ export default async function EmbedFullPage({
       )}
       <BookingWizard
         services={data.services}
+        serviceCategories={data.serviceCategories}
         locations={data.locations}
         professionals={data.professionals}
         preselectedServiceIds={data.preselectedServiceIds}

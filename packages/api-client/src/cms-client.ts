@@ -44,7 +44,12 @@ import type {
   ConfirmPaymentResponse,
   StartCheckoutRequest,
   SubscriptionOverview,
-  UpdateSubscriptionRequest
+  UpdateSubscriptionRequest,
+  ServiceCategory,
+  CreateServiceCategoryRequest,
+  UpdateServiceCategoryRequest,
+  ReorderServiceCategoriesRequest,
+  ReorderServicesRequest
 } from "@booking/shared-types";
 import { HttpClient, type ApiClientOptions } from "./http";
 
@@ -143,6 +148,33 @@ export class CmsApiClient {
 
   deleteService(id: string) {
     return this.http.delete<void>(`/cms/services/${id}`);
+  }
+
+  // R510: one category's services in their new order — all of them
+  reorderServices(payload: ReorderServicesRequest) {
+    return this.http.put<ServiceSummary[]>("/cms/services/order", payload);
+  }
+
+  // R510: service categories
+  listServiceCategories() {
+    return this.http.get<ServiceCategory[]>("/cms/service-categories");
+  }
+
+  createServiceCategory(payload: CreateServiceCategoryRequest) {
+    return this.http.post<ServiceCategory>("/cms/service-categories", payload);
+  }
+
+  updateServiceCategory(id: string, payload: UpdateServiceCategoryRequest) {
+    return this.http.patch<ServiceCategory>(`/cms/service-categories/${id}`, payload);
+  }
+
+  /** Its services stay, uncategorized. */
+  deleteServiceCategory(id: string) {
+    return this.http.delete<void>(`/cms/service-categories/${id}`);
+  }
+
+  reorderServiceCategories(payload: ReorderServiceCategoriesRequest) {
+    return this.http.put<ServiceCategory[]>("/cms/service-categories/order", payload);
   }
 
   listProfessionals() {

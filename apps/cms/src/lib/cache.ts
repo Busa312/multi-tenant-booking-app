@@ -27,11 +27,24 @@ import type {
   UpdateOnboardingRequest,
   SubscriptionOverview,
   SubscriptionPlanId,
-  UpdateSubscriptionRequest
+  UpdateSubscriptionRequest,
+  CreateServiceCategoryRequest,
+  UpdateServiceCategoryRequest,
+  ReorderServiceCategoriesRequest,
+  ReorderServicesRequest
 } from "@booking/shared-types";
 import { cmsApiClient } from "./api.js";
 
-type CacheKey = "tenant" | "services" | "professionals" | "business-hours" | "time-off" | "locations" | "onboarding" | "subscription";
+type CacheKey =
+  | "tenant"
+  | "services"
+  | "service-categories"
+  | "professionals"
+  | "business-hours"
+  | "time-off"
+  | "locations"
+  | "onboarding"
+  | "subscription";
 
 type InvalidationKey = CacheKey | "appointments";
 
@@ -198,6 +211,16 @@ export const cachedApi = {
   updateService: (id: string, payload: UpdateServiceRequest) =>
     mutating(cmsApiClient.updateService(id, payload), SERVICE_ASSIGNMENT),
   deleteService: (id: string) => mutating(cmsApiClient.deleteService(id), SERVICE_ASSIGNMENT),
+  // R510: categories and the salon's order. Deleting a category moves its services.
+  reorderServices: (payload: ReorderServicesRequest) => mutating(cmsApiClient.reorderServices(payload), ["services"]),
+  listServiceCategories: () => cached("service-categories", () => cmsApiClient.listServiceCategories()),
+  createServiceCategory: (payload: CreateServiceCategoryRequest) =>
+    mutating(cmsApiClient.createServiceCategory(payload), ["service-categories"]),
+  updateServiceCategory: (id: string, payload: UpdateServiceCategoryRequest) =>
+    mutating(cmsApiClient.updateServiceCategory(id, payload), ["service-categories"]),
+  deleteServiceCategory: (id: string) => mutating(cmsApiClient.deleteServiceCategory(id), ["service-categories", "services"]),
+  reorderServiceCategories: (payload: ReorderServiceCategoriesRequest) =>
+    mutating(cmsApiClient.reorderServiceCategories(payload), ["service-categories"]),
   createProfessional: (payload: CreateProfessionalRequest) =>
     mutating(cmsApiClient.createProfessional(payload), SERVICE_ASSIGNMENT),
   updateProfessional: (id: string, payload: UpdateProfessionalRequest) =>

@@ -1,3 +1,4 @@
+import { DATE_NAMES, georgianDate, type CalendarDate } from "@booking/shared-types";
 // Every time the CMS shows or collects is the *salon's* wall clock, not the
 // staff browser's: an owner checking tomorrow's book from another timezone must
 // still see the day their customers will walk in on. So all formatting here
@@ -66,13 +67,27 @@ export function addMonths(date: string, months: number): string {
   return first.toISOString().slice(0, 10);
 }
 
+/*
+ * Georgian dates come from the shared tables (@booking/shared-types dates.ts)
+ * rather than Intl: Chromium has no Georgian data and would print English
+ * month and weekday names in a Georgian CMS. English goes through Intl.
+ */
+const calendarOf = (date: string): CalendarDate => {
+  const d = dateOf(date);
+  return { year: d.getUTCFullYear(), month: d.getUTCMonth(), day: d.getUTCDate(), weekday: d.getUTCDay() };
+};
+/** An instant's calendar date on the salon's clock. */
+const calendarAt = (iso: string, timeZone: string): CalendarDate => calendarOf(tenantDateString(timeZone, new Date(iso)));
+
 /** The month of a "YYYY-MM-DD", e.g. "November 2026". */
 export function formatMonthLabel(date: string, lang: string): string {
+  if (lang === "ka") return georgianDate.month(calendarOf(date));
   return new Intl.DateTimeFormat(lang, { month: "long", year: "numeric", timeZone: "UTC" }).format(dateOf(date));
 }
 
 /** A "YYYY-MM-DD" rendered for humans in the active UI language. */
 export function formatDateLabel(date: string, lang: string): string {
+  if (lang === "ka") return georgianDate.long(calendarOf(date));
   return new Intl.DateTimeFormat(lang, {
     weekday: "long",
     day: "numeric",
@@ -83,12 +98,14 @@ export function formatDateLabel(date: string, lang: string): string {
 
 /** An inclusive span of calendar dates, e.g. "3 – 9 August". */
 export function formatWeekLabel(from: string, to: string, lang: string): string {
+  if (lang === "ka") return georgianDate.range(calendarOf(from), calendarOf(to));
   const formatter = new Intl.DateTimeFormat(lang, { day: "numeric", month: "long", timeZone: "UTC" });
   return formatter.formatRange(dateOf(from), dateOf(to));
 }
 
 /** Short weekday name for a calendar date, e.g. "Mon". */
 export function formatWeekdayLabel(date: string, lang: string): string {
+  if (lang === "ka") return DATE_NAMES.ka.weekdaysShort[calendarOf(date).weekday] ?? "";
   return new Intl.DateTimeFormat(lang, { weekday: "short", timeZone: "UTC" }).format(dateOf(date));
 }
 
@@ -129,23 +146,45 @@ export function tenantWallTimeToUtc(localDateTime: string, timeZone: string): Da
   return new Date(asUtc - offsetAt(firstGuess, timeZone));
 }
 
+/**
+ * Georgian reads the 24-hour clock. Browsers without Georgian locale data
+ * (Chromium) fall back to English and would show "10:00 AM" in a Georgian UI,
+ * so the clock is set explicitly rather than left to the locale.
+ */
+const hourCycleFor = (lang: string): { hourCycle?: "h23" } => (lang === "ka" ? { hourCycle: "h23" } : {});
+
 /** An instant as a tenant-local clock time, in the active UI language. */
 export function formatTimeLabel(iso: string, timeZone: string, lang: string): string {
-  return new Intl.DateTimeFormat(lang, { timeZone, hour: "2-digit", minute: "2-digit" }).format(new Date(iso));
+  return new Intl.DateTimeFormat(lang, { timeZone, hour: "2-digit", minute: "2-digit", ...hourCycleFor(lang) }).format(new Date(iso));
 }
 
 /** An instant as a tenant-local date + time, for conflicts that fall elsewhere. */
 export function formatDateTimeLabel(iso: string, timeZone: string, lang: string): string {
+  if (lang === "ka") {
+    const d = calendarAt(iso, timeZone);
+    return `${d.day} ${DATE_NAMES.ka.monthsShort[d.month]}, ${formatTimeLabel(iso, timeZone, lang)}`;
+  }
   return new Intl.DateTimeFormat(lang, {
     timeZone,
     day: "numeric",
     month: "short",
     hour: "2-digit",
     minute: "2-digit",
+    ...hourCycleFor(lang),
   }).format(new Date(iso));
 }
 
 /** An instant as a tenant-local calendar date with the year, e.g. "22 December 2026" (R470: billing dates). */
 export function formatInstantDate(iso: string, timeZone: string, lang: string): string {
+  if (lang === "ka") return georgianDate.withYear(calendarAt(iso, timeZone));
   return new Intl.DateTimeFormat(lang, { timeZone, day: "numeric", month: "long", year: "numeric" }).format(new Date(iso));
+}
+
+/** An instant as a short date on the viewer's own calendar, e.g. "18 Nov 2026" / "18 ნოე. 2026" — for record dates, not appointments. */
+export function formatShortDate(iso: string, lang: string): string {
+  const d = new Date(iso);
+  if (lang === "ka") {
+    return georgianDate.short({ year: d.getFullYear(), month: d.getMonth(), day: d.getDate(), weekday: d.getDay() });
+  }
+  return new Intl.DateTimeFormat(lang, { day: "numeric", month: "short", year: "numeric" }).format(d);
 }

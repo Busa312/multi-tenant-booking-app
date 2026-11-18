@@ -1,4 +1,5 @@
 import type { ServiceSummary } from "@booking/shared-types";
+import { priceLabel } from "../lib/priceLabel.js";
 import { useI18n } from "../i18n/I18nContext.js";
 import { useLocalizedName } from "../lib/useLocalizedName.js";
 import { Button, Select } from "./ui/index.js";
@@ -41,7 +42,12 @@ export function BookingServiceRow({
         placeholder={t("bookings.servicePlaceholder")}
         options={options.map((s) => ({
           value: s.id,
-          label: t("bookings.serviceOption", { name: nameOf(s.name, s.nameI18n), minutes: s.durationMinutes, price: s.price }),
+          label: t("bookings.serviceOption", {
+            name: nameOf(s.name, s.nameI18n),
+            minutes: s.durationMinutes,
+            // R520
+            price: priceLabel(t, s.price, s.priceFrom),
+          }),
         }))}
       />
       {/* Only once there is something to remove: with a single service the

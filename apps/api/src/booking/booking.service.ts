@@ -228,6 +228,8 @@ export class BookingService {
       position: line.position,
       durationMinutes: line.durationMinutes,
       price: line.price,
+      // R520
+      priceFrom: line.priceFrom,
     };
   }
 

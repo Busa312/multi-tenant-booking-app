@@ -8,11 +8,18 @@ import type { TenantContextService } from "../tenant/tenant-context.service.js";
 const TENANT_ID = "11111111-1111-1111-1111-111111111111";
 const TZ = "Asia/Tbilisi";
 
-type ServiceRow = { id: string; name: string; durationMinutes: number; price: Prisma.Decimal; isActive: boolean };
+type ServiceRow = {
+  id: string;
+  name: string;
+  durationMinutes: number;
+  price: Prisma.Decimal;
+  isActive: boolean;
+  priceFrom?: boolean;
+};
 type ProfessionalRow = { id: string; name: string; isActive: boolean; locationId?: string | null };
 type LocationRow = { id: string; name: string; isActive: boolean };
 
-type LineRow = { serviceId: string; position: number; durationMinutes: number; price: Prisma.Decimal };
+type LineRow = { serviceId: string; position: number; durationMinutes: number; price: Prisma.Decimal; priceFrom?: boolean };
 type AppointmentRow = {
   phoneNumber: string;
   id: string;
@@ -287,6 +294,16 @@ describe("BookingService.create", () => {
         [30, "45"],
         [15, "15"],
       ]);
+    });
+
+    // R520
+    it("snapshots whether each line's price was a starting price", async () => {
+      const design = { ...beardTrim, priceFrom: true };
+      const { service, tx } = setup({ services: [{ ...defaultService, priceFrom: false }, design] });
+
+      await service.create(createInput({ serviceIds: ["s1", "s2"] }));
+
+      expect(createdData(tx).services.create.map((line) => line.priceFrom)).toEqual([false, true]);
     });
 
     it("rejects a booking with no services", async () => {
@@ -647,6 +664,21 @@ describe("BookingService.update", () => {
       await service.update(updateInput({ serviceIds: ["s1", "s2"] }));
 
       expect(tx.appointment.update).toHaveBeenCalled();
+    });
+
+    // R520
+    it("keeps a line booked at a starting price as one, even after the service's price stops being one", async () => {
+      const { service, tx } = setup({
+        services: [{ ...defaultService, priceFrom: false }, { ...beardTrim, priceFrom: false }],
+        appointment: { services: [{ serviceId: "s1", position: 0, durationMinutes: 30, price: new Prisma.Decimal("45.00"), priceFrom: true }] },
+      });
+
+      await service.update(updateInput({ serviceIds: ["s1", "s2"] }));
+
+      expect(rewrittenLines(tx).map((line) => [line.serviceId, line.priceFrom])).toEqual([
+        ["s1", true],
+        ["s2", false],
+      ]);
     });
 
     it("rejects reviving a cancelled appointment by editing it", async () => {

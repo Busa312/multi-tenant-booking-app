@@ -1,3 +1,4 @@
+import { priceText } from "@/lib/price";
 import { getPublicApiClient } from "@/lib/api";
 import { openingTodayLine } from "@/lib/opening-today";
 import { loadPageContext } from "@/lib/page-context";
@@ -33,7 +34,8 @@ export default async function EmbedMediumPage({ params }: { params: { locale: st
                 <div className="min-w-0">
                   <p className="truncate font-semibold">{name}</p>
                   <p className="text-sm text-base-content/65 tabular-nums">
-                    {context.t("home.minutes", { count: service.durationMinutes })} · {service.price} ₾
+                    {context.t("home.minutes", { count: service.durationMinutes })} ·{" "}
+                    {priceText(context.t, service.price, service.priceFrom)}
                   </p>
                 </div>
                 <EmbedOpenButton

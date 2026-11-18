@@ -8,14 +8,19 @@ export type ActionResult<T> = ({ ok: true } & T) | { ok: false; reason: FailureR
 
 // tooLate (R300): inside the salon's cutoff — changes go through the salon now
 // "blocked" (R380): this salon doesn't take online bookings from the number
-export type FailureReason = "conflict" | "invalid" | "notFound" | "limit" | "tooLate" | "blocked" | "unknown";
+// "paused" (R490): the salon's subscription has lapsed — no online bookings at all
+export type FailureReason = "conflict" | "invalid" | "notFound" | "limit" | "tooLate" | "blocked" | "paused" | "unknown";
 
 function toFailure(error: unknown): { ok: false; reason: FailureReason } {
   if (error instanceof ApiError) {
     if (error.status === 409) return { ok: false, reason: "conflict" };
     if (error.status === 429) return { ok: false, reason: "limit" };
-    if (error.status === 403 && (error.body as { code?: unknown } | null)?.code === "phone_blocked") {
+    const code = (error.body as { code?: unknown } | null)?.code;
+    if (error.status === 403 && code === "phone_blocked") {
       return { ok: false, reason: "blocked" };
+    }
+    if (error.status === 403 && code === "booking_paused") {
+      return { ok: false, reason: "paused" };
     }
     if (error.status === 403) return { ok: false, reason: "tooLate" };
     if (error.status === 404) return { ok: false, reason: "notFound" };

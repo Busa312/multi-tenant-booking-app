@@ -10,6 +10,7 @@ import { AppointmentsController } from "./appointments.controller.js";
 import { DashboardController } from "./dashboard.controller.js";
 import { BlockedPhonesController } from "./blocked-phones.controller.js";
 import { OnboardingController } from "./onboarding.controller.js";
+import { ServiceCategoriesController } from "./service-categories.controller.js";
 import { OnboardingService } from "./onboarding.service.js";
 import { RevalidationService } from "./revalidation.service.js";
 import { DashboardService } from "./dashboard.service.js";
@@ -27,6 +28,7 @@ import { DashboardService } from "./dashboard.service.js";
     DashboardController,
     BlockedPhonesController,
     OnboardingController,
+    ServiceCategoriesController,
   ],
   providers: [RevalidationService, DashboardService, OnboardingService],
 })

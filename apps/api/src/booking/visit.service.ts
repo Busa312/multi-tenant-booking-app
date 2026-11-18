@@ -130,6 +130,7 @@ export class VisitService {
                 position,
                 durationMinutes: line.durationMinutes,
                 price: line.price,
+                priceFrom: line.priceFrom,
               })),
             },
           },

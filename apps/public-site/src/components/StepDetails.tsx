@@ -81,6 +81,7 @@ export function StepDetails({
           professional: professionalName(segment.professionalId),
         }))}
         total={services.reduce((sum, service) => sum + Number(service.price), 0).toFixed(2)}
+        totalFrom={services.some((service) => service.priceFrom)}
         timezone={timezone}
         locale={locale}
         t={t}

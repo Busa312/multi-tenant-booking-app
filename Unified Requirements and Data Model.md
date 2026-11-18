@@ -81,6 +81,9 @@ as those code comments — they are not written down here yet, and back-filling 
 | R480 | A new salon starts with a 14-day free trial (salons that existed before billing: 14 days from its rollout). Paying during the trial keeps the remaining trial days — the first paid month starts when the trial ends. A salon's status is derived, never stored: *free* (granted by the platform admin, R430), *trial*, *active* (paid through a future date), *past due* (up to 7 days after the trial or the paid month ended without payment; a failed renewal is retried daily) or *lapsed*. The platform admin (R430) can grant free use, and extend or end a trial. The CMS tells the owner when the trial is ending, when a payment failed and when booking is paused. |
 | R490 | A lapsed salon's booking site stops taking new online bookings: it says booking is unavailable, and the API refuses holds and bookings. Everything else keeps working — the CMS (so the owner can pay), staff bookings, and customers' manage links. Paying lifts the pause at once. A server with no payment provider configured pauses nobody, since nobody there could pay. |
 | R500 | Texts are counted per **billing month** — the salon's paid month — against the allowance of the plan paid for it (R470), and shown on the subscription page as they're used; outside a paid month (trial, free use, lapsed) the calendar month in the salon's time zone is shown instead and nothing is charged. A text counts once the SMS provider accepts it, by the SMS parts it is billed as (160 Latin characters per part, 153 each when split); only texts sent on the salon's behalf count — booking codes and booking links — and what was sent, and to whom, isn't kept. Texts beyond the allowance cost **0.07 GEL each** and are added to the next renewal: one card payment covers the coming month and the month just ended's extra texts, and the invoice shows both. Texts are never blocked over the allowance — every online booking needs one. A cancelled subscription's last month isn't followed by a renewal, so its extra texts aren't charged. The owner is warned in the CMS at 80% and 100% of the allowance; the platform admin sees each salon's usage. |
+| R510 | Services are grouped into **categories** the salon names (translatable, R160) — e.g. Nails, Lashes, Brows — and the salon sets the order of the categories and of the services in each. The booking site and the CMS show services in that order, under their category's heading; services in no category come last, under a general heading. Deleting a category keeps its services, uncategorized. A price list with options ("3 lengths", "short/long") is entered as one service per option in the same category. |
+| R520 | A service's price can be a **starting price**, shown as "from 15 ₾". The amount stored is that starting price; a booking records it (R40), and a booking — or a visit total — that includes a starting price is shown as "from" too, on the booking site, its confirmation, the manage page and in the CMS. The salon settles the final amount in person. |
+| R530 | Staff mark a booking *completed* or *no-show* (R100) only once it has started — a no-show can't happen before the appointment, and marking one early would count against the customer's history (R360). The CMS offers both only from the start time on, and the API refuses them before it; putting a booking back to *booked*, and cancelling, stay available any time. |
 
 ## Booking Access — Magic Link
 
@@ -248,7 +251,22 @@ every professional at null, which is why adding locations does not disturb exist
 | `description_i18n` | jsonb, nullable | |
 | `duration_minutes` | int | |
 | `price` | numeric | current price; appointments snapshot this at booking time |
+| `price_from` | boolean, default false | R520: `price` is a starting price ("from 15 ₾") |
+| `category_id` | uuid, FK, nullable | R510: null = uncategorized; set null when the category is deleted |
+| `position` | int, default 0 | R510: order within its category |
 | `is_active` | boolean, default true | R60/R70: deactivated, never deleted, once it has history |
+| `created_at` | timestamptz | |
+
+### ServiceCategory
+R510: how a salon groups its price list.
+
+| column | type | notes |
+|---|---|---|
+| `id` | uuid, PK | |
+| `tenant_id` | uuid, FK | |
+| `name` | text | |
+| `name_i18n` | jsonb, nullable | non-default locales, per the Localized content convention |
+| `position` | int, default 0 | order of the categories |
 | `created_at` | timestamptz | |
 
 ### ServiceProfessional (join table)
@@ -372,6 +390,7 @@ professional, which is what lets `Appointment` keep a single `professional_id`,
 | `position` | smallint | order the services were chosen in; unique per appointment |
 | `duration_minutes` | int | snapshot of `Service.duration_minutes` when this service was added |
 | `price` | numeric | snapshot of `Service.price` when this service was added |
+| `price_from` | boolean, default false | R520: snapshot of `Service.price_from` — the price was a starting price |
 
 Note that `Appointment` therefore has no database-level guarantee of at least one
 service — a join table can't express "≥1 row" without a deferred constraint

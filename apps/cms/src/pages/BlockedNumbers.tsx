@@ -8,6 +8,8 @@ import { AppShell } from "../components/AppShell.js";
 import { BlockPhoneModal } from "../components/BlockPhoneModal.js";
 import { CardSkeleton } from "../components/CardSkeleton.js";
 import { Alert, Button, Pagination, Table, TableEmpty, TableHead, TableRow } from "../components/ui/index.js";
+import { formatPhone } from "../lib/formatPhone.js";
+import { formatShortDate } from "../lib/tenantTime.js";
 
 const COLUMNS = "minmax(0,1fr) minmax(0,1.4fr) 120px 110px";
 const TABLE_ROW = "48px";
@@ -44,7 +46,7 @@ export function BlockedNumbersPage() {
   function unblock(entry: BlockedPhone) {
     setConfirmRequest({
       title: t("blocked.unblock"),
-      message: t("blocked.confirmUnblock", { phone: entry.phoneNumber }),
+      message: t("blocked.confirmUnblock", { phone: formatPhone(entry.phoneNumber) }),
       confirmLabel: t("blocked.unblock"),
       run: () => {
         setError(null);
@@ -56,7 +58,7 @@ export function BlockedNumbersPage() {
     });
   }
 
-  const dateOf = (iso: string) => new Intl.DateTimeFormat(lang, { day: "numeric", month: "short", year: "numeric" }).format(new Date(iso));
+  const dateOf = (iso: string) => formatShortDate(iso, lang);
 
   return (
     <AppShell title={t("blocked.title")} subtitle={t("blocked.subtitle")}>
@@ -81,7 +83,7 @@ export function BlockedNumbersPage() {
               {blocked.length === 0 && <TableEmpty>{t("blocked.empty")}</TableEmpty>}
               {pager.pageItems.map((entry) => (
                 <TableRow key={entry.id} columns={COLUMNS}>
-                  <div className="font-semibold tabular-nums">{entry.phoneNumber}</div>
+                  <div className="font-semibold tabular-nums">{formatPhone(entry.phoneNumber)}</div>
                   <div className="text-[13px] text-base-content/60">{entry.reason ?? "—"}</div>
                   <div className="text-[13px] tabular-nums">{dateOf(entry.createdAt)}</div>
                   <div className="flex justify-end">

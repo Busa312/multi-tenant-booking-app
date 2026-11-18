@@ -1,5 +1,6 @@
 "use client";
 
+import { priceText } from "@/lib/price";
 import { useCallback, useMemo, useState } from "react";
 import { localized } from "@booking/shared-types";
 import type { Visit } from "@booking/shared-types";
@@ -133,7 +134,8 @@ export function ManageAppointment({
         </div>
         <div className={SUMMARY_ROW}>
           <dt className={SUMMARY_TERM}>{t("booking.summary.total")}</dt>
-          <dd className="text-xl font-extrabold tabular-nums">{current.price} ₾</dd>
+          {/* R520 */}
+          <dd className="text-xl font-extrabold tabular-nums">{priceText(t, current.price, current.priceFrom)}</dd>
         </div>
       </dl>
 

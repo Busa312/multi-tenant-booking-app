@@ -23,6 +23,7 @@ import { BookingsWeekGrid } from "../components/BookingsWeekGrid.js";
 import { BookingsMonthGrid } from "../components/BookingsMonthGrid.js";
 import { CardSkeleton } from "../components/CardSkeleton.js";
 import { type ActionMenuItem, Alert, Button, TextInput } from "../components/ui/index.js";
+import { formatPhone } from "../lib/formatPhone.js";
 
 const DAY_ROW = "48px";
 const WEEK_ROW = "74px";
@@ -174,7 +175,7 @@ export function BookingsPage() {
     const label = t(block ? "blocked.blockNumber" : "blocked.unblockNumber");
     setConfirmRequest({
       title: label,
-      message: t(block ? "blocked.confirmBlock" : "blocked.confirmUnblock", { phone: appointment.phoneNumber }),
+      message: t(block ? "blocked.confirmBlock" : "blocked.confirmUnblock", { phone: formatPhone(appointment.phoneNumber) }),
       confirmLabel: label,
       danger: block,
       run: () => {
@@ -200,15 +201,17 @@ export function BookingsPage() {
         onSelect: () => setRescheduleTarget(appointment),
       });
     }
-    // R100: marking is manual
-    if (appointment.status !== "completed") {
+    // R100: marking is manual. R530: and only once the appointment has started —
+    // a no-show can't happen in advance.
+    const started = new Date(appointment.startAt).getTime() <= Date.now();
+    if (started && appointment.status !== "completed") {
       items.push({
         label: t("bookings.actionComplete"),
         icon: "check_circle",
         onSelect: () => setStatus(appointment, "completed"),
       });
     }
-    if (appointment.status !== "no_show") {
+    if (started && appointment.status !== "no_show") {
       items.push({
         label: t("bookings.actionNoShow"),
         icon: "person_off",

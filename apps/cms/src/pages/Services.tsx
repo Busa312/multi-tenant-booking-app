@@ -1,40 +1,27 @@
 import { useEffect, useState } from "react";
-import type { ProfessionalSummary, ServiceSummary } from "@booking/shared-types";
+import type { ProfessionalSummary, ServiceCategory, ServiceSummary } from "@booking/shared-types";
 import { ApiError } from "@booking/api-client";
 import { enabledLocalesOf } from "@booking/shared-types";
 import { cachedApi } from "../lib/cache.js";
 import { useI18n } from "../i18n/I18nContext.js";
 import { useLocalizedName } from "../lib/useLocalizedName.js";
 import { ConfirmModal, type ConfirmRequest } from "../components/ConfirmModal.js";
-import { usePagination } from "../lib/usePagination.js";
+import { groupServices, moved, type ServiceGroup } from "../lib/serviceGroups.js";
 import { AppShell } from "../components/AppShell.js";
-import { PillList } from "../components/PillList.js";
 import { Modal } from "../components/Modal.js";
 import { EditServiceModal } from "../components/EditServiceModal.js";
+import { EditCategoryModal } from "../components/EditCategoryModal.js";
+import { ServiceCategorySection } from "../components/ServiceCategorySection.js";
 import { CardSkeleton } from "../components/CardSkeleton.js";
-import {
-  ActionMenu,
-  type ActionMenuItem,
-  Alert,
-  Button,
-  Pill,
-  Pagination, Table,
-  TableHead,
-  TableRow,
-  TableEmpty,
-} from "../components/ui/index.js";
-
-const COLUMNS = "1.3fr 90px 100px 1.4fr 100px 60px";
-
-// A service many people perform would otherwise grow its row a line per few
-// names; past this many the rest fold into a "+N" chip that lists them.
-const MAX_PROFESSIONAL_CHIPS = 2;
+import { type ActionMenuItem, Alert, Button } from "../components/ui/index.js";
 
 /** A TableRow with an ActionMenu in it. Sized for the loading placeholder. */
 const TABLE_ROW = "46px";
 
 interface PageData {
   services: ServiceSummary[];
+  // R510: the headings, in the salon's order
+  categories: ServiceCategory[];
   professionals: ProfessionalSummary[];
   // R50: a service with nobody assigned is only reachable if the tenant has
   // tenant-wide (professionalId === null) business hours — which changes what
@@ -42,9 +29,6 @@ interface PageData {
   hasTenantWideHours: boolean;
   enabledLocales: string[];
 }
-
-// Rows per page; a pager appears only once there are more.
-const PAGE_SIZE = 10;
 
 export function ServicesPage() {
   const { t } = useI18n();
@@ -54,20 +38,27 @@ export function ServicesPage() {
   const [data, setData] = useState<PageData | null>(null);
   const [listError, setListError] = useState<string | null>(null);
   const [editTarget, setEditTarget] = useState<ServiceSummary | "new" | null>(null);
+  // R510: the category a new service starts in (the section its "Add" was pressed in)
+  const [newServiceCategory, setNewServiceCategory] = useState<string | null>(null);
+  const [categoryTarget, setCategoryTarget] = useState<ServiceCategory | "new" | null>(null);
+  // A reorder is on its way: the arrows wait for it rather than racing it.
+  const [reordering, setReordering] = useState(false);
   const [unbookableWarning, setUnbookableWarning] = useState<string | null>(null);
   const [deactivateTarget, setDeactivateTarget] = useState<ServiceSummary | null>(null);
   const [deactivateLoading, setDeactivateLoading] = useState(false);
 
   function load() {
-    Promise.all([
+    return Promise.all([
       cachedApi.listServices(),
       cachedApi.listProfessionals(),
       cachedApi.listBusinessHours(),
       cachedApi.getTenant(),
+      cachedApi.listServiceCategories(),
     ])
-      .then(([services, professionals, hours, tenant]) => {
+      .then(([services, professionals, hours, tenant, categories]) => {
         setData({
           services,
+          categories,
           professionals,
           hasTenantWideHours: hours.some((h) => h.professionalId === null),
           enabledLocales: enabledLocalesOf(tenant.configJson.enabledLocales),
@@ -77,8 +68,10 @@ export function ServicesPage() {
   }
 
   // Fetch once on mount; a language switch shouldn't trigger a refetch.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(load, []);
+  useEffect(() => {
+    void load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   function professionalNames(s: ServiceSummary): string[] {
     if (!data) return [];
@@ -159,7 +152,60 @@ export function ServicesPage() {
     ];
   }
 
-  const pager = usePagination(data?.services ?? [], PAGE_SIZE);
+  function addService(categoryId: string | null) {
+    setNewServiceCategory(categoryId);
+    setEditTarget("new");
+  }
+
+  /** R510: one place up or down in its category. */
+  async function moveService(group: ServiceGroup<ServiceSummary>, index: number, direction: -1 | 1) {
+    setListError(null);
+    setReordering(true);
+    try {
+      await cachedApi.reorderServices({
+        categoryId: group.category?.id ?? null,
+        ids: moved(group.services.map((service) => service.id), index, direction),
+      });
+      await load();
+    } catch {
+      setListError(t("services.errReorder"));
+    } finally {
+      setReordering(false);
+    }
+  }
+
+  /** R510: one place up or down among the categories. */
+  async function moveCategory(index: number, direction: -1 | 1) {
+    if (!data) return;
+    setListError(null);
+    setReordering(true);
+    try {
+      await cachedApi.reorderServiceCategories({ ids: moved(data.categories.map((category) => category.id), index, direction) });
+      await load();
+    } catch {
+      setListError(t("services.errReorder"));
+    } finally {
+      setReordering(false);
+    }
+  }
+
+  function deleteCategory(category: ServiceCategory, serviceCount: number) {
+    const name = nameOf(category.name, category.nameI18n);
+    setConfirmRequest({
+      title: t("services.deleteCategory"),
+      message: t("services.confirmDeleteCategory", { name, count: serviceCount }),
+      confirmLabel: t("services.deleteCategory"),
+      danger: true,
+      run: () =>
+        void cachedApi
+          .deleteServiceCategory(category.id)
+          .then(load)
+          .catch(() => setListError(t("services.errCategorySave"))),
+    });
+  }
+
+  // Empty categories stay visible here, so they can be filled.
+  const groups = data ? groupServices(data.services, data.categories, { keepEmpty: true }) : [];
 
   return (
     <AppShell title={t("services.title")} subtitle={t("services.subtitle")}>
@@ -167,7 +213,11 @@ export function ServicesPage() {
         <div className="mb-5 flex flex-wrap items-center justify-end gap-3">
           {/* Disabled until the roster and locale list are in — the form can't
               be rendered without them. */}
-          <Button className="ml-auto" icon="add" disabled={!data} onClick={() => setEditTarget("new")}>
+          {/* R510 */}
+          <Button className="ml-auto" variant="secondary" icon="add" disabled={!data} onClick={() => setCategoryTarget("new")}>
+            {t("services.addCategory")}
+          </Button>
+          <Button icon="add" disabled={!data} onClick={() => addService(null)}>
             {t("services.add")}
           </Button>
         </div>
@@ -175,48 +225,39 @@ export function ServicesPage() {
         {listError && <Alert>{listError}</Alert>}
         {unbookableWarning && <Alert variant="warning">{unbookableWarning}</Alert>}
 
-        {data && (
-          <div className="overflow-x-auto">
-            <Table className="min-w-[800px]">
-              <TableHead columns={COLUMNS}>
-                <div>{t("services.colName")}</div>
-                <div>{t("services.colDuration")}</div>
-                <div>{t("services.colPrice")}</div>
-                <div>{t("services.colProfessionals")}</div>
-                <div>{t("services.colStatus")}</div>
-                <div></div>
-              </TableHead>
-              {pager.pageItems.map((s) => (
-                <TableRow key={s.id} columns={COLUMNS}>
-                  <div>
-                    <div className="font-semibold">{nameOf(s.name, s.nameI18n)}</div>
-                    {s.description && (
-                      <div className="mt-0.5 line-clamp-2 text-xs text-base-content/60">
-                        {nameOf(s.description, s.descriptionI18n)}
-                      </div>
-                    )}
-                  </div>
-                  <div className="text-[13.5px] tabular-nums">{t("services.minutes", { count: s.durationMinutes })}</div>
-                  <div className="text-[13.5px] font-medium tabular-nums">{t("services.priceValue", { price: s.price })}</div>
-                  <div className="flex flex-wrap gap-1">
-                    <PillList items={professionalNames(s)} max={MAX_PROFESSIONAL_CHIPS} />
-                    {s.professionalIds.length === 0 && <Pill tone="warning">{t("services.noneAssigned")}</Pill>}
-                  </div>
-                  <div>
-                    <Pill tone={s.isActive ? "success" : "danger"}>
-                      {t(s.isActive ? "services.active" : "services.inactive")}
-                    </Pill>
-                  </div>
-                  <div className="flex justify-end">
-                    <ActionMenu ariaLabel={t("common.rowActions", { name: nameOf(s.name, s.nameI18n) })} items={rowActions(s)} />
-                  </div>
-                </TableRow>
-              ))}
-              {data.services.length === 0 && <TableEmpty>{t("services.empty")}</TableEmpty>}
-            </Table>
-            <Pagination {...pager} />
-          </div>
-        )}
+        {/* R510: the price list under its categories, in the salon's order */}
+        {data &&
+          groups.map((group) => {
+            const index = group.category ? data.categories.indexOf(group.category) : -1;
+            const category = group.category;
+            return (
+              <ServiceCategorySection
+                key={category?.id ?? "uncategorized"}
+                title={category ? nameOf(category.name, category.nameI18n) : t(data.categories.length > 0 ? "services.uncategorized" : "services.allServices")}
+                services={group.services}
+                categoryActions={
+                  category
+                    ? [
+                        { label: t("services.renameCategory"), icon: "edit", onSelect: () => setCategoryTarget(category) },
+                        {
+                          label: t("services.deleteCategory"),
+                          icon: "delete",
+                          danger: true,
+                          onSelect: () => deleteCategory(category, group.services.length),
+                        },
+                      ]
+                    : undefined
+                }
+                onMoveUp={category && index > 0 ? () => void moveCategory(index, -1) : undefined}
+                onMoveDown={category && index < data.categories.length - 1 ? () => void moveCategory(index, 1) : undefined}
+                onAddService={() => addService(category?.id ?? null)}
+                professionalNames={professionalNames}
+                serviceActions={rowActions}
+                onMoveService={(serviceIndex, direction) => void moveService(group, serviceIndex, direction)}
+                busy={reordering}
+              />
+            );
+          })}
         {!data && <CardSkeleton rows={5} rowHeight={TABLE_ROW} />}
       </div>
 
@@ -225,8 +266,22 @@ export function ServicesPage() {
           target={editTarget}
           professionals={data.professionals}
           locales={data.enabledLocales}
+          categories={data.categories}
+          defaultCategoryId={newServiceCategory}
           onClose={() => setEditTarget(null)}
           onSaved={handleSaved}
+        />
+      )}
+
+      {categoryTarget && data && (
+        <EditCategoryModal
+          target={categoryTarget}
+          locales={data.enabledLocales}
+          onClose={() => setCategoryTarget(null)}
+          onSaved={() => {
+            setCategoryTarget(null);
+            void load();
+          }}
         />
       )}
 

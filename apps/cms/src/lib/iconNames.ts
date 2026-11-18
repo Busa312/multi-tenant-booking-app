@@ -8,7 +8,9 @@
  */
 export const ICON_NAMES = [
   "add",
+  "arrow_downward",
   "arrow_forward",
+  "arrow_upward",
   "block",
   "check",
   "check_circle",

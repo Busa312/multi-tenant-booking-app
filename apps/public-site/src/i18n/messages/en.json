@@ -5,7 +5,9 @@
     "loading": "Loading…",
     "retry": "Try again",
     "somethingWrong": "Something went wrong. Please try again.",
-    "required": "Required"
+    "required": "Required",
+    "price": "{price} ₾",
+    "priceFrom": "from {price} ₾"
   },
   "nav": {
     "language": "Language",
@@ -23,7 +25,8 @@
     "defaultDescription": "See what's available and book online at {name}.",
     "bookAt": "Book at {name}",
     "hoursTitle": "Opening hours",
-    "closed": "Closed"
+    "closed": "Closed",
+    "otherServices": "Other services"
   },
   "booking": {
     "title": "Book an appointment",
@@ -41,7 +44,7 @@
       "hint": "Pick one or more. They'll run back to back in one appointment.",
       "empty": "Nothing is bookable online right now.",
       "totalDuration": "about {count} min total",
-      "totalPrice": "{price} ₾ total",
+      "totalPrice": "{price} total",
       "max": "You can book up to {max} services at once.",
       "unavailable": "Not bookable online"
     },

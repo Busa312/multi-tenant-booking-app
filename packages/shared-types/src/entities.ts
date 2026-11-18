@@ -124,8 +124,22 @@ export interface Service {
   descriptionI18n: LocalizedText | null;
   durationMinutes: number;
   price: string;
+  /** R520: `price` is a starting price ("from 15 ₾"). */
+  priceFrom: boolean;
+  /** R510: null = uncategorized. */
+  categoryId: string | null;
+  /** R510: order within its category. */
+  position: number;
   isActive: boolean;
   createdAt: string;
+}
+
+/** R510: how a salon groups its price list, in its own order. */
+export interface ServiceCategory {
+  id: string;
+  name: string;
+  nameI18n: LocalizedText | null;
+  position: number;
 }
 
 export interface ServiceSummary extends Service {
@@ -168,6 +182,8 @@ export interface AppointmentServiceLine {
   nameI18n: LocalizedText | null;
   durationMinutes: number;
   price: string;
+  /** R520: booked at a starting price. */
+  priceFrom: boolean;
 }
 
 export interface Appointment {
@@ -293,6 +309,8 @@ export interface Visit {
   startAt: string;
   endAt: string;
   price: string;
+  /** R520: some service in it was booked at a starting price, so `price` is "from". */
+  priceFrom: boolean;
   locationId: string | null;
   locationName: string | null;
   // R160

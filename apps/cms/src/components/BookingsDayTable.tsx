@@ -1,4 +1,5 @@
 import type { AppointmentSummary } from "@booking/shared-types";
+import { priceLabel } from "../lib/priceLabel.js";
 import { useI18n } from "../i18n/I18nContext.js";
 import { serviceLabel } from "../lib/appointmentServices.js";
 import { usePagination } from "../lib/usePagination.js";
@@ -8,6 +9,7 @@ import { BookingStatusPill } from "./BookingStatusPill.js";
 import { NoShowBadge } from "./NoShowBadge.js";
 import { BlockedBadge } from "./BlockedBadge.js";
 import { ActionMenu, type ActionMenuItem, Table, TableEmpty, TableHead, TableRow, Pagination } from "./ui/index.js";
+import { formatPhone } from "../lib/formatPhone.js";
 
 interface BookingsDayTableProps {
   appointments: AppointmentSummary[];
@@ -54,7 +56,7 @@ export function BookingsDayTable({ appointments, listKey, timezone, actionsFor }
             </div>
             <div>
               <div className="font-semibold">{appointment.userName}</div>
-              <div className="mt-0.5 text-xs text-base-content/60">{appointment.phoneNumber}</div>
+              <div className="mt-0.5 text-xs text-base-content/60">{formatPhone(appointment.phoneNumber)}</div>
               <div className="mt-1 flex flex-wrap gap-1 empty:hidden">
                 <BlockedBadge blocked={appointment.phoneBlocked} />
                 <NoShowBadge history={appointment.noShowHistory} />
@@ -63,7 +65,8 @@ export function BookingsDayTable({ appointments, listKey, timezone, actionsFor }
             </div>
             <div>
               <div className="text-[13.5px]">{serviceLabel(appointment, nameOf)}</div>
-              <div className="mt-0.5 text-xs text-base-content/60">{t("bookings.priceValue", { price: appointment.price })}</div>
+              <div className="mt-0.5 text-xs text-base-content/60">{/* R520 */}
+                {priceLabel(t, appointment.price, appointment.services.some((line) => line.priceFrom))}</div>
             </div>
             <div className="text-[13.5px]">{appointment.professionalName ? nameOf(appointment.professionalName, appointment.professionalNameI18n) : t("bookings.anyProfessional")}</div>
             <div>

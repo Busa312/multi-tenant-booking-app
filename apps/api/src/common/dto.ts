@@ -179,8 +179,35 @@ export class ServiceDto {
   @ApiProperty() durationMinutes!: number;
   @ApiProperty({ description: "Decimal, transported as a string to avoid float precision loss" })
   price!: string;
+  @ApiProperty({ description: "R520: price is a starting price (\"from 15 ₾\")" }) priceFrom!: boolean;
+  @ApiProperty({ nullable: true, type: String, description: "R510: null = uncategorized" }) categoryId!: string | null;
+  @ApiProperty({ description: "R510: order within its category" }) position!: number;
   @ApiProperty() isActive!: boolean;
   @ApiProperty() createdAt!: string;
+}
+
+export class ServiceCategoryDto {
+  @ApiProperty() id!: string;
+  @ApiProperty() name!: string;
+  @ApiProperty({ nullable: true, ...LOCALIZED_MAP }) nameI18n!: Record<string, string> | null;
+  @ApiProperty({ description: "R510: order of the categories" }) position!: number;
+}
+
+export class CreateServiceCategoryRequestDto {
+  @ApiProperty() name!: string;
+  @ApiPropertyOptional(LOCALIZED_MAP) nameI18n?: Record<string, string>;
+}
+
+export class UpdateServiceCategoryRequestDto extends PartialType(CreateServiceCategoryRequestDto) {}
+
+export class ReorderServiceCategoriesRequestDto {
+  @ApiProperty({ type: [String], description: "Every category's id, first to last" }) ids!: string[];
+}
+
+export class ReorderServicesRequestDto {
+  @ApiProperty({ nullable: true, type: String, description: "The category whose services these are; null = uncategorized" })
+  categoryId!: string | null;
+  @ApiProperty({ type: [String], description: "All of that category's services, first to last" }) ids!: string[];
 }
 
 export class ServiceSummaryDto extends ServiceDto {
@@ -196,6 +223,8 @@ export class CreateServiceRequestDto {
   @ApiPropertyOptional(LOCALIZED_MAP) descriptionI18n?: Record<string, string>;
   @ApiProperty({ minimum: 1, description: "Positive whole number of minutes" }) durationMinutes!: number;
   @ApiProperty({ example: "45.00", description: "Positive decimal, in GEL" }) price!: string;
+  @ApiPropertyOptional({ description: "R520: price is a starting price" }) priceFrom?: boolean;
+  @ApiPropertyOptional({ nullable: true, type: String, description: "R510: null = uncategorized" }) categoryId?: string | null;
   @ApiProperty({ type: [String] }) professionalIds!: string[];
 }
 
@@ -250,6 +279,7 @@ export class AppointmentServiceLineDto {
   durationMinutes!: number;
   @ApiProperty({ description: "Snapshotted when the service was added to the appointment (R40)" })
   price!: string;
+  @ApiProperty({ description: "R520: booked at a starting price" }) priceFrom!: boolean;
 }
 
 export class AppointmentDto {
@@ -376,6 +406,7 @@ export class VisitDto {
   @ApiProperty() startAt!: string;
   @ApiProperty() endAt!: string;
   @ApiProperty({ description: "Sum of the segments still happening" }) price!: string;
+  @ApiProperty({ description: "R520: some service in it was booked at a starting price" }) priceFrom!: boolean;
   @ApiProperty({ nullable: true, type: String }) locationId!: string | null;
   @ApiProperty({ nullable: true, type: String }) locationName!: string | null;
   @ApiProperty({ nullable: true, ...LOCALIZED_MAP, description: "R160" }) locationNameI18n!: Record<string, string> | null;
