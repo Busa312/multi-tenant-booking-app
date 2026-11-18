@@ -67,6 +67,21 @@ export function saveWizard(state: WizardState): void {
   }
 }
 
+/**
+ * `/book`, `/ka/book`, `/embed/full`, `/ka/embed/full` (a trailing slash
+ * allowed). A pattern rather than the locale list: that module carries every
+ * message catalog, too much to put on every page for this.
+ */
+const BOOKING_PATH = /^(\/[a-z]{2}(-[A-Za-z]{2,4})?)?\/(book|embed\/full)\/?$/;
+
+/**
+ * R160: whether `pathname` (as the browser shows it, with or without a language
+ * prefix) is the booking flow itself — the only pages its saved progress is for.
+ */
+export function isBookingPath(pathname: string): boolean {
+  return BOOKING_PATH.test(pathname);
+}
+
 export function clearWizard(): void {
   try {
     window.sessionStorage.removeItem(KEY);

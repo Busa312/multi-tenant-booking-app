@@ -119,6 +119,9 @@ export function BookingWizard({
   const bookHref = useLocaleHref()("/book");
 
   const [stepIndex, setStepIndex] = useState(0);
+  // Bumped when a saved draft is put back, so the service step starts over from
+  // it (R510: the categories holding its services open).
+  const [restoreCount, setRestoreCount] = useState(0);
   const [draft, setDraft] = useState<BookingDraft>(() => {
     // A deep link can't preselect something that can't be booked (R240/R210).
     // R440: with only one service to book, it's chosen already.
@@ -184,6 +187,7 @@ export function BookingWizard({
     setDetails(restored.details);
     setCodeSent(restored.codeSent);
     setStepIndex(restored.stepIndex);
+    setRestoreCount((count) => count + 1);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -434,6 +438,7 @@ export function BookingWizard({
 
       {step === "services" && (
         <StepServices
+          key={restoreCount}
           services={services}
           categories={serviceCategories}
           professionals={allProfessionals}

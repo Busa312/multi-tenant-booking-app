@@ -46,7 +46,8 @@
       "totalDuration": "სულ დაახლოებით {count} წთ",
       "totalPrice": "სულ {price}",
       "max": "ერთ ჯავშანში შეგიძლიათ მაქსიმუმ {max} სერვისის არჩევა.",
-      "unavailable": "ონლაინ ვერ დაიჯავშნება"
+      "unavailable": "ონლაინ ვერ დაიჯავშნება",
+      "selectedInCategory": "{count} არჩეული"
     },
     "location": {
       "heading": "რომელი ლოკაცია?",

@@ -46,7 +46,8 @@
       "totalDuration": "about {count} min total",
       "totalPrice": "{price} total",
       "max": "You can book up to {max} services at once.",
-      "unavailable": "Not bookable online"
+      "unavailable": "Not bookable online",
+      "selectedInCategory": "{count} selected"
     },
     "location": {
       "heading": "Which location?",

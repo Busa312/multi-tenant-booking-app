@@ -1,4 +1,5 @@
 import { groupServices, type Service, type ServiceCategory } from "@booking/shared-types";
+import { DisclosureChevron } from "./DisclosureChevron";
 import { ServiceCard } from "./ServiceCard";
 
 interface ServiceListProps {
@@ -42,15 +43,10 @@ export function ServiceList({
       {services.length === 0 ? (
         <p className="border-y-2 border-accent py-8 text-base-content/65">{emptyLabel}</p>
       ) : (
-        <div className="flex flex-col gap-8">
-          {groups.map((group) => (
-            <div key={group.category?.id ?? "other"}>
-              {titled && (
-                <h3 className="mb-2 text-xl font-bold tracking-tight">
-                  {group.category ? text(group.category.name, group.category.nameI18n) : otherLabel}
-                </h3>
-              )}
-              <ul className="divide-y divide-base-300 border-y-2 border-accent">
+        <div className={titled ? "border-b-2 border-accent" : undefined}>
+          {groups.map((group, index) => {
+            const list = (
+              <ul className={titled ? "divide-y divide-base-300 border-t border-base-300" : "divide-y divide-base-300 border-y-2 border-accent"}>
                 {group.services.map((service) => (
                   <li key={service.id}>
                     <ServiceCard
@@ -65,8 +61,26 @@ export function ServiceList({
                   </li>
                 ))}
               </ul>
-            </div>
-          ))}
+            );
+            if (!titled) return <div key="all">{list}</div>;
+            // R510: each category opens and closes on its own; the first starts open.
+            // Native <details>: no script, keyboard and screen readers for free, and
+            // the browser's find-in-page opens a closed category to show a match.
+            return (
+              <details key={group.category?.id ?? "other"} className="group border-t-2 border-accent" open={index === 0}>
+                <summary className="flex min-h-12 cursor-pointer list-none items-center gap-3 py-3 [&::-webkit-details-marker]:hidden">
+                  <h3 className="text-xl font-bold tracking-tight">
+                    {group.category ? text(group.category.name, group.category.nameI18n) : otherLabel}
+                  </h3>
+                  <span className="text-sm text-base-content/60 tabular-nums">· {group.services.length}</span>
+                  <span className="ml-auto">
+                    <DisclosureChevron />
+                  </span>
+                </summary>
+                {list}
+              </details>
+            );
+          })}
         </div>
       )}
     </section>

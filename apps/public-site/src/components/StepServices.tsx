@@ -1,11 +1,13 @@
 "use client";
 
+import { useState } from "react";
 import { MAX_SERVICES_PER_BOOKING, groupServices } from "@booking/shared-types";
 import type { PublicProfessional, Service, ServiceCategory } from "@booking/shared-types";
 import { priceText } from "@/lib/price";
 import type { Translate } from "@/i18n/locales";
 import { BTN_NEXT, FOOTER, OPTION_LIST, STATUS_TEXT, STEP, STEP_HEADING, STEP_HINT } from "@/lib/wizardClasses";
 import { isBookable } from "@/lib/visit-booking";
+import { DisclosureChevron } from "./DisclosureChevron";
 
 interface StepServicesProps {
   services: Service[];
@@ -36,6 +38,24 @@ export function StepServices({ services, categories, professionals, selectedIds,
   // R510: under the salon's headings, when it has them
   const groups = groupServices(services, categories);
   const titled = groups.some((group) => group.category !== null);
+  const groupKey = (group: (typeof groups)[number]) => group.category?.id ?? "other";
+  // R510: which categories are open. To begin with: every one holding a service
+  // already chosen (coming back to this step, a deep link, a restored draft),
+  // or else the first. After that only the customer opens and closes them —
+  // picking a service never folds another category away under them.
+  const [open, setOpen] = useState<ReadonlySet<string>>(() => {
+    const chosen = groups.filter((group) => group.services.some((service) => selectedIds.includes(service.id))).map(groupKey);
+    const first = groups[0];
+    return new Set(chosen.length > 0 ? chosen : first ? [groupKey(first)] : []);
+  });
+  const setGroupOpen = (key: string, isOpen: boolean) =>
+    setOpen((current) => {
+      if (current.has(key) === isOpen) return current;
+      const next = new Set(current);
+      if (isOpen) next.add(key);
+      else next.delete(key);
+      return next;
+    });
 
   return (
     <section className={STEP}>
@@ -45,14 +65,10 @@ export function StepServices({ services, categories, professionals, selectedIds,
       {services.length === 0 ? (
         <p className={STATUS_TEXT}>{t("booking.services.empty")}</p>
       ) : (
-        <div className="flex flex-col gap-5">
-          {groups.map((group) => (
-            <div key={group.category?.id ?? "other"} className="flex flex-col gap-2">
-              {titled && (
-                <h3 className="text-sm font-bold text-base-content/70">
-                  {group.category ? text(group.category.name, group.category.nameI18n) : t("home.otherServices")}
-                </h3>
-              )}
+        <div className={titled ? "divide-y divide-base-300 border-y border-base-300" : undefined}>
+          {groups.map((group) => {
+            const key = groupKey(group);
+            const list = (
               <ul className={OPTION_LIST}>
                 {group.services.map((service) => {
                   const isSelected = selectedIds.includes(service.id);
@@ -93,8 +109,35 @@ export function StepServices({ services, categories, professionals, selectedIds,
                   );
                 })}
               </ul>
-            </div>
-          ))}
+            );
+            if (!titled) return <div key={key}>{list}</div>;
+            const chosenHere = group.services.filter((service) => selectedIds.includes(service.id)).length;
+            // R510: a category opens and closes on a click; several can be open.
+            return (
+              <details
+                key={key}
+                className="group"
+                open={open.has(key)}
+                onToggle={(event) => setGroupOpen(key, event.currentTarget.open)}
+              >
+                <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2 py-2 [&::-webkit-details-marker]:hidden">
+                  <h3 className="text-sm font-bold text-base-content/70">
+                    {group.category ? text(group.category.name, group.category.nameI18n) : t("home.otherServices")}
+                  </h3>
+                  <span className="text-sm text-base-content/50 tabular-nums">· {group.services.length}</span>
+                  {chosenHere > 0 && (
+                    <span className="badge badge-primary badge-sm tabular-nums">
+                      {t("booking.services.selectedInCategory", { count: chosenHere })}
+                    </span>
+                  )}
+                  <span className="ml-auto">
+                    <DisclosureChevron />
+                  </span>
+                </summary>
+                <div className="pb-4">{list}</div>
+              </details>
+            );
+          })}
         </div>
       )}
 

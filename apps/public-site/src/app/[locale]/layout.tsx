@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import Link from "next/link";
+import { BookingProgressReset } from "@/components/BookingProgressReset";
 import { PreviewColorListener } from "@/components/PreviewColorListener";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 import { SalonNotFoundDocument } from "@/components/SalonNotFoundDocument";
@@ -77,6 +78,7 @@ export default async function RootLayout({ children, params }: LayoutProps) {
     <html lang={context.locale} style={tenantThemeStyle(tenantThemeVars(colors))} suppressHydrationWarning>
       <body>
         <PreviewColorListener />
+        <BookingProgressReset />
         <div className="flex min-h-dvh flex-col">
           <header className="border-b-2 border-accent">
             <div className="mx-auto flex w-full max-w-3xl items-center justify-between gap-4 px-4 py-3.5">
