@@ -22,9 +22,14 @@ export interface IssuedToken {
 /** When a visit ending at `endAt` stops being manageable through its link. */
 export const linkExpiresAt = (endAt: Date): Date => new Date(endAt.getTime() + MAGIC_LINK_GRACE_MS);
 
-/** A fresh random token, expiring MAGIC_LINK_GRACE_MS after `endAt`. */
+/**
+ * A fresh random token, expiring MAGIC_LINK_GRACE_MS after `endAt`. 256 bits,
+ * written as base64url (43 URL-safe characters, not 64 hex): the link travels
+ * by SMS, where every character counts toward the one 160-character part
+ * (R500). Lookups go by hash, so links issued in the old hex form still work.
+ */
 export function issueToken(endAt: Date): IssuedToken {
-  const token = randomBytes(32).toString("hex");
+  const token = randomBytes(32).toString("base64url");
   return {
     token,
     accessTokenHash: hashToken(token),

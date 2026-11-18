@@ -1,4 +1,5 @@
 import { Module } from "@nestjs/common";
+import { BillingModule } from "../billing/billing.module.js";
 import { BookingModule } from "../booking/booking.module.js";
 import { TenantController } from "./tenant.controller.js";
 import { ServicesController } from "./services.controller.js";
@@ -16,7 +17,7 @@ import { RevalidationService } from "./revalidation.service.js";
 import { DashboardService } from "./dashboard.service.js";
 
 @Module({
-  imports: [BookingModule],
+  imports: [BookingModule, BillingModule],
   controllers: [
     TenantController,
     ServicesController,

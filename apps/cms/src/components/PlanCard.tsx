@@ -10,17 +10,26 @@ interface PlanCardProps {
   /** A chip beside the name: "Current", "From next renewal". */
   badge: string | null;
   action: { label: string; disabled: boolean; onClick: () => void };
+  /** Why the plan can't be chosen right now (R540: the salon has more locations than it includes). */
+  note?: string | null;
 }
 
 /** One plan on the Subscription page (R470): what it costs, what it includes, and the way onto it. */
-export function PlanCard({ plan, current, badge, action }: PlanCardProps) {
+export function PlanCard({ plan, current, badge, action, note }: PlanCardProps) {
   const { t } = useI18n();
+
+  // R540
+  function locationsFeature(): string {
+    if (plan.maxLocations === null) return t("subscription.featureManyLocations");
+    if (plan.maxLocations === 1) return t("subscription.featureOneLocation");
+    return t("subscription.featureUpToLocations", { count: plan.maxLocations });
+  }
 
   const features = [
     t("subscription.featureSms", { count: plan.smsIncluded }),
     t("subscription.featureBooking"),
-    t(plan.multipleLocations ? "subscription.featureManyLocations" : "subscription.featureOneLocation"),
-    ...(plan.id === "early" ? [t("subscription.featureEarlyPrice")] : []),
+    locationsFeature(),
+    ...(plan.id === "early" || plan.id === "early_pro" ? [t("subscription.featureEarlyPrice")] : []),
     ...(plan.prioritySupport ? [t("subscription.featurePriority")] : []),
   ];
 
@@ -44,6 +53,8 @@ export function PlanCard({ plan, current, badge, action }: PlanCardProps) {
           </li>
         ))}
       </ul>
+
+      {note && <p className="text-sm text-base-content/60">{note}</p>}
 
       <Button variant={current ? "secondary" : "primary"} fullWidth disabled={action.disabled} onClick={action.onClick}>
         {action.label}

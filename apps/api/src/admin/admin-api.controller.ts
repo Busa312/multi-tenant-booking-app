@@ -4,8 +4,10 @@ import { ApiExcludeController } from "@nestjs/swagger";
 import type { FastifyReply } from "fastify";
 import type {
   AdminLoginRequest,
+  AdminPlan,
   AdminSession,
   AdminTenantSummary,
+  AdminUpdatePlanRequest,
   AdminUpdateSubscriptionRequest,
   OnboardTenantRequest,
   OnboardTenantResponse,
@@ -13,6 +15,7 @@ import type {
 import { RateLimit } from "../rate-limit/rate-limit.decorator.js";
 import { OnboardingService } from "../internal/onboarding.service.js";
 import { BillingService } from "../billing/billing.service.js";
+import { PlanCatalog } from "../billing/plan-catalog.service.js";
 import { PrismaService } from "../prisma/prisma.service.js";
 import { TenantContextService } from "../tenant/tenant-context.service.js";
 import { AdminAuthService } from "./admin-auth.service.js";
@@ -36,6 +39,7 @@ export class AdminApiController {
     private readonly auth: AdminAuthService,
     private readonly onboarding: OnboardingService,
     private readonly billing: BillingService,
+    private readonly plans: PlanCatalog,
     private readonly prisma: PrismaService,
     private readonly tenantContext: TenantContextService,
     config: ConfigService,
@@ -94,6 +98,23 @@ export class AdminApiController {
     const tenant = await this.prisma.client.tenant.findUnique({ where: { id }, select: { id: true } });
     if (!tenant) throw new NotFoundException("No such salon");
     return this.tenantContext.runWithTenant(id, () => this.billing.adminUpdate(body));
+  }
+
+  // R550: the plans, edited without a deploy
+  @Get("plans")
+  @UseGuards(AdminSessionGuard)
+  @RateLimit({ name: "admin-read", ...LIMIT_READ })
+  listPlans(): Promise<AdminPlan[]> {
+    return this.plans.list();
+  }
+
+  @Post("plans/:id")
+  @HttpCode(200)
+  @UseGuards(AdminSessionGuard)
+  @RateLimit({ name: "admin-write", max: 120, windowSeconds: 60 * 60 })
+  updatePlan(@Param("id") id: string, @Body() body: AdminUpdatePlanRequest): Promise<AdminPlan> {
+    if (!/^[a-z][a-z0-9_]{0,31}$/.test(id)) throw new BadRequestException("Invalid plan id");
+    return this.plans.update(id, body);
   }
 
   @Post("tenants")

@@ -12,6 +12,7 @@ import type {
   AdminTenantSummary,
   AdminUpdateSubscriptionRequest,
   CheckoutResponse,
+  PlanLocationLimitResponse,
   ConfirmPaymentResponse,
   SubscriptionOverview,
   SubscriptionPaymentKind,
@@ -26,7 +27,8 @@ import { TenantContextService } from "../tenant/tenant-context.service.js";
 import { RevalidationService } from "../cms/revalidation.service.js";
 import { addCycle, TRIAL_MS } from "./billing-config.js";
 import { FlittClient, FlittError, type FlittOrder } from "./flitt.client.js";
-import { DEFAULT_PLAN, planById, PLANS, toMinorUnits, toWirePlan } from "./plans.js";
+import { PlanCatalog } from "./plan-catalog.service.js";
+import { DEFAULT_PLAN, locationLimit, planFits, planIn, toMinorUnits, toWirePlan, type PlanDefinition } from "./plans.js";
 import { matchesPayment, settle } from "./settle-payment.js";
 import { EXTRA_TEXT_PRICE, extraTexts, usageWindow } from "./sms-usage.js";
 import { deriveStatus, nextPeriodStart, renewalDue, type DerivedStatus } from "./subscription-status.js";
@@ -57,6 +59,8 @@ const ORDER_ID = /^([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}
 export function tenantOfOrder(orderId: unknown): string | null {
   return typeof orderId === "string" ? (ORDER_ID.exec(orderId)?.[1] ?? null) : null;
 }
+
+const locationLimitBody = (limit: number, message: string): PlanLocationLimitResponse => ({ code: "plan_location_limit", message, limit });
 
 const toSummary = (payment: SubscriptionPayment): SubscriptionPaymentSummary => ({
   id: payment.id,
@@ -90,6 +94,7 @@ export class BillingService {
     private readonly tenantContext: TenantContextService,
     private readonly flitt: FlittClient,
     private readonly revalidation: RevalidationService,
+    private readonly catalog: PlanCatalog,
   ) {}
 
   private get config() {
@@ -135,14 +140,53 @@ export class BillingService {
     }
   }
 
+  /** R540: how many active locations this salon may have now; null = no limit. */
+  private limitOf(subscription: Subscription, plans: readonly PlanDefinition[], now = new Date()): number | null {
+    return locationLimit(
+      {
+        status: this.derive(subscription, now).status,
+        planId: subscription.planId,
+        nextPlanId: subscription.nextPlanId,
+        cancelAtPeriodEnd: subscription.cancelAtPeriodEnd,
+        billingAvailable: this.flitt.configured,
+      },
+      plans,
+    );
+  }
+
+  private activeLocationsIn(tx: Prisma.TransactionClient, tenantId: string): Promise<number> {
+    return tx.location.count({ where: { tenantId, isActive: true } });
+  }
+
+  /** R540: refuses one more active location (a new one, or a closed one reopened) beyond the plan's limit. */
+  async assertLocationAllowedIn(tx: Prisma.TransactionClient, tenantId: string): Promise<void> {
+    const limit = this.limitOf(await this.subscriptionIn(tx, tenantId), await this.catalog.allIn(tx));
+    if (limit !== null && (await this.activeLocationsIn(tx, tenantId)) >= limit) {
+      throw new ForbiddenException(locationLimitBody(limit, `Your plan includes ${limit} active location${limit === 1 ? "" : "s"}. Upgrade on the Subscription page to add more.`));
+    }
+  }
+
+  /** R540: a plan is paid for or switched to only if the salon's active locations fit it. */
+  private async assertPlanFitsIn(tx: Prisma.TransactionClient, tenantId: string, plan: PlanDefinition): Promise<void> {
+    const active = await this.activeLocationsIn(tx, tenantId);
+    if (!planFits(plan, active)) {
+      const limit = plan.maxLocations ?? 0;
+      throw new ConflictException(
+        locationLimitBody(limit, `This plan includes ${limit} active location${limit === 1 ? "" : "s"} and the salon has ${active}. Close locations first, or choose a bigger plan.`),
+      );
+    }
+  }
+
   async overview(): Promise<SubscriptionOverview> {
     const { tenantId } = this.tenantContext.current;
     const now = new Date();
-    const { subscription, payments, sms } = await this.prisma.forTenant(async (tx) => {
+    const { subscription, payments, sms, activeLocations, plans } = await this.prisma.forTenant(async (tx) => {
       const current = await this.subscriptionIn(tx, tenantId);
       return {
         subscription: current,
+        plans: await this.catalog.allIn(tx),
         sms: await this.smsUsageIn(tx, tenantId, current, now),
+        activeLocations: await this.activeLocationsIn(tx, tenantId),
         payments: await tx.subscriptionPayment.findMany({
         where: {
           tenantId,
@@ -167,10 +211,12 @@ export class BillingService {
       cancelAtPeriodEnd: subscription.cancelAtPeriodEnd,
       bookingPaused: derived.bookingPaused,
       card: subscription.cardMasked ? { masked: subscription.cardMasked, brand: subscription.cardBrand } : null,
-      plans: PLANS.filter((plan) => plan.offered || plan.id === subscription.planId || plan.id === subscription.nextPlanId).map(toWirePlan),
+      plans: plans.filter((plan) => plan.offered || plan.id === subscription.planId || plan.id === subscription.nextPlanId).map(toWirePlan),
       payments: payments.map(toSummary),
       sms,
       billingAvailable: this.flitt.configured,
+      activeLocations,
+      locationLimit: this.limitOf(subscription, plans, now),
     };
   }
 
@@ -187,7 +233,7 @@ export class BillingService {
       timeZone: timezone,
     });
     const used = await this.textsIn(tx, tenantId, window.start, window.end);
-    const included = planById(subscription.planId)?.smsIncluded ?? 0;
+    const included = planIn(await this.catalog.allIn(tx), subscription.planId)?.smsIncluded ?? 0;
     const extra = extraTexts(used, included);
     return {
       used,
@@ -225,17 +271,18 @@ export class BillingService {
    * or now if the salon has lapsed.
    */
   async startCheckout(planId: unknown, apiOrigin: string, lang: CheckoutLang): Promise<CheckoutResponse> {
-    const plan = planById(planId);
-    if (!plan?.offered) throw new BadRequestException("planId must be one of the offered plans");
     this.assertConfigured();
     const { tenantId } = this.tenantContext.current;
     const now = new Date();
 
-    const orderId = await this.prisma.forTenant(async (tx) => {
+    const { orderId, plan } = await this.prisma.forTenant(async (tx) => {
+      const plan = planIn(await this.catalog.allIn(tx), planId);
+      if (!plan?.offered) throw new BadRequestException("planId must be one of the offered plans");
       const subscription = await this.subscriptionIn(tx, tenantId);
       const derived = this.derive(subscription, now);
       if (derived.status === "free") throw new ConflictException("This salon is on free use; there's nothing to pay.");
       if (derived.status === "active") throw new ConflictException("This salon is paid up. Switch plan instead.");
+      await this.assertPlanFitsIn(tx, tenantId, plan);
       const periodStart = nextPeriodStart(derived, now);
       const id = orderIdFor(tenantId, "signup", randomBytes(9).toString("base64url").replace(/_/g, "-"));
       await tx.subscriptionPayment.create({
@@ -249,7 +296,7 @@ export class BillingService {
           periodEnd: addCycle(periodStart, this.config.cycle),
         },
       });
-      return id;
+      return { orderId: id, plan };
     });
 
     const checkoutUrl = await this.checkoutPage(orderId, toMinorUnits(plan.price), `Subscription: ${plan.id} plan`, apiOrigin, lang, false);
@@ -291,10 +338,13 @@ export class BillingService {
       if (this.derive(subscription).status !== "active") {
         throw new ConflictException("Only a paid-up subscription can be changed. Choose a plan and pay instead.");
       }
-      const data: Prisma.SubscriptionUpdateInput = {};
+      const data: Prisma.SubscriptionUncheckedUpdateInput = {};
       if (planId !== undefined) {
-        const plan = planById(planId);
+        const plan = planIn(await this.catalog.allIn(tx), planId);
         if (!plan || (!plan.offered && plan.id !== subscription.planId)) throw new BadRequestException("planId must be one of the offered plans");
+        // R540: any change of the plan renewed on — including dropping a pending
+        // upgrade by keeping the current plan — must fit the open locations.
+        if (plan.id !== (subscription.nextPlanId ?? subscription.planId)) await this.assertPlanFitsIn(tx, tenantId, plan);
         data.nextPlanId = plan.id === subscription.planId ? null : plan.id;
       }
       if (cancel !== undefined) data.cancelAtPeriodEnd = cancel;
@@ -383,7 +433,8 @@ export class BillingService {
       });
       if (leased.count !== 1) return null;
 
-      const plan = planById(subscription.nextPlanId) ?? planById(subscription.planId) ?? planById(DEFAULT_PLAN);
+      const plans = await this.catalog.allIn(tx);
+      const plan = planIn(plans, subscription.nextPlanId) ?? planIn(plans, subscription.planId) ?? planIn(plans, DEFAULT_PLAN);
       if (!plan) return null;
       const orderId = orderIdFor(tenantId, "renewal", `${subscription.paidThrough.getTime()}-${subscription.failedAttempts + 1}`);
       const existing = await tx.subscriptionPayment.findUnique({ where: { orderId } });
@@ -395,7 +446,7 @@ export class BillingService {
       // allowance of the plan that month was paid for. That month is over, so
       // the count can't move: a retried renewal charges the same.
       const endedFrom = await this.periodStartIn(tx, tenantId, subscription.paidThrough);
-      const allowance = planById(subscription.planId)?.smsIncluded ?? 0;
+      const allowance = planIn(plans, subscription.planId)?.smsIncluded ?? 0;
       const extra = endedFrom
         ? extraTexts(await this.textsIn(tx, tenantId, endedFrom, subscription.paidThrough), allowance)
         : extraTexts(0, allowance);
@@ -488,7 +539,7 @@ export class BillingService {
     }
     await this.prisma.forTenant(async (tx) => {
       const subscription = await this.subscriptionIn(tx, tenantId);
-      const data: Prisma.SubscriptionUpdateInput = {};
+      const data: Prisma.SubscriptionUncheckedUpdateInput = {};
       if (free !== undefined) data.free = free;
       if (days !== undefined) {
         const from = Math.max(Date.now(), subscription.trialEndsAt.getTime());

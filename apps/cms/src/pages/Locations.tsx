@@ -10,6 +10,8 @@ import { ConfirmModal, type ConfirmRequest } from "../components/ConfirmModal.js
 import { usePagination } from "../lib/usePagination.js";
 import { AppShell } from "../components/AppShell.js";
 import { EditLocationModal } from "../components/EditLocationModal.js";
+import { PlanLimitAlert } from "../components/PlanLimitAlert.js";
+import { locationLimitFromError } from "../lib/planLimit.js";
 import { CardSkeleton } from "../components/CardSkeleton.js";
 import {
   ActionMenu,
@@ -42,6 +44,8 @@ export function LocationsPage() {
   const nameOf = useLocalizedName();
   const [data, setData] = useState<PageData | null>(null);
   const [listError, setListError] = useState<string | null>(null);
+  // R540: reopening was refused because the plan's location limit is reached
+  const [planLimit, setPlanLimit] = useState<number | null>(null);
   const [editTarget, setEditTarget] = useState<LocationSummary | "new" | null>(null);
 
   function load() {
@@ -62,11 +66,14 @@ export function LocationsPage() {
 
   async function setActive(location: LocationSummary, isActive: boolean) {
     setListError(null);
+    setPlanLimit(null);
     try {
       await cachedApi.updateLocation(location.id, { isActive });
       load();
-    } catch {
-      setListError(t("locations.errSave"));
+    } catch (err) {
+      const limit = locationLimitFromError(err);
+      if (limit === null) setListError(t("locations.errSave"));
+      else setPlanLimit(limit);
     }
   }
 
@@ -119,6 +126,7 @@ export function LocationsPage() {
         </div>
 
         {listError && <Alert>{listError}</Alert>}
+        {planLimit !== null && <PlanLimitAlert limit={planLimit} />}
 
         {data?.locations.length === 0 && <Alert variant="warning">{t("locations.firstLocationNotice")}</Alert>}
 

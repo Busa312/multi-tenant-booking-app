@@ -14,6 +14,13 @@ export interface MagicLinkMessage {
   locationName: string | null;
 }
 
+/**
+ * R270/R500: the manage-link text. Short, plain Latin wording so it stays one
+ * SMS part for any salon address up to 80 characters; also used for a resent
+ * link, so it doesn't say "confirmed".
+ */
+export const magicLinkText = (manageUrl: string): string => `Manage your booking: ${manageUrl}`;
+
 export interface OtpMessage {
   phoneNumber: string;
   code: string;
@@ -89,7 +96,7 @@ export class NotificationService {
       );
       return false;
     }
-    return this.sendSms(message.phoneNumber, `Your booking is confirmed. View, change or cancel it: ${message.manageUrl}`, {
+    return this.sendSms(message.phoneNumber, magicLinkText(message.manageUrl), {
       otp: false,
       kind: "manage_link",
     });

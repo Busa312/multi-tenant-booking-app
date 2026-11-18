@@ -1,6 +1,9 @@
 import type { ConfigService } from "@nestjs/config";
-import { NotificationService } from "./notification.service.js";
+import { issueToken } from "../booking/magic-link.js";
+import { manageUrl as buildManageUrl } from "../common/tenant-url.js";
+import { magicLinkText, NotificationService } from "./notification.service.js";
 import type { SmsLogService } from "./sms-log.service.js";
+import { smsParts } from "./sms-parts.js";
 
 const configOf = (values: Record<string, string>) =>
   ({ get: (key: string) => values[key] }) as unknown as ConfigService;
@@ -56,11 +59,11 @@ describe("NotificationService (SMS via uBill)", () => {
     });
   });
 
-  // R270
+  // R270, R500
   it("texts the manage link in plain Latin, so it bills as a single SMS", async () => {
     fetchMock.mockResolvedValue(reply(200, { statusID: 0, smsID: "2" }));
     const service = new NotificationService(configOf(UBILL), smsLog as unknown as SmsLogService);
-    const manageUrl = `https://salon.bukme.website/manage/${"x".repeat(43)}`;
+    const manageUrl = buildManageUrl("salon.bukme.website", issueToken(new Date()).token);
 
     await service.sendMagicLink({
       phoneNumber: "+995555123456",
@@ -75,6 +78,16 @@ describe("NotificationService (SMS via uBill)", () => {
     expect(otp).toBe(false);
     expect(text.length).toBeLessThanOrEqual(160);
     expect(/^[\x20-\x7E]*$/.test(text)).toBe(true);
+  });
+
+  // R500: a long salon name must not make every booking cost two texts
+  it.each([
+    ["a long subdomain", "nailandbeautystudiotbilisi.bukme.website"],
+    ["a custom domain", "www.nail-and-beauty-studio-tbilisi.ge"],
+    ["the longest address the rule promises (80 characters)", `${"s".repeat(66)}.bukme.website`],
+  ])("keeps the manage-link text to one SMS part for %s", (_label, host) => {
+    const text = magicLinkText(buildManageUrl(host, issueToken(new Date()).token));
+    expect(smsParts(text)).toBe(1);
   });
 
   it("reports a refusal (no balance, OTP cooldown) as not delivered", async () => {

@@ -545,6 +545,23 @@ export interface AdminTenantSummary {
   };
 }
 
+/** R550: a plan as the platform admin sees and edits it. */
+export interface AdminPlan extends SubscriptionPlan {
+  /** An owner can choose it now. */
+  offered: boolean;
+}
+
+/** R550: the fields of one plan to change; only what is sent changes. */
+export interface AdminUpdatePlanRequest {
+  /** GEL per month, e.g. "90.00". */
+  price?: string;
+  smsIncluded?: number;
+  /** null = no limit. */
+  maxLocations?: number | null;
+  prioritySupport?: boolean;
+  offered?: boolean;
+}
+
 /** R430: the platform admin grants (or takes back) free use, or extends a trial. */
 export interface AdminUpdateSubscriptionRequest {
   free?: boolean;
@@ -556,7 +573,7 @@ export interface AdminUpdateSubscriptionRequest {
 
 // ---- R470–R490: salons paying the platform ----
 
-export type SubscriptionPlanId = "early" | "standard" | "pro";
+export type SubscriptionPlanId = "early" | "early_pro" | "standard" | "pro";
 
 /**
  * Derived, never stored (R480): free (granted by the platform), trial, active
@@ -570,8 +587,17 @@ export interface SubscriptionPlan {
   /** GEL per month, two decimals. */
   price: string;
   smsIncluded: number;
-  multipleLocations: boolean;
+  /** R540: active locations the plan allows; null = no limit. */
+  maxLocations: number | null;
   prioritySupport: boolean;
+}
+
+/** R540: the API's 403 body when a plan doesn't allow another active location. */
+export interface PlanLocationLimitResponse {
+  code: "plan_location_limit";
+  message: string;
+  /** Active locations the plan allows. */
+  limit: number;
 }
 
 export type SubscriptionPaymentKind = "signup" | "renewal" | "card";
@@ -634,6 +660,9 @@ export interface SubscriptionOverview {
   };
   /** false = no payment provider configured here: nothing can be paid. */
   billingAvailable: boolean;
+  /** R540: the salon's active locations, and how many it may have now (null = no limit). */
+  activeLocations: number;
+  locationLimit: number | null;
 }
 
 /** Back from Flitt's page: that payment as it stands now, and the subscription after it. */

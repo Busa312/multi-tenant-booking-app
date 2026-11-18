@@ -21,6 +21,7 @@ import { Roles } from "../auth/decorators/roles.decorator.js";
 import { serializeLocation } from "../common/serializers.js";
 import { CreateLocationRequestDto, LocationSummaryDto, UpdateLocationRequestDto } from "../common/dto.js";
 import { enabledLocalesOf, validateLocalizedText, LOCALIZED_NAME_MAX } from "../common/i18n-validation.js";
+import { BillingService } from "../billing/billing.service.js";
 import { RevalidationService } from "./revalidation.service.js";
 
 const LOCATION_SUMMARY_INCLUDE = {
@@ -102,6 +103,7 @@ export class LocationsController {
     private readonly prisma: PrismaService,
     private readonly tenantContext: TenantContextService,
     private readonly revalidation: RevalidationService,
+    private readonly billing: BillingService,
   ) {}
 
   @Get()
@@ -130,6 +132,8 @@ export class LocationsController {
         (await tx.tenant.findUniqueOrThrow({ where: { id: tenantId }, select: { configJson: true } })).configJson,
       );
       const coordinates = parseCoordinates(body.latitude, body.longitude);
+      // R540: a new location is an active one
+      await this.billing.assertLocationAllowedIn(tx, tenantId);
       const position = body.position ?? (await this.nextPosition(tx, tenantId));
 
       return tx.location.create({
@@ -196,6 +200,11 @@ export class LocationsController {
         data.position = body.position;
       }
       if (body.isActive !== undefined) {
+        // R540: reopening a closed location counts against the plan's limit
+        if (body.isActive) {
+          const current = await tx.location.findFirst({ where: { id, tenantId }, select: { isActive: true } });
+          if (current && !current.isActive) await this.billing.assertLocationAllowedIn(tx, tenantId);
+        }
         data.isActive = body.isActive;
       }
 

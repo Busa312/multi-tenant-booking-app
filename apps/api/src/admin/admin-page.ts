@@ -80,6 +80,12 @@ td a { color:var(--ink); }
 .plan .row { margin-top:6px; flex-wrap:wrap; }
 .plan button { padding:3px 8px; font-size:12px; }
 .scroll { overflow-x:auto; }
+.plans input[type=text], .plans input[type=number] { width:96px; }
+.plans input[type=checkbox] { width:18px; height:18px; margin:9px 0 0; }
+.plans td { vertical-align:middle; }
+.plans .note { display:block; color:var(--muted); font-size:12px; margin-top:4px; max-width:220px; }
+.plans .note.warn { color:var(--ink); background:var(--accent); padding:2px 6px; border-radius:4px; }
+.plans .note.bad { color:var(--error); }
 [hidden] { display:none !important; }
 </style>
 </head>
@@ -133,6 +139,18 @@ td a { color:var(--ink); }
     </div>
 
     <div class="card">
+      <h2>Plans</h2>
+      <p class="hint">What owners see and pay (R550). Changes apply at once to every salon on the plan: texts and locations straight away (including the month in progress), a new price from each salon's next renewal. A plan that isn't offered can't be chosen, but salons already on it keep it. Leave locations empty for no limit.</p>
+      <div class="scroll">
+        <table class="plans">
+          <thead><tr><th>Plan</th><th>Price ₾ / month</th><th>Texts / month</th><th>Locations</th><th>Priority support</th><th>Offered</th><th>Paying salons</th><th></th></tr></thead>
+          <tbody id="plans"></tbody>
+        </table>
+      </div>
+      <p class="error" id="plans-error" role="alert" hidden></p>
+    </div>
+
+    <div class="card">
       <h2>Salons</h2>
       <div class="scroll">
         <table>
@@ -154,7 +172,10 @@ const CSRF = { "x-requested-with": "booking-cms" };
 const SETUP = { in_progress: "In progress", hidden: "Hidden by owner", finished: "Finished" };
 // R480: subscription statuses and plans, as the admin reads them
 const STATUS = { free: "Free", trial: "Trial", active: "Active", past_due: "Payment due", lapsed: "Booking paused" };
-const PLAN = { early: "Early adopter", standard: "Standard", pro: "Pro" };
+const PLAN = { early: "Early adopter", early_pro: "Early Pro", standard: "Standard", pro: "Pro" };
+// R550: the plans as last loaded, and the salons (to count who pays for each)
+let plans = [];
+let tenantsSeen = [];
 
 async function api(path, options) {
   const headers = options && options.body !== undefined ? { ...CSRF, "content-type": "application/json" } : CSRF;
@@ -185,6 +206,7 @@ function signedIn(session) {
   $("who").hidden = false;
   $("signout").hidden = false;
   loadTenants();
+  loadPlans();
 }
 
 function signedOut() {
@@ -200,6 +222,9 @@ async function loadTenants() {
   show($("tenants-error"));
   try {
     const tenants = await api("tenants");
+    tenantsSeen = tenants;
+    // Only the counts: a plan edit in progress must survive a salon list reload.
+    for (const td of document.querySelectorAll("[data-paying]")) td.textContent = String(payingOn(td.dataset.paying));
     body.replaceChildren(...tenants.map((tenant) => {
       const row = document.createElement("tr");
       const cell = (text) => { const td = document.createElement("td"); td.textContent = text; row.appendChild(td); return td; };
@@ -271,6 +296,101 @@ function planCell(tenant) {
   if (sub.status === "trial") button("End trial now", { endTrial: true });
   td.appendChild(actions);
   return td;
+}
+
+// R550: the plans, edited in place
+async function loadPlans() {
+  show($("plans-error"));
+  try {
+    plans = await api("plans");
+    renderPlans();
+  } catch (error) {
+    if (error.status === 401) { signedOut(); return; }
+    show($("plans-error"), error.message);
+  }
+}
+
+function payingOn(id) {
+  return tenantsSeen.filter((t) => !t.subscription.free && t.subscription.paidThrough && t.subscription.planId === id).length;
+}
+
+function renderPlans() {
+  $("plans").replaceChildren(...plans.map(planRow));
+}
+
+function planRow(plan) {
+  const row = document.createElement("tr");
+  const cell = () => { const td = document.createElement("td"); row.appendChild(td); return td; };
+  const input = (type, value, label) => {
+    const el = document.createElement("input");
+    el.type = type; el.setAttribute("aria-label", label + " · " + (PLAN[plan.id] || plan.id));
+    if (type === "checkbox") el.checked = value; else el.value = value;
+    cell().appendChild(el);
+    return el;
+  };
+  const name = cell();
+  name.textContent = PLAN[plan.id] || plan.id;
+  const price = input("text", plan.price, "Price");
+  price.inputMode = "decimal";
+  const sms = input("number", String(plan.smsIncluded), "Texts per month");
+  sms.min = "0"; sms.step = "1";
+  const locations = input("number", plan.maxLocations === null ? "" : String(plan.maxLocations), "Locations");
+  locations.min = "1"; locations.step = "1"; locations.placeholder = "No limit";
+  const priority = input("checkbox", plan.prioritySupport, "Priority support");
+  const offered = input("checkbox", plan.offered, "Offered");
+  const paying = cell();
+  paying.dataset.paying = plan.id;
+  paying.textContent = String(payingOn(plan.id));
+  const actions = cell();
+  const save = document.createElement("button");
+  save.type = "button"; save.className = "secondary"; save.textContent = "Save";
+  const note = document.createElement("small");
+  note.className = "note"; note.hidden = true;
+  actions.append(save, note);
+  const say = (text, kind) => { note.textContent = text || ""; note.hidden = !text; note.className = "note" + (kind ? " " + kind : ""); };
+
+  let confirming = false;
+  const changes = () => {
+    const body = {};
+    if (Number(price.value) !== Number(plan.price) || price.value.trim() === "") body.price = price.value.trim();
+    if (sms.value.trim() === "" || Number(sms.value) !== plan.smsIncluded) body.smsIncluded = sms.value.trim() === "" ? NaN : Number(sms.value);
+    const max = locations.value.trim() === "" ? null : Number(locations.value);
+    if (max !== plan.maxLocations) body.maxLocations = max;
+    if (priority.checked !== plan.prioritySupport) body.prioritySupport = priority.checked;
+    if (offered.checked !== plan.offered) body.offered = offered.checked;
+    return body;
+  };
+  // An edit after a "confirm the price" prompt asks again.
+  for (const el of [price, sms, locations, priority, offered]) el.addEventListener("input", () => { confirming = false; save.textContent = "Save"; say(""); });
+
+  save.addEventListener("click", async () => {
+    const body = changes();
+    if (Object.keys(body).length === 0) { say("Nothing changed."); return; }
+    if (Number.isNaN(body.smsIncluded)) { say("Enter the texts per month (0 for none).", "bad"); return; }
+    if (body.price !== undefined && !confirming) {
+      const paying = payingOn(plan.id);
+      confirming = true;
+      save.textContent = "Confirm";
+      say(paying + " paying salon" + (paying === 1 ? "" : "s") + " on this plan will be charged " + body.price + " ₾ from their next renewal. Click Confirm to save.", "warn");
+      return;
+    }
+    save.disabled = true;
+    try {
+      const updated = await api("plans/" + encodeURIComponent(plan.id), { method: "POST", body: JSON.stringify(body) });
+      plans = plans.map((p) => (p.id === updated.id ? updated : p));
+      const fresh = planRow(updated);
+      row.replaceWith(fresh);
+      const freshNote = fresh.querySelector(".note");
+      freshNote.textContent = "Saved."; freshNote.hidden = false;
+    } catch (error) {
+      if (error.status === 401) { signedOut(); return; }
+      save.disabled = false;
+      confirming = false;
+      save.textContent = "Save";
+      say(error.message, "bad");
+    }
+  });
+  return row;
 }
 
 function alertError(message) {

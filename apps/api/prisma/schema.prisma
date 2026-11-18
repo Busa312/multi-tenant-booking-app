@@ -425,10 +425,31 @@ model Subscription {
   createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamptz
   updatedAt         DateTime  @updatedAt @map("updated_at") @db.Timestamptz
 
-  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenant   Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  plan     SubscriptionPlan  @relation("CurrentPlan", fields: [planId], references: [id], onDelete: Restrict)
+  nextPlan SubscriptionPlan? @relation("NextPlan", fields: [nextPlanId], references: [id], onDelete: Restrict)
 
   @@index([tenantId])
   @@map("subscription")
+}
+
+/// R470/R550: the plans, edited by the platform admin. Platform-wide: no tenant_id, no RLS.
+model SubscriptionPlan {
+  id              String   @id
+  price           Decimal  @db.Decimal(10, 2)
+  smsIncluded     Int      @map("sms_included")
+  /// R540: active locations allowed; null = no limit.
+  maxLocations    Int?     @map("max_locations")
+  prioritySupport Boolean  @default(false) @map("priority_support")
+  offered         Boolean  @default(false)
+  position        Int      @default(0)
+  updatedAt       DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  subscriptions     Subscription[]        @relation("CurrentPlan")
+  nextSubscriptions Subscription[]        @relation("NextPlan")
+  payments          SubscriptionPayment[]
+
+  @@map("subscription_plan")
 }
 
 /// R470: every payment attempt — the invoices.
@@ -453,7 +474,8 @@ model SubscriptionPayment {
   createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz
   settledAt      DateTime? @map("settled_at") @db.Timestamptz
 
-  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenant Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  plan   SubscriptionPlan? @relation(fields: [planId], references: [id], onDelete: Restrict)
 
   @@index([tenantId])
   @@index([tenantId, createdAt])

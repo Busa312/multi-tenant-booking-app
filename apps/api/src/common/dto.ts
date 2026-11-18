@@ -670,14 +670,15 @@ export class DashboardSummaryDto {
 
 // ---- R470–R490: subscriptions ----
 
-const PLAN_IDS = ["early", "standard", "pro"];
+const PLAN_IDS = ["early", "early_pro", "standard", "pro"];
 const SUBSCRIPTION_STATUSES = ["free", "trial", "active", "past_due", "lapsed"];
 
 export class SubscriptionPlanDto {
   @ApiProperty({ enum: PLAN_IDS }) id!: string;
   @ApiProperty({ example: "60.00", description: "GEL per month" }) price!: string;
   @ApiProperty() smsIncluded!: number;
-  @ApiProperty() multipleLocations!: boolean;
+  @ApiProperty({ nullable: true, type: Number, description: "R540: active locations allowed; null = no limit" })
+  maxLocations!: number | null;
   @ApiProperty() prioritySupport!: boolean;
 }
 
@@ -730,6 +731,9 @@ export class SubscriptionOverviewDto {
   @ApiProperty({ type: [SubscriptionPaymentSummaryDto], description: "Newest first" }) payments!: SubscriptionPaymentSummaryDto[];
   @ApiProperty({ type: SmsUsageDto, description: "R500" }) sms!: SmsUsageDto;
   @ApiProperty({ description: "false = no payment provider configured on this server" }) billingAvailable!: boolean;
+  @ApiProperty({ description: "R540" }) activeLocations!: number;
+  @ApiProperty({ nullable: true, type: Number, description: "R540: active locations allowed now; null = no limit" })
+  locationLimit!: number | null;
 }
 
 export class ConfirmPaymentResponseDto {
@@ -738,7 +742,7 @@ export class ConfirmPaymentResponseDto {
 }
 
 export class StartCheckoutRequestDto {
-  @ApiProperty({ enum: ["early", "pro"] }) planId!: string;
+  @ApiProperty({ enum: ["early", "early_pro", "pro"] }) planId!: string;
   @ApiPropertyOptional({ enum: ["ka", "en"], description: "Language of Flitt's payment page" }) lang?: string;
 }
 

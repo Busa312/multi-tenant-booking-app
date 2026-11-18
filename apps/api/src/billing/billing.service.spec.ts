@@ -5,6 +5,7 @@ import type { TenantContextService } from "../tenant/tenant-context.service.js";
 import { BillingService, orderIdFor, tenantOfOrder } from "./billing.service.js";
 import type { FlittClient, FlittOrder } from "./flitt.client.js";
 import type { RevalidationService } from "../cms/revalidation.service.js";
+import { PlanCatalog } from "./plan-catalog.service.js";
 
 const TENANT = "11111111-1111-1111-1111-111111111111";
 const DAY = 86_400_000;
@@ -26,6 +27,27 @@ interface SubRow {
   retryAt: Date | null;
 }
 
+interface PlanRow {
+  id: string;
+  price: Prisma.Decimal;
+  smsIncluded: number;
+  maxLocations: number | null;
+  prioritySupport: boolean;
+  offered: boolean;
+  position: number;
+}
+
+/** The plans as the subscription_plan migration seeds them (R470/R540). */
+const plan = (id: string, price: string, smsIncluded: number, maxLocations: number | null, offered: boolean, position: number): PlanRow => ({
+  id, price: new Prisma.Decimal(price), smsIncluded, maxLocations, prioritySupport: id === "pro", offered, position,
+});
+const SEEDED_PLANS = [
+  plan("early", "60.00", 600, 1, true, 0),
+  plan("early_pro", "90.00", 1000, 3, true, 1),
+  plan("standard", "90.00", 600, 1, false, 2),
+  plan("pro", "150.00", 1500, null, true, 3),
+];
+
 interface PaymentRow {
   id: string;
   tenantId: string;
@@ -42,7 +64,7 @@ interface PaymentRow {
 
 function setup(
   subOverrides: Partial<SubRow> = {},
-  options: { configured?: boolean; smsParts?: number; payments?: Partial<PaymentRow>[] } = {},
+  options: { configured?: boolean; smsParts?: number; payments?: Partial<PaymentRow>[]; activeLocations?: number; plans?: PlanRow[] } = {},
 ) {
   const sub: SubRow = {
     tenantId: TENANT,
@@ -86,6 +108,10 @@ function setup(
         timezone: "Asia/Tbilisi",
       }),
     },
+    // R550: the plans, as the admin last left them
+    subscriptionPlan: { findMany: jest.fn(() => Promise.resolve(options.plans ?? SEEDED_PLANS)) },
+    // R540: the salon's active locations
+    location: { count: jest.fn().mockResolvedValue(options.activeLocations ?? 0) },
     // R500: parts sent this month
     smsMessage: { aggregate: jest.fn().mockResolvedValue({ _sum: { parts: options.smsParts ?? null } }) },
     subscription: {
@@ -146,7 +172,7 @@ function setup(
     status: jest.fn(),
   };
   const revalidation = { revalidateTenant: jest.fn().mockResolvedValue(undefined) };
-  const service = new BillingService(prisma, tenantContext, flitt as unknown as FlittClient, revalidation as unknown as RevalidationService);
+  const service = new BillingService(prisma, tenantContext, flitt as unknown as FlittClient, revalidation as unknown as RevalidationService, new PlanCatalog(prisma));
   return { service, sub, payments, tx, flitt, revalidation };
 }
 
@@ -453,6 +479,100 @@ describe("BillingService.overview — texts this month", () => {
 });
 
 // R430/R480
+// R540
+describe("BillingService — the plan's location limit", () => {
+  const paying = { paidThrough: days(20) };
+  const isLimit = (limit: number) => expect.objectContaining({ response: expect.objectContaining({ code: "plan_location_limit", limit }) });
+
+  it("refuses a location beyond the plan's limit, and allows one within it", async () => {
+    const full = setup(paying, { activeLocations: 1 });
+    await expect(full.service.assertLocationAllowedIn(full.tx as never, TENANT)).rejects.toEqual(isLimit(1));
+
+    const room = setup({ ...paying, planId: "early_pro" }, { activeLocations: 2 });
+    await expect(room.service.assertLocationAllowedIn(room.tx as never, TENANT)).resolves.toBeUndefined();
+  });
+
+  it("has no limit on Pro, on the free trial, on free use, or with no payment provider", async () => {
+    for (const { sub, options } of [
+      { sub: { ...paying, planId: "pro" }, options: {} },
+      { sub: {}, options: {} },
+      { sub: { ...paying, free: true }, options: {} },
+      { sub: paying, options: { configured: false } },
+    ]) {
+      const { service, tx } = setup(sub, { ...options, activeLocations: 5 });
+      await expect(service.assertLocationAllowedIn(tx as never, TENANT)).resolves.toBeUndefined();
+    }
+  });
+
+  it("gives an upgrade's room at once, but not after cancelling", async () => {
+    const upgraded = setup({ ...paying, nextPlanId: "early_pro" }, { activeLocations: 2 });
+    await expect(upgraded.service.assertLocationAllowedIn(upgraded.tx as never, TENANT)).resolves.toBeUndefined();
+
+    const cancelled = setup({ ...paying, nextPlanId: "early_pro", cancelAtPeriodEnd: true }, { activeLocations: 1 });
+    await expect(cancelled.service.assertLocationAllowedIn(cancelled.tx as never, TENANT)).rejects.toEqual(isLimit(1));
+  });
+
+  it("won't take payment for a plan the salon's active locations don't fit", async () => {
+    const { service, payments } = setup({}, { activeLocations: 2 });
+
+    await expect(service.startCheckout("early", "https://api.example.com", "ka")).rejects.toEqual(isLimit(1));
+    expect(payments).toHaveLength(0);
+    await expect(service.startCheckout("early_pro", "https://api.example.com", "ka")).resolves.toMatchObject({ orderId: expect.any(String) });
+  });
+
+  it("won't switch to a smaller plan the salon doesn't fit", async () => {
+    const { service, sub } = setup({ ...paying, planId: "early_pro", nextPlanId: "pro" }, { activeLocations: 3 });
+
+    await expect(service.update({ planId: "early" })).rejects.toThrow(ConflictException);
+    expect(sub.nextPlanId).toBe("pro");
+    await service.update({ planId: "early_pro" });
+    expect(sub.nextPlanId).toBeNull();
+  });
+
+  it("won't drop a pending upgrade whose room is already used", async () => {
+    const { service, sub } = setup({ ...paying, planId: "early", nextPlanId: "early_pro" }, { activeLocations: 2 });
+
+    await expect(service.update({ planId: "early" })).rejects.toEqual(isLimit(1));
+    expect(sub.nextPlanId).toBe("early_pro");
+  });
+
+  it("tells the CMS the salon's active locations and its limit", async () => {
+    const { service } = setup(paying, { activeLocations: 1 });
+
+    expect(await service.overview()).toMatchObject({ activeLocations: 1, locationLimit: 1 });
+  });
+});
+
+// R550
+describe("BillingService — plans edited by the admin", () => {
+  const paying = { paidThrough: days(-0.5), rectoken: "tok-1", planId: "early" };
+
+  it("renews at the plan's current price, as the admin last set it", async () => {
+    const raised = SEEDED_PLANS.map((row) => (row.id === "early" ? { ...row, price: new Prisma.Decimal("70.00") } : row));
+    const { service, flitt } = setup(paying, { plans: raised });
+    flitt.recurring.mockImplementation(({ orderId }: { orderId: string }) => Promise.resolve({ order_id: orderId, order_status: "approved", amount: "7000", currency: "GEL" }));
+
+    await service.renewIfDue();
+
+    expect(flitt.recurring).toHaveBeenCalledWith(expect.objectContaining({ amount: 7000 }));
+  });
+
+  it("counts texts against the plan's current allowance", async () => {
+    const generous = SEEDED_PLANS.map((row) => (row.id === "early" ? { ...row, smsIncluded: 1800 } : row));
+    const { service } = setup({}, { plans: generous, smsParts: 700 });
+
+    expect((await service.overview()).sms).toMatchObject({ used: 700, included: 1800, extra: 0 });
+  });
+
+  it("offers owners only the plans marked offered, plus the one they're on", async () => {
+    const withdrawn = SEEDED_PLANS.map((row) => (row.id === "early" ? { ...row, offered: false } : row));
+    const { service } = setup({ paidThrough: days(20) }, { plans: withdrawn });
+
+    expect((await service.overview()).plans.map((p) => p.id)).toEqual(["early", "early_pro", "pro"]);
+    await expect(setup({}, { plans: withdrawn }).service.startCheckout("early", "https://api.example.com", "ka")).rejects.toThrow(BadRequestException);
+  });
+});
+
 describe("BillingService.adminUpdate", () => {
   it("grants free use and extends the trial from its current end", async () => {
     const { service, sub } = setup();

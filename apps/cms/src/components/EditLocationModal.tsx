@@ -1,8 +1,10 @@
 import { useState, type FormEvent } from "react";
 import type { LocalizedText, LocationSummary } from "@booking/shared-types";
 import { cachedApi } from "../lib/cache.js";
+import { locationLimitFromError } from "../lib/planLimit.js";
 import { useI18n } from "../i18n/I18nContext.js";
 import { Modal } from "./Modal.js";
+import { PlanLimitAlert } from "./PlanLimitAlert.js";
 import { LocalizedField } from "./LocalizedField.js";
 import { ContentLocaleSelect } from "./ContentLocaleSelect.js";
 import { LocationMapPicker, type LatLng } from "./LocationMapPicker.js";
@@ -60,10 +62,13 @@ export function EditLocationModal({ target, locales, onClose, onSaved }: EditLoc
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // R540: the plan's location limit, when that's why the save was refused
+  const [planLimit, setPlanLimit] = useState<number | null>(null);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setError(null);
+    setPlanLimit(null);
 
     const errors = validate(name, addressLine, latitude, longitude);
     setFieldErrors(errors);
@@ -89,8 +94,10 @@ export function EditLocationModal({ target, locales, onClose, onSaved }: EditLoc
         await cachedApi.updateLocation(target.id, payload);
       }
       onSaved();
-    } catch {
-      setError(t("locations.errSave"));
+    } catch (err) {
+      const limit = locationLimitFromError(err);
+      if (limit === null) setError(t("locations.errSave"));
+      else setPlanLimit(limit);
     } finally {
       setSaving(false);
     }
@@ -176,6 +183,7 @@ export function EditLocationModal({ target, locales, onClose, onSaved }: EditLoc
         {fieldErrors.coordinates && <Alert className="py-2">{t(fieldErrors.coordinates)}</Alert>}
 
         {error && <Alert>{error}</Alert>}
+        {planLimit !== null && <PlanLimitAlert limit={planLimit} />}
       </form>
     </Modal>
   );

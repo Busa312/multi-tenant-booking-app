@@ -131,6 +131,18 @@ export function SubscriptionPage() {
   const date = (iso: string) => formatInstantDate(iso, timezone, lang);
   const paying = overview !== null && overview.status === "active";
 
+  /** R540: the salon has more open locations than this plan includes, so it can't be paid for or switched to. */
+  function tooSmall(plan: SubscriptionPlan): boolean {
+    return overview !== null && plan.maxLocations !== null && overview.activeLocations > plan.maxLocations;
+  }
+
+  function planNote(plan: SubscriptionPlan): string | null {
+    if (!overview || overview.status === "free" || !tooSmall(plan)) return null;
+    // The plan a paying salon renews on is already its own; nothing to choose there.
+    if (paying && plan.id === (overview.nextPlanId ?? overview.planId)) return null;
+    return t("subscription.planTooSmall", { count: overview.activeLocations, limit: plan.maxLocations ?? 0 });
+  }
+
   function planAction(plan: SubscriptionPlan): { label: string; disabled: boolean; onClick: () => void } {
     const name = t(`subscription.plan_${plan.id}`);
     if (!overview) return { label: name, disabled: true, onClick: () => undefined };
@@ -140,14 +152,14 @@ export function SubscriptionPage() {
       const paidThrough = overview.paidThrough;
       if (plan.id === overview.planId) {
         return overview.nextPlanId
-          ? { label: t("subscription.keepPlanButton", { plan: name }), disabled: busy, onClick: () => void change({ planId: plan.id }) }
+          ? { label: t("subscription.keepPlanButton", { plan: name }), disabled: busy || tooSmall(plan), onClick: () => void change({ planId: plan.id }) }
           : { label: t("subscription.currentPlanButton"), disabled: true, onClick: () => undefined };
       }
       if (plan.id === overview.nextPlanId) return { label: t("subscription.nextBadge"), disabled: true, onClick: () => undefined };
       return {
         label: t("subscription.switchTo", { plan: name }),
         // A cancelled subscription has no next renewal to switch at; resuming comes first.
-        disabled: busy || overview.cancelAtPeriodEnd,
+        disabled: busy || overview.cancelAtPeriodEnd || tooSmall(plan),
         onClick: () =>
           setConfirmRequest({
             title: t("subscription.switchTo", { plan: name }),
@@ -160,7 +172,7 @@ export function SubscriptionPage() {
 
     return {
       label: t("subscription.payBtn", { plan: name, price: Number(plan.price) }),
-      disabled: busy || !overview.billingAvailable,
+      disabled: busy || !overview.billingAvailable || tooSmall(plan),
       onClick: () => void goToCheckout(() => cachedApi.startCheckout(plan.id, lang)),
     };
   }
@@ -221,7 +233,7 @@ export function SubscriptionPage() {
                 <p className="mt-0.5 mb-4 text-sm text-base-content/60">
                   {t(paying ? "subscription.plansHintSwitch" : "subscription.plansHintPay")}
                 </p>
-                <ul className="grid gap-3 md:grid-cols-2">
+                <ul className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
                   {overview.plans.map((plan) => (
                     <li key={plan.id}>
                       <PlanCard
@@ -229,6 +241,7 @@ export function SubscriptionPage() {
                         current={overview.paidThrough !== null && plan.id === overview.planId}
                         badge={planBadge(plan)}
                         action={planAction(plan)}
+                        note={planNote(plan)}
                       />
                     </li>
                   ))}
