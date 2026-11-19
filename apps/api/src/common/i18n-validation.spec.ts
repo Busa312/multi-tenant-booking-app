@@ -56,8 +56,8 @@ describe("enabledLocalesOf", () => {
     expect(enabledLocalesOf({ enabledLocales: ["ka", "en"] })).toEqual(["ka", "en"]);
   });
 
-  it("falls back to every supported locale for a tenant that configured none", () => {
-    // Both languages are on until an owner narrows the list; "en" stays first,
+  it("falls back to English and Georgian for a tenant that configured none", () => {
+    // R570: Russian stays off until an owner switches it on; "en" stays first,
     // so it remains the default content locale the plain columns hold.
     expect(enabledLocalesOf({})).toEqual(["en", "ka"]);
     expect(enabledLocalesOf({ enabledLocales: [] })).toEqual(["en", "ka"]);
@@ -65,7 +65,12 @@ describe("enabledLocalesOf", () => {
   });
 
   it("drops locales the platform doesn't support", () => {
-    expect(enabledLocalesOf({ enabledLocales: ["en", "ru"] })).toEqual(["en"]);
+    expect(enabledLocalesOf({ enabledLocales: ["en", "de"] })).toEqual(["en"]);
+  });
+
+  // R570
+  it("keeps Russian once an owner has switched it on", () => {
+    expect(enabledLocalesOf({ enabledLocales: ["ka", "ru"] })).toEqual(["ka", "ru"]);
   });
 
   it("ignores malformed config rather than throwing on an unauthenticated read path", () => {

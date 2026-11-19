@@ -1,0 +1,26 @@
+---
+import { contactPath, type Locale, type Messages } from "../i18n";
+import { sectionClasses as c } from "../lib/sectionClasses";
+import { cmsUrl } from "../lib/site";
+import MarkedText from "./MarkedText.astro";
+
+interface Props {
+  locale: Locale;
+  t: Messages;
+}
+
+const { locale, t } = Astro.props;
+---
+
+<section class:list={["bg-base-100", c.band]}>
+  <div class:list={[c.narrow, "reveal"]}>
+    <h2 class="text-5xl font-semibold leading-(--heading-leading) tracking-tight text-balance md:text-7xl">
+      <MarkedText title={t.finalCta.title} />
+    </h2>
+    <p class={c.lead}>{t.finalCta.lead}</p>
+    <div class="mt-10 flex flex-col items-center justify-center gap-3 sm:flex-row">
+      <a href={contactPath(locale)} class="btn btn-primary btn-lg px-8">{t.finalCta.primary}</a>
+      <a href={cmsUrl} class="btn btn-ghost btn-lg">{t.finalCta.secondary}</a>
+    </div>
+  </div>
+</section>

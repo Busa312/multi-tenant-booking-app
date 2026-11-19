@@ -41,8 +41,9 @@ export const DEFAULT_CONTENT_LOCALE = "en";
  * The FIRST entry of a tenant's list is its default locale — the one the plain
  * columns hold — which is why order is meaningful here and not just a set.
  */
-export const SUPPORTED_CONTENT_LOCALES = ["en", "ka"] as const;
-export const DEFAULT_ENABLED_LOCALES: string[] = [...SUPPORTED_CONTENT_LOCALES];
+export const SUPPORTED_CONTENT_LOCALES = ["en", "ka", "ru"] as const;
+/** R570: Russian is opt-in — a site shows it only once its owner switches it on. */
+export const DEFAULT_ENABLED_LOCALES: string[] = ["en", "ka"];
 
 /** A tenant's configured locales, falling back to the platform default. */
 export function enabledLocalesOf(enabledLocales: string[] | undefined): string[] {

@@ -79,21 +79,38 @@ const calendarOf = (date: string): CalendarDate => {
 /** An instant's calendar date on the salon's clock. */
 const calendarAt = (iso: string, timeZone: string): CalendarDate => calendarOf(tenantDateString(timeZone, new Date(iso)));
 
+/**
+ * R570: Russian `Intl` writes month and weekday names in lower case
+ * ("суббота, 21 ноября"), as mid-sentence; these labels start a heading or a
+ * column, so their first letter is raised.
+ */
+const asLabel = (text: string, lang: string): string => (lang === "ru" ? text.charAt(0).toLocaleUpperCase("ru") + text.slice(1) : text);
+
+/**
+ * R570: Russian `Intl` ends a date with a year in "г." ("3 декабря 2026 г."),
+ * which doubles the full stop when the date ends a sentence. Plain
+ * "3 декабря 2026" reads just as well, so the "г." goes.
+ */
+const withoutYearMark = (text: string, lang: string): string => (lang === "ru" ? text.replace(/\s*г\.$/, "") : text);
+
 /** The month of a "YYYY-MM-DD", e.g. "November 2026". */
 export function formatMonthLabel(date: string, lang: string): string {
   if (lang === "ka") return georgianDate.month(calendarOf(date));
-  return new Intl.DateTimeFormat(lang, { month: "long", year: "numeric", timeZone: "UTC" }).format(dateOf(date));
+  return asLabel(withoutYearMark(new Intl.DateTimeFormat(lang, { month: "long", year: "numeric", timeZone: "UTC" }).format(dateOf(date)), lang), lang);
 }
 
 /** A "YYYY-MM-DD" rendered for humans in the active UI language. */
 export function formatDateLabel(date: string, lang: string): string {
   if (lang === "ka") return georgianDate.long(calendarOf(date));
-  return new Intl.DateTimeFormat(lang, {
-    weekday: "long",
-    day: "numeric",
-    month: "long",
-    timeZone: "UTC",
-  }).format(dateOf(date));
+  return asLabel(
+    new Intl.DateTimeFormat(lang, {
+      weekday: "long",
+      day: "numeric",
+      month: "long",
+      timeZone: "UTC",
+    }).format(dateOf(date)),
+    lang,
+  );
 }
 
 /** An inclusive span of calendar dates, e.g. "3 – 9 August". */
@@ -106,7 +123,7 @@ export function formatWeekLabel(from: string, to: string, lang: string): string 
 /** Short weekday name for a calendar date, e.g. "Mon". */
 export function formatWeekdayLabel(date: string, lang: string): string {
   if (lang === "ka") return DATE_NAMES.ka.weekdaysShort[calendarOf(date).weekday] ?? "";
-  return new Intl.DateTimeFormat(lang, { weekday: "short", timeZone: "UTC" }).format(dateOf(date));
+  return asLabel(new Intl.DateTimeFormat(lang, { weekday: "short", timeZone: "UTC" }).format(dateOf(date)), lang);
 }
 
 /** Day-of-month for a calendar date, for a compact column header. */
@@ -177,7 +194,7 @@ export function formatDateTimeLabel(iso: string, timeZone: string, lang: string)
 /** An instant as a tenant-local calendar date with the year, e.g. "22 December 2026" (R470: billing dates). */
 export function formatInstantDate(iso: string, timeZone: string, lang: string): string {
   if (lang === "ka") return georgianDate.withYear(calendarAt(iso, timeZone));
-  return new Intl.DateTimeFormat(lang, { timeZone, day: "numeric", month: "long", year: "numeric" }).format(new Date(iso));
+  return withoutYearMark(new Intl.DateTimeFormat(lang, { timeZone, day: "numeric", month: "long", year: "numeric" }).format(new Date(iso)), lang);
 }
 
 /** An instant as a short date on the viewer's own calendar, e.g. "18 Nov 2026" / "18 ნოე. 2026" — for record dates, not appointments. */
@@ -186,5 +203,5 @@ export function formatShortDate(iso: string, lang: string): string {
   if (lang === "ka") {
     return georgianDate.short({ year: d.getFullYear(), month: d.getMonth(), day: d.getDate(), weekday: d.getDay() });
   }
-  return new Intl.DateTimeFormat(lang, { day: "numeric", month: "short", year: "numeric" }).format(d);
+  return withoutYearMark(new Intl.DateTimeFormat(lang, { day: "numeric", month: "short", year: "numeric" }).format(d), lang);
 }

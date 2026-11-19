@@ -1,0 +1,11 @@
+{
+  "$schema": "https://turbo.build/schema.json",
+  "extends": ["//"],
+  "tasks": {
+    "build": {
+      "env": ["SITE_URL", "BLOCK_SEARCH_ENGINES", "PUBLIC_CMS_URL", "API_URL", "VERCEL"],
+      // The plans come from the API at build time: a cached build could print old prices.
+      "cache": false
+    }
+  }
+}

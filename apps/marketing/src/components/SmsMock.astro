@@ -1,0 +1,23 @@
+---
+import Icon from "./Icon.astro";
+
+interface Props {
+  business: { name: string; host: string };
+  class?: string;
+}
+
+const { business, class: className = "" } = Astro.props;
+---
+
+<!-- R500: the booking-link text, word for word — plain Latin, one SMS part. -->
+<div class:list={["rounded-3xl bg-base-100/90 p-4 shadow-xl ring-1 ring-base-300 backdrop-blur-xl", className]} aria-hidden="true">
+  <p class="flex items-center gap-2 text-xs text-base-content/60">
+    <span class="grid size-6 place-items-center rounded-lg bg-primary text-primary-content">
+      <Icon name="sms" class="size-3.5" />
+    </span>
+    <span class="font-semibold text-base-content">{business.name}</span>
+  </p>
+  <p class="mt-2 text-sm leading-snug">
+    Manage your booking: <span class="break-all underline">https://{business.host}/manage/k3Xp9fQ…</span>
+  </p>
+</div>

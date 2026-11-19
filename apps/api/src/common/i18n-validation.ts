@@ -8,11 +8,12 @@ export const LOCALIZED_NAME_MAX = 200;
 
 /**
  * Every locale the platform can publish in, and the set a tenant gets until an
- * owner narrows it. Mirrors SUPPORTED_CONTENT_LOCALES in @booking/shared-types
- * for the reason this whole file is duplicated: apps/api cannot import runtime
- * values from that package.
+ * owner changes it (Russian is opt-in, R570). Mirrors SUPPORTED_CONTENT_LOCALES
+ * and DEFAULT_ENABLED_LOCALES in @booking/shared-types for the reason this
+ * whole file is duplicated: apps/api cannot import runtime values from that package.
  */
-export const SUPPORTED_CONTENT_LOCALES = ["en", "ka"];
+export const SUPPORTED_CONTENT_LOCALES = ["en", "ka", "ru"];
+export const DEFAULT_ENABLED_LOCALES = ["en", "ka"];
 export const LOCALIZED_TEXT_MAX = 2000;
 
 export function validateLocalizedText(
@@ -54,14 +55,14 @@ export function validateLocalizedText(
 
 export function enabledLocalesOf(configJson: unknown): string[] {
   if (!configJson || typeof configJson !== "object" || Array.isArray(configJson)) {
-    return SUPPORTED_CONTENT_LOCALES;
+    return DEFAULT_ENABLED_LOCALES;
   }
   const locales = (configJson as { enabledLocales?: unknown }).enabledLocales;
   if (!Array.isArray(locales)) {
-    return SUPPORTED_CONTENT_LOCALES;
+    return DEFAULT_ENABLED_LOCALES;
   }
   const valid = locales.filter(
     (locale): locale is string => typeof locale === "string" && SUPPORTED_CONTENT_LOCALES.includes(locale),
   );
-  return valid.length > 0 ? valid : SUPPORTED_CONTENT_LOCALES;
+  return valid.length > 0 ? valid : DEFAULT_ENABLED_LOCALES;
 }

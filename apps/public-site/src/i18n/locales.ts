@@ -1,7 +1,9 @@
 import en from "./messages/en.json";
 import ka from "./messages/ka.json";
+import ru from "./messages/ru.json";
 
-export const LOCALES = ["en", "ka"] as const;
+/** R160's languages; Russian is R570 (opt-in per salon). */
+export const LOCALES = ["en", "ka", "ru"] as const;
 export type Locale = (typeof LOCALES)[number];
 
 export const DEFAULT_LOCALE: Locale = "en";
@@ -17,7 +19,7 @@ export const DEFAULT_LOCALE_SEGMENT = "_";
 type Widen<T> = T extends string ? string : { [K in keyof T]: Widen<T[K]> };
 export type Messages = Widen<typeof en>;
 
-const DICTS: Record<Locale, Messages> = { en, ka };
+const DICTS: Record<Locale, Messages> = { en, ka, ru };
 
 export function isLocale(value: unknown): value is Locale {
   return typeof value === "string" && (LOCALES as readonly string[]).includes(value);
@@ -30,6 +32,7 @@ export function getMessages(locale: Locale): Messages {
 export const LOCALE_LABELS: Record<Locale, string> = {
   en: "English",
   ka: "ქართული",
+  ru: "Русский",
 };
 
 export function resolveLocale(requested: string, enabledLocales: string[] | undefined): Locale {

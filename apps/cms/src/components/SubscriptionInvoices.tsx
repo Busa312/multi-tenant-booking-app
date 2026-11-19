@@ -57,16 +57,6 @@ export function SubscriptionInvoices({ payments, timezone }: SubscriptionInvoice
                     {date(payment.periodStart)} – {date(payment.periodEnd)}
                   </div>
                 )}
-                {/* R500: one charge, two lines — the plan and the month before's extra texts */}
-                {payment.extraTexts > 0 && (
-                  <div className="text-xs text-base-content/60 tabular-nums">
-                    {t("subscription.itemExtraTexts", {
-                      plan: (Number(payment.amount) - Number(payment.extraTextsAmount)).toFixed(2),
-                      count: payment.extraTexts,
-                      amount: payment.extraTextsAmount,
-                    })}
-                  </div>
-                )}
                 {payment.failureReason && <div className="text-xs text-error">{payment.failureReason}</div>}
               </div>
               <div className="tabular-nums">{payment.amount} ₾</div>

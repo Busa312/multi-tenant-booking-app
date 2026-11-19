@@ -8,6 +8,7 @@
    request to Google, and the browser fetches only the subsets a page uses. */
 @import "@fontsource-variable/archivo/wdth.css";
 @import "@fontsource-variable/noto-sans-georgian/wdth.css";
+@import "@fontsource-variable/noto-sans/wdth.css";
 
 /* Built-in themes are off: the CMS ships only the two defined in theme.css. */
 @plugin "daisyui" {

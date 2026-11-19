@@ -1,0 +1,106 @@
+/* ==========================================================================
+   Marketing brand — the one file that decides how the marketing site looks.
+
+   The COLORS are the CMS's (apps/cms/src/theme.css): ink on cool paper with
+   the yellow highlighter, so the site a business reads before signing up looks
+   like the product it signs up for. Change a color there, change it here.
+
+   The SHAPE is the marketing site's own: rounder surfaces and pill buttons,
+   a calm, spacious product page rather than the CMS's dense appointment book.
+
+   Color roles are the CMS's:
+     base-100 page / cards   base-200 alternate sections   base-300 hairlines
+     primary  ink: the main action, links
+     accent   the highlighter — one marked phrase, "this is next".
+              Never a button, never a status.
+     neutral  the dark band
+   ========================================================================== */
+
+@plugin "daisyui/theme" {
+  name: "bookit";
+  default: true;
+  prefersdark: false;
+  color-scheme: light;
+
+  --color-base-100: #ffffff;
+  --color-base-200: #f2f3f0;
+  --color-base-300: #d9dcd5;
+  --color-base-content: #15181b;
+
+  --color-primary: #15181b;
+  --color-primary-content: #ffffff;
+  --color-secondary: #5b6b7a;
+  --color-secondary-content: #ffffff;
+  --color-accent: #ffe45c;
+  --color-accent-content: #15181b;
+  --color-neutral: #15181b;
+  --color-neutral-content: #f2f3f0;
+
+  --color-info: #2f6690;
+  --color-info-content: #ffffff;
+  --color-success: #2e7d4f;
+  --color-success-content: #ffffff;
+  --color-warning: #b7791f;
+  --color-warning-content: #15181b;
+  --color-error: #c0362c;
+  --color-error-content: #ffffff;
+
+  --radius-selector: 1rem;
+  --radius-field: 2rem;
+  --radius-box: 1.75rem;
+  --size-selector: 0.25rem;
+  --size-field: 0.25rem;
+  --border: 1px;
+  --depth: 0;
+  --noise: 0;
+}
+
+@plugin "daisyui/theme" {
+  name: "bookit-dark";
+  default: false;
+  prefersdark: true;
+  color-scheme: dark;
+
+  --color-base-100: #1c1f23;
+  --color-base-200: #131518;
+  --color-base-300: #32373d;
+  --color-base-content: #e9eae6;
+
+  --color-primary: #e9eae6;
+  --color-primary-content: #131518;
+  --color-secondary: #9aa8b5;
+  --color-secondary-content: #131518;
+  --color-accent: #ffe45c;
+  --color-accent-content: #15181b;
+  --color-neutral: #0b0c0e;
+  --color-neutral-content: #e9eae6;
+
+  --color-info: #7fb2d6;
+  --color-info-content: #131518;
+  --color-success: #7cc496;
+  --color-success-content: #131518;
+  --color-warning: #e0b05a;
+  --color-warning-content: #131518;
+  --color-error: #ef8478;
+  --color-error-content: #131518;
+
+  --radius-selector: 1rem;
+  --radius-field: 2rem;
+  --radius-box: 1.75rem;
+  --size-selector: 0.25rem;
+  --size-field: 0.25rem;
+  --border: 1px;
+  --depth: 0;
+  --noise: 0;
+}
+
+/* The CMS's type: Archivo, with Noto Sans Georgian behind it so Georgian is
+   set in a real face, and Noto Sans for Russian (Archivo has no Cyrillic). Self-hosted (imported in global.css), split by
+   unicode-range so an English visitor never downloads the Georgian file.
+   `font-display` is the condensed width — times and numbers, as in the CMS. */
+@theme {
+  --font-sans: "Archivo Variable", "Noto Sans Georgian Variable", "Noto Sans Variable", ui-sans-serif, system-ui, sans-serif;
+  --font-sans--font-variation-settings: "wdth" 100;
+  --font-display: "Archivo Variable", "Noto Sans Georgian Variable", "Noto Sans Variable", ui-sans-serif, system-ui, sans-serif;
+  --font-display--font-variation-settings: "wdth" 78;
+}

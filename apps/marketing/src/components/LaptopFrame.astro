@@ -1,0 +1,14 @@
+---
+// A laptop drawn in CSS around a real CMS screenshot (16:10, as captured).
+---
+
+<div class="w-full">
+  <div class="mx-auto w-[88%] rounded-t-xl bg-neutral px-[1.1%] pt-[1.1%] pb-[2.4%] shadow-2xl ring-1 ring-base-300 md:rounded-t-3xl">
+    <div class="aspect-[16/10] overflow-hidden rounded-sm bg-base-200 md:rounded-md">
+      <slot />
+    </div>
+  </div>
+  <div class="relative h-[clamp(0.5rem,1.3vw,1.1rem)] w-full rounded-b-[12%_100%] bg-base-300">
+    <div class="absolute left-1/2 top-0 h-1/2 w-[14%] -translate-x-1/2 rounded-b-lg bg-base-200"></div>
+  </div>
+</div>

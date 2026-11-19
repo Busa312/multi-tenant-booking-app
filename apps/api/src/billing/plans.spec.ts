@@ -2,9 +2,9 @@ import { BadRequestException } from "@nestjs/common";
 import { locationLimit, planFits, type PlanDefinition, validatePlanUpdate } from "./plans.js";
 
 const PLANS: PlanDefinition[] = [
-  { id: "early", price: "60.00", smsIncluded: 600, maxLocations: 1, prioritySupport: false, offered: true },
-  { id: "early_pro", price: "90.00", smsIncluded: 1000, maxLocations: 3, prioritySupport: false, offered: true },
-  { id: "pro", price: "150.00", smsIncluded: 1500, maxLocations: null, prioritySupport: true, offered: true },
+  { id: "early", price: "60.00", maxLocations: 1, prioritySupport: false, offered: true },
+  { id: "early_pro", price: "90.00", maxLocations: 3, prioritySupport: false, offered: true },
+  { id: "pro", price: "150.00", maxLocations: null, prioritySupport: true, offered: true },
 ];
 
 function plan(id: string): PlanDefinition {
@@ -55,7 +55,12 @@ describe("planFits", () => {
 describe("validatePlanUpdate", () => {
   it("takes only the fields sent", () => {
     expect(validatePlanUpdate({ price: "75.5" })).toEqual({ price: "75.5" });
-    expect(validatePlanUpdate({ smsIncluded: 1800, maxLocations: null, offered: false })).toEqual({ smsIncluded: 1800, maxLocations: null, offered: false });
+    expect(validatePlanUpdate({ maxLocations: null, offered: false })).toEqual({ maxLocations: null, offered: false });
+  });
+
+  // R500: texts are unlimited, so there is no allowance to set
+  it("has nothing to change when only a texts allowance is sent", () => {
+    expect(() => validatePlanUpdate({ smsIncluded: 1800 } as never)).toThrow(BadRequestException);
   });
 
   it("refuses nonsense, naming the field", () => {
@@ -64,8 +69,6 @@ describe("validatePlanUpdate", () => {
       { price: "-5" },
       { price: "60.001" },
       { price: "abc" },
-      { smsIncluded: -1 },
-      { smsIncluded: 2.5 },
       { maxLocations: 0 },
       { offered: "yes" as unknown as boolean },
       {},

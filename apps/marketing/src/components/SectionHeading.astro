@@ -1,0 +1,20 @@
+---
+import { sectionClasses as c } from "../lib/sectionClasses";
+
+interface Props {
+  eyebrow: string;
+  title: string;
+  lead?: string;
+  align?: "center" | "start";
+  onDark?: boolean;
+  id?: string;
+}
+
+const { eyebrow, title, lead, align = "center", onDark = false, id } = Astro.props;
+---
+
+<div class={align === "center" ? c.narrow : "max-w-xl"}>
+  <p class={onDark ? c.eyebrowOnDark : c.eyebrow}>{eyebrow}</p>
+  <h2 class={c.title} id={id}>{title}</h2>
+  {lead && <p class={onDark ? c.leadOnDark : c.lead}>{lead}</p>}
+</div>

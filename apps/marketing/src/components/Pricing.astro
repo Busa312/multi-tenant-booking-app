@@ -1,0 +1,29 @@
+---
+import type { Locale, Messages } from "../i18n";
+import { loadPlans } from "../lib/plans";
+import { sectionClasses as c } from "../lib/sectionClasses";
+import PlanCard from "./PlanCard.astro";
+import SectionHeading from "./SectionHeading.astro";
+
+interface Props {
+  locale: Locale;
+  t: Messages;
+}
+
+const { locale, t } = Astro.props;
+const plans = await loadPlans();
+// As many columns as plans (the admin decides how many are offered, R550).
+const columns = ["", "md:mx-auto md:max-w-md", "md:grid-cols-2 lg:mx-auto lg:max-w-4xl", "lg:grid-cols-3", "md:grid-cols-2 xl:grid-cols-4"][plans.length] ?? "md:grid-cols-2 lg:grid-cols-3";
+---
+
+<section id="pricing" class:list={["bg-base-100", c.band]}>
+  <div class={c.container}>
+    <div class="reveal">
+      <SectionHeading eyebrow={t.pricing.eyebrow} title={t.pricing.title} lead={t.pricing.lead} />
+    </div>
+    <div class:list={["mt-16 grid gap-4 md:mt-20", columns]}>
+      {plans.map((plan, index) => <PlanCard plan={plan} locale={locale} t={t} top={plans.length > 1 && index === plans.length - 1} />)}
+    </div>
+    <p class="mx-auto mt-10 max-w-2xl text-center text-sm leading-relaxed text-base-content/60">{t.pricing.footnote}</p>
+  </div>
+</section>

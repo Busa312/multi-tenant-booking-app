@@ -1,0 +1,30 @@
+---
+import type { Messages } from "../i18n";
+import type { screensFor } from "../lib/screens";
+import { sectionClasses as c } from "../lib/sectionClasses";
+import CheckList from "./CheckList.astro";
+import Screenshot from "./Screenshot.astro";
+import SectionHeading from "./SectionHeading.astro";
+import WindowFrame from "./WindowFrame.astro";
+
+interface Props {
+  t: Messages;
+  screens: ReturnType<typeof screensFor>;
+}
+
+const { t, screens } = Astro.props;
+---
+
+<section class:list={["bg-neutral text-neutral-content", c.band]}>
+  <div class:list={[c.container, "grid items-center gap-16 md:grid-cols-[1.15fr_1fr] md:gap-16"]}>
+    <div class="reveal order-last md:order-first">
+      <WindowFrame>
+        <Screenshot screen={screens.hours} alt={t.screens.hours} sizes="(min-width: 768px) 620px, 92vw" widths={[600, 1000, 1400]} />
+      </WindowFrame>
+    </div>
+    <div class="reveal">
+      <SectionHeading eyebrow={t.calendar.eyebrow} title={t.calendar.title} lead={t.calendar.lead} align="start" onDark />
+      <CheckList items={t.calendar.points} onDark />
+    </div>
+  </div>
+</section>

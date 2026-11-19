@@ -26,7 +26,6 @@ export function PlanCard({ plan, current, badge, action, note }: PlanCardProps) 
   }
 
   const features = [
-    t("subscription.featureSms", { count: plan.smsIncluded }),
     t("subscription.featureBooking"),
     locationsFeature(),
     ...(plan.id === "early" || plan.id === "early_pro" ? [t("subscription.featureEarlyPrice")] : []),

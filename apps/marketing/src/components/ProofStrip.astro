@@ -1,0 +1,23 @@
+---
+import type { Messages } from "../i18n";
+import { sectionClasses as c } from "../lib/sectionClasses";
+
+interface Props {
+  t: Messages;
+}
+
+const { t } = Astro.props;
+---
+
+<section class="px-4 pb-24 pt-8 sm:px-6 md:pb-32">
+  <dl class:list={[c.container, "grid grid-cols-2 gap-x-6 gap-y-12 border-t border-base-300 pt-12 md:grid-cols-4"]}>
+    {
+      t.proof.map((item) => (
+        <div class="reveal">
+          <dt class="font-display text-5xl font-semibold tracking-tight md:text-6xl">{item.value}</dt>
+          <dd class="mt-2 text-base-content/60">{item.label}</dd>
+        </div>
+      ))
+    }
+  </dl>
+</section>

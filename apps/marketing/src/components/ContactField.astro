@@ -1,0 +1,35 @@
+---
+// One labelled input of the contact form (R580).
+interface Props {
+  label: string;
+  name: string;
+  type?: "text" | "tel" | "email";
+  required?: boolean;
+  /** Shown after the label of a field that may be left empty. */
+  optionalLabel?: string;
+  maxlength: number;
+  autocomplete: string;
+  placeholder?: string;
+  pattern?: string;
+}
+
+const { label, name, type = "text", required = false, optionalLabel, maxlength, autocomplete, placeholder, pattern } = Astro.props;
+---
+
+<label class="flex flex-col gap-2">
+  <span class="text-sm font-medium">
+    {label}
+    {!required && optionalLabel && <span class="font-normal text-base-content/50"> · {optionalLabel}</span>}
+  </span>
+  <input
+    class="input input-lg w-full"
+    name={name}
+    type={type}
+    required={required}
+    maxlength={maxlength}
+    autocomplete={autocomplete}
+    placeholder={placeholder}
+    pattern={pattern}
+    inputmode={type === "tel" ? "tel" : undefined}
+  />
+</label>

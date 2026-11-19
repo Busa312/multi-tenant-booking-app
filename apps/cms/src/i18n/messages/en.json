@@ -534,7 +534,8 @@
     "languageMain": "main language",
     "language": {
       "en": "English",
-      "ka": "Georgian"
+      "ka": "Georgian",
+      "ru": "Russian"
     }
   },
   "forgotPassword": {
@@ -589,10 +590,6 @@
     "noCard": "No card saved yet. It's saved with your first payment.",
     "updateCard": "Update card",
     "updateCardHint": "The payment page checks the new card with 1 ₾, which is refunded straight away.",
-    "smsTitle": "Texts in {month}",
-    "smsUsed": "{used} of {included} used",
-    "smsHint": "Booking codes and booking links sent to your customers, counted as the SMS parts they're billed as. Texts beyond your plan's allowance cost {price} ₾ each and are added to your next monthly payment; they're never blocked, so customers can always book.",
-    "smsResets": "Starts again on {date}.",
     "plansTitle": "Plans",
     "plansHintPay": "You pay by card on Flitt's secure payment page. Plans renew every month.",
     "plansHintSwitch": "A switch takes effect from your next renewal. A bigger plan's extra locations can be used straight away.",
@@ -608,7 +605,6 @@
     "switchTo": "Switch to {plan}",
     "confirmSwitch": "Switch to {plan} at {price} ₾ per month from {date}?",
     "planTooSmall": "You have {count} open locations and this plan includes {limit}. Close some on the Locations page first.",
-    "featureSms": "{count} texts included each month",
     "featureBooking": "Online booking site and this CMS",
     "featureOneLocation": "One location",
     "featureUpToLocations": "Up to {count} locations",
@@ -640,17 +636,7 @@
     "bannerTrial": "Your free trial ends on {date}.",
     "bannerPastDue": "Your subscription payment is due. Online booking pauses on {date}.",
     "bannerLapsed": "Online booking is paused because your subscription has ended.",
-    "bannerAction": "Go to subscription",
-    "smsTitleBilling": "Texts this billing month",
-    "smsPeriod": "{from} – {to}",
-    "smsExtraCharged": "{count} extra texts so far: {amount} ₾, added to your payment on {date}.",
-    "smsNotChargedTrial": "{count} over the allowance. Not charged: texts during the free trial are free.",
-    "smsNotChargedFree": "{count} over the allowance. Not charged: your salon uses the service for free.",
-    "smsNotChargedCancelled": "{count} over the allowance. Not charged, as your subscription ends with this month.",
-    "smsNotCharged": "{count} over the allowance. Not charged.",
-    "itemExtraTexts": "Plan {plan} ₾ + {count} extra texts {amount} ₾",
-    "bannerSmsNearly": "You've used {used} of this month's {included} texts.",
-    "bannerSmsFull": "You've used all {included} texts this month. Extra texts cost {price} ₾ each, added to your next payment."
+    "bannerAction": "Go to subscription"
   },
   "blocked": {
     "title": "Blocked numbers",

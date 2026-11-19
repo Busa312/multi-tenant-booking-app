@@ -1,0 +1,30 @@
+---
+import type { Messages } from "../i18n";
+import { sectionClasses as c } from "../lib/sectionClasses";
+import SectionHeading from "./SectionHeading.astro";
+
+interface Props {
+  t: Messages;
+}
+
+const { t } = Astro.props;
+---
+
+<section id="how-it-works" class:list={["bg-base-200", c.band]}>
+  <div class={c.container}>
+    <div class="reveal">
+      <SectionHeading eyebrow={t.steps.eyebrow} title={t.steps.title} />
+    </div>
+    <ol class="mt-16 grid gap-12 md:mt-20 md:grid-cols-3 md:gap-8">
+      {
+        t.steps.items.map((step, index) => (
+          <li class="reveal border-t border-base-content pt-8">
+            <span class="font-display text-6xl font-semibold text-base-content/25">{String(index + 1).padStart(2, "0")}</span>
+            <h3 class="mt-6 text-2xl font-semibold tracking-tight">{step.title}</h3>
+            <p class="mt-3 text-lg leading-relaxed text-base-content/60">{step.body}</p>
+          </li>
+        ))
+      }
+    </ol>
+  </div>
+</section>

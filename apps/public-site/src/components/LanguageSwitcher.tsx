@@ -40,6 +40,7 @@ export function LanguageSwitcher({ current, defaultLocale, enabledLocales, label
             href={href}
             hrefLang={locale}
             lang={locale}
+            aria-label={LOCALE_LABELS[locale]}
             className={`btn btn-ghost btn-sm px-2 ${locale === current ? "font-bold underline decoration-2 underline-offset-4" : "font-normal text-base-content/65"}`}
             aria-current={locale === current ? "true" : undefined}
             onClick={(event) => {
@@ -50,7 +51,9 @@ export function LanguageSwitcher({ current, defaultLocale, enabledLocales, label
               }
             }}
           >
-            {LOCALE_LABELS[locale]}
+            {/* R570: three names don't fit beside the salon's name on a phone, so phones get the codes. */}
+            <span className="uppercase sm:hidden">{locale}</span>
+            <span className="hidden sm:inline">{LOCALE_LABELS[locale]}</span>
           </a>
         );
       })}

@@ -201,7 +201,8 @@ export function DashboardPage() {
   const canBook = context !== null && canBookAsRole && blocker === null;
 
   return (
-    <AppShell title={t("nav.dashboard")} subtitle={context ? formatDateLabel(context.today, lang) : undefined}>
+    // A blank line holds the date's place while it loads, so the page doesn't shift down when it arrives.
+    <AppShell title={t("nav.dashboard")} subtitle={context ? formatDateLabel(context.today, lang) : "\u00a0"}>
       <div className="flex flex-col gap-4 xl:gap-5">
         {error && <Alert flush>{error}</Alert>}
 

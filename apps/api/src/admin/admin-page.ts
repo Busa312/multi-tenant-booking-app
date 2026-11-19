@@ -88,6 +88,9 @@ td a { color:var(--ink); }
 .plans .note { display:block; color:var(--muted); font-size:12px; margin-top:4px; max-width:220px; }
 .plans .note.warn { color:var(--ink); background:var(--accent); padding:2px 6px; border-radius:4px; }
 .plans .note.bad { color:var(--error); }
+.contacts td { vertical-align:top; }
+.contacts .msg { max-width:320px; white-space:pre-wrap; overflow-wrap:anywhere; }
+.contacts tr.handled td { color:var(--muted); }
 fieldset { border:0; padding:0; margin:16px 0 0; display:grid; gap:8px; min-width:0; }
 legend { font-size:13px; font-weight:600; padding:0; margin-bottom:6px; }
 label.choice { flex-direction:row; align-items:center; gap:8px; font-weight:500; font-size:14px; }
@@ -154,11 +157,24 @@ label.choice input { margin:0; width:16px; height:16px; }
     </div>
 
     <div class="card">
+      <h2>Contact requests</h2>
+      <p class="hint" id="contacts-hint">Businesses asking to get started, from the marketing site's contact page (R580). Newest first.</p>
+      <div class="scroll">
+        <table class="contacts">
+          <thead><tr><th>Received</th><th>Name</th><th>Business</th><th>Phone</th><th>Email</th><th>Message</th><th>Language</th><th></th></tr></thead>
+          <tbody id="contacts"></tbody>
+        </table>
+      </div>
+      <p class="hint" id="contacts-empty" hidden>No requests yet.</p>
+      <p class="error" id="contacts-error" role="alert" hidden></p>
+    </div>
+
+    <div class="card">
       <h2>Plans</h2>
-      <p class="hint">What owners see and pay (R550). Changes apply at once to every salon on the plan: texts and locations straight away (including the month in progress), a new price from each salon's next renewal. A plan that isn't offered can't be chosen, but salons already on it keep it. Leave locations empty for no limit.</p>
+      <p class="hint">What owners see and pay (R550). Changes apply at once to every salon on the plan: locations straight away, a new price from each salon's next renewal. Texts are unlimited on every plan. A plan that isn't offered can't be chosen, but salons already on it keep it. Leave locations empty for no limit.</p>
       <div class="scroll">
         <table class="plans">
-          <thead><tr><th>Plan</th><th>Price ₾ / month</th><th>Texts / month</th><th>Locations</th><th>Priority support</th><th>Offered</th><th>Paying salons</th><th></th></tr></thead>
+          <thead><tr><th>Plan</th><th>Price ₾ / month</th><th>Locations</th><th>Priority support</th><th>Offered</th><th>Paying salons</th><th></th></tr></thead>
           <tbody id="plans"></tbody>
         </table>
       </div>
@@ -222,6 +238,7 @@ function signedIn(session) {
   $("signout").hidden = false;
   loadTenants();
   loadPlans();
+  loadContacts();
 }
 
 function signedOut() {
@@ -287,7 +304,7 @@ function planCell(tenant) {
   td.appendChild(detail);
   // R500: who is outgrowing their plan
   const texts = document.createElement("small");
-  texts.textContent = "Texts " + sub.smsUsed + " / " + sub.smsIncluded + (sub.smsUsed > sub.smsIncluded ? " · over" : "");
+  texts.textContent = "Texts this month: " + sub.smsThisMonth;
   td.appendChild(texts);
   const actions = document.createElement("div");
   actions.className = "row";
@@ -358,6 +375,53 @@ function linkNote(link) {
     : "Couldn't email " + link.email + ". Send them this link yourself (works once, until " + until + "): " + link.url;
 }
 
+// R580: requests from the marketing site's contact page
+async function loadContacts() {
+  show($("contacts-error"));
+  try {
+    const requests = await api("contact-requests");
+    $("contacts").replaceChildren(...requests.map(contactRow));
+    $("contacts-empty").hidden = requests.length > 0;
+    const open = requests.filter((request) => !request.handledAt).length;
+    $("contacts-hint").textContent = "Businesses asking to get started, from the marketing site's contact page (R580). Newest first" + (requests.length ? " · " + open + " open." : ".");
+  } catch (error) {
+    if (error.status === 401) { signedOut(); return; }
+    show($("contacts-error"), error.message);
+  }
+}
+
+function contactRow(request) {
+  const row = document.createElement("tr");
+  if (request.handledAt) row.className = "handled";
+  const cell = (text) => { const td = document.createElement("td"); td.textContent = text; row.appendChild(td); return td; };
+  const link = (href, text) => { const a = document.createElement("a"); a.href = href; a.textContent = text; return a; };
+  cell(new Date(request.createdAt).toLocaleString());
+  cell(request.name);
+  cell(request.business);
+  cell("").appendChild(link("tel:" + request.phone.replace(/[^0-9+]/g, ""), request.phone));
+  const email = cell("");
+  if (request.email) email.appendChild(link("mailto:" + request.email, request.email));
+  cell(request.message || "").className = "msg";
+  cell(request.locale);
+  const toggle = document.createElement("button");
+  toggle.type = "button"; toggle.className = "secondary";
+  toggle.textContent = request.handledAt ? "Reopen" : "Mark handled";
+  toggle.addEventListener("click", async () => {
+    toggle.disabled = true;
+    try {
+      const updated = await api("contact-requests/" + encodeURIComponent(request.id), { method: "POST", body: JSON.stringify({ handled: !request.handledAt }) });
+      row.replaceWith(contactRow(updated));
+      loadContacts();
+    } catch (error) {
+      toggle.disabled = false;
+      if (error.status === 401) { signedOut(); return; }
+      show($("contacts-error"), error.message);
+    }
+  });
+  cell("").appendChild(toggle);
+  return row;
+}
+
 // R550: the plans, edited in place
 async function loadPlans() {
   show($("plans-error"));
@@ -392,8 +456,6 @@ function planRow(plan) {
   name.textContent = PLAN[plan.id] || plan.id;
   const price = input("text", plan.price, "Price");
   price.inputMode = "decimal";
-  const sms = input("number", String(plan.smsIncluded), "Texts per month");
-  sms.min = "0"; sms.step = "1";
   const locations = input("number", plan.maxLocations === null ? "" : String(plan.maxLocations), "Locations");
   locations.min = "1"; locations.step = "1"; locations.placeholder = "No limit";
   const priority = input("checkbox", plan.prioritySupport, "Priority support");
@@ -413,7 +475,6 @@ function planRow(plan) {
   const changes = () => {
     const body = {};
     if (Number(price.value) !== Number(plan.price) || price.value.trim() === "") body.price = price.value.trim();
-    if (sms.value.trim() === "" || Number(sms.value) !== plan.smsIncluded) body.smsIncluded = sms.value.trim() === "" ? NaN : Number(sms.value);
     const max = locations.value.trim() === "" ? null : Number(locations.value);
     if (max !== plan.maxLocations) body.maxLocations = max;
     if (priority.checked !== plan.prioritySupport) body.prioritySupport = priority.checked;
@@ -421,12 +482,11 @@ function planRow(plan) {
     return body;
   };
   // An edit after a "confirm the price" prompt asks again.
-  for (const el of [price, sms, locations, priority, offered]) el.addEventListener("input", () => { confirming = false; save.textContent = "Save"; say(""); });
+  for (const el of [price, locations, priority, offered]) el.addEventListener("input", () => { confirming = false; save.textContent = "Save"; say(""); });
 
   save.addEventListener("click", async () => {
     const body = changes();
     if (Object.keys(body).length === 0) { say("Nothing changed."); return; }
-    if (Number.isNaN(body.smsIncluded)) { say("Enter the texts per month (0 for none).", "bad"); return; }
     if (body.price !== undefined && !confirming) {
       const paying = payingOn(plan.id);
       confirming = true;

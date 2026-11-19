@@ -5,6 +5,7 @@ import { isLocale } from "@/i18n/locales";
 import { localePath } from "@/lib/locale-path";
 import { getCachedTenant } from "@/lib/tenant-config";
 import { siteOrigin } from "@/lib/site-url";
+import { searchEnginesBlocked } from "@/lib/search-indexing";
 
 // The pages worth finding. Manage pages are personal and stay out.
 const PATHS = ["/", "/book", "/privacy", "/terms"];
@@ -12,6 +13,8 @@ const PATHS = ["/", "/book", "/privacy", "/terms"];
 // R160: every page once per language the salon publishes in, each pointing at
 // its translations.
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
+  // R390: staging lists nothing
+  if (searchEnginesBlocked()) return [];
   const origin = siteOrigin();
   const salon = await getCachedTenant(headers().get("host") ?? "").catch(() => null);
   if (!salon) {

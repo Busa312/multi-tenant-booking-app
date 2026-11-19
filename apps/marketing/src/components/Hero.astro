@@ -1,0 +1,46 @@
+---
+import { contactPath, type Locale, type Messages } from "../i18n";
+import type { screensFor } from "../lib/screens";
+import Icon from "./Icon.astro";
+import LaptopFrame from "./LaptopFrame.astro";
+import MarkedText from "./MarkedText.astro";
+import PhoneFrame from "./PhoneFrame.astro";
+import Screenshot from "./Screenshot.astro";
+
+interface Props {
+  locale: Locale;
+  t: Messages;
+  screens: ReturnType<typeof screensFor>;
+}
+
+const { locale, t, screens } = Astro.props;
+---
+
+<section class="overflow-hidden px-4 pb-20 pt-16 sm:px-6 md:pb-32 md:pt-28">
+  <div class="mx-auto max-w-5xl text-center">
+    <p class="text-sm font-semibold text-base-content/60 md:text-lg">{t.hero.eyebrow}</p>
+    <h1 class="mt-4 text-[2.6rem] font-semibold leading-(--heading-leading) tracking-tight text-balance sm:text-6xl md:text-7xl lg:text-8xl">
+      <MarkedText title={t.hero.title} />
+    </h1>
+    <p class="mx-auto mt-8 max-w-2xl text-lg leading-relaxed text-base-content/60 text-pretty md:text-2xl">
+      {t.hero.lead}
+    </p>
+    <div class="mt-10 flex flex-col items-center justify-center gap-3 sm:flex-row">
+      <a href={contactPath(locale)} class="btn btn-primary btn-lg px-8">{t.hero.primaryCta}</a>
+      <a href="#how-it-works" class="btn btn-ghost btn-lg">
+        {t.hero.secondaryCta}
+        <Icon name="arrow" class="size-4" />
+      </a>
+    </div>
+    <p class="mt-4 text-sm text-base-content/50">{t.hero.note}</p>
+  </div>
+
+  <div class="relative mx-auto mt-16 max-w-6xl md:mt-24">
+    <LaptopFrame>
+      <Screenshot screen={screens.calendar} alt={t.screens.calendar} sizes="(min-width: 1200px) 1000px, 86vw" widths={[800, 1200, 1600, 2000]} priority />
+    </LaptopFrame>
+    <PhoneFrame class="absolute -bottom-10 right-0 w-[30%] max-w-72 sm:right-2 md:-bottom-14 md:w-[24%]">
+      <Screenshot screen={screens.site} alt={t.screens.site} sizes="(min-width: 768px) 280px, 30vw" widths={[300, 560, 780]} eager />
+    </PhoneFrame>
+  </div>
+</section>

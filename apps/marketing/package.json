@@ -1,0 +1,38 @@
+{
+  "name": "@booking/marketing",
+  "version": "0.0.0",
+  "private": true,
+  "description": "R560: the platform's own marketing site (Astro, static). Never shows a salon's data.",
+  "type": "module",
+  "scripts": {
+    "dev": "astro dev --port 4321",
+    "build": "astro build",
+    "preview": "astro preview --port 4321",
+    "lint": "eslint \"src/**/*.{ts,astro}\"",
+    "typecheck": "astro check",
+    "test": "echo \"no tests yet\"",
+    "screens": "node scripts/capture-screens.mjs && node scripts/capture-og.mjs",
+    "og": "node scripts/capture-og.mjs"
+  },
+  "dependencies": {
+    "@fontsource-variable/archivo": "^5.3.0",
+    "@fontsource-variable/noto-sans": "^5.3.0",
+    "@fontsource-variable/noto-sans-georgian": "^5.3.0",
+    "astro": "5.18.2"
+  },
+  "devDependencies": {
+    "@astrojs/check": "0.9.12",
+    "@booking/config": "workspace:*",
+    "@booking/shared-types": "workspace:*",
+    "@tailwindcss/vite": "4.3.3",
+    "@typescript-eslint/parser": "^8.8.0",
+    "astro-eslint-parser": "^1.4.0",
+    "daisyui": "5.7.50",
+    "eslint": "^8.57.1",
+    "eslint-plugin-astro": "1.7.0",
+    "playwright-core": "1.64.0",
+    "sharp": "0.34.5",
+    "tailwindcss": "4.3.3",
+    "typescript": "^5.6.3"
+  }
+}

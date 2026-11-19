@@ -6,7 +6,7 @@ import { openBooking, type BookedDetail } from "@booking/widget";
 export interface BookingButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   /** The salon's booking site, e.g. "https://salon.platform.ge". */
   site: string;
-  /** "en" or "ka". Default: the salon's main language. */
+  /** "en", "ka" or "ru". Default: the salon's main language. */
   locale?: string;
   /** Services to start with ticked. */
   serviceIds?: string[];

@@ -1,0 +1,52 @@
+---
+import type { Locale, Messages } from "../i18n";
+import { cmsUrl } from "../lib/site";
+import Icon from "./Icon.astro";
+import LanguageLinks from "./LanguageLinks.astro";
+
+interface Props {
+  locale: Locale;
+  t: Messages;
+  /** The page under the language's home, for the language links (empty = home). */
+  path?: string;
+  links: { href: string; label: string }[];
+}
+
+const { locale, t, links, path = "" } = Astro.props;
+---
+
+<!-- Native disclosure: works without script. The script only closes it after
+     a jump to a section, so the menu doesn't cover what was picked. -->
+<details class="group lg:hidden" data-mobile-menu>
+  <summary class="btn btn-ghost btn-sm btn-square list-none [&::-webkit-details-marker]:hidden" aria-label={t.nav.menu}>
+    <Icon name="menu" />
+  </summary>
+  <div class="absolute inset-x-0 top-full border-b border-base-300 bg-base-100 px-4 pb-6 sm:px-6">
+    <ul class="flex flex-col text-xl font-medium">
+      {
+        links.map((link) => (
+          <li>
+            <a href={link.href} class="block border-b border-base-300 py-4">
+              {link.label}
+            </a>
+          </li>
+        ))
+      }
+      <li>
+        <a href={cmsUrl} class="block border-b border-base-300 py-4">{t.nav.signIn}</a>
+      </li>
+    </ul>
+    <div class="mt-4 flex items-center gap-3">
+      <Icon name="globe" class="size-4 text-base-content/55" />
+      <LanguageLinks locale={locale} path={path} label={t.nav.language} variant="names" />
+    </div>
+  </div>
+</details>
+
+<script>
+  for (const menu of document.querySelectorAll<HTMLDetailsElement>("[data-mobile-menu]")) {
+    menu.addEventListener("click", (event) => {
+      if (event.target instanceof Element && event.target.closest("a")) menu.open = false;
+    });
+  }
+</script>
