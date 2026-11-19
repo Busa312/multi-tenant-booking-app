@@ -1,4 +1,4 @@
-import { DEFAULT_CONTENT_LOCALE, defaultLocaleOf, localized, localizedAddress } from "./i18n";
+import { DEFAULT_CONTENT_LOCALE, defaultLocaleOf, enabledLocalesOf, localized, localizedAddress } from "./i18n";
 
 // R160: these pin the *rule*
 
@@ -61,5 +61,17 @@ describe("localizedAddress", () => {
 
   it("is just the line when there's no city", () => {
     expect(localizedAddress({ ...vake, city: null }, pick("ka"))).toBe("ჭავჭავაძის გამზ. 12");
+  });
+});
+
+// R570
+describe("enabledLocalesOf", () => {
+  it("keeps Russian off until an owner switches it on", () => {
+    expect(enabledLocalesOf(undefined)).toEqual(["en", "ka"]);
+    expect(enabledLocalesOf(["ka", "ru"])).toEqual(["ka", "ru"]);
+  });
+
+  it("drops a language the platform doesn't publish in", () => {
+    expect(enabledLocalesOf(["ka", "de"])).toEqual(["ka"]);
   });
 });

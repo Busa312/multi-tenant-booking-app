@@ -3,13 +3,13 @@ import { useSearchParams } from "react-router-dom";
 import type { SubscriptionOverview, SubscriptionPaymentSummary, SubscriptionPlan } from "@booking/shared-types";
 import { useI18n } from "../i18n/I18nContext.js";
 import { cachedApi } from "../lib/cache.js";
+import { cx } from "../lib/cx.js";
 import { formatInstantDate } from "../lib/tenantTime.js";
 import { AppShell } from "../components/AppShell.js";
 import { CardSkeleton } from "../components/CardSkeleton.js";
 import { ConfirmModal, type ConfirmRequest } from "../components/ConfirmModal.js";
 import { PaymentMethodCard } from "../components/PaymentMethodCard.js";
 import { PlanCard } from "../components/PlanCard.js";
-import { SmsUsageCard } from "../components/SmsUsageCard.js";
 import { SubscriptionInvoices } from "../components/SubscriptionInvoices.js";
 import { SubscriptionStatusCard } from "../components/SubscriptionStatusCard.js";
 import { Alert, Card, Eyebrow } from "../components/ui/index.js";
@@ -22,6 +22,17 @@ interface Notice {
 // After a return from Flitt, how often (and how many times) to ask again while the payment is still pending.
 const CONFIRM_RETRY_MS = 3000;
 const CONFIRM_TRIES = 6;
+
+/**
+ * The plans share the row evenly, whatever the admin offers (R550): one column
+ * per plan where they fit side by side, two by two for four, stacked on phones.
+ */
+function planColumns(count: number): string {
+  if (count <= 1) return "md:max-w-md";
+  if (count === 2) return "md:grid-cols-2";
+  if (count === 3) return "lg:grid-cols-3";
+  return "md:grid-cols-2 2xl:grid-cols-4";
+}
 
 /**
  * The owner's subscription (R470–R490): where the salon stands, the plans, the
@@ -217,14 +228,11 @@ export function SubscriptionPage() {
                 }
                 onResume={() => void change({ cancelAtPeriodEnd: false })}
               />
-              <div className="flex flex-col gap-4 xl:gap-5">
-                <PaymentMethodCard
-                  overview={overview}
-                  busy={busy}
-                  onUpdateCard={() => void goToCheckout(() => cachedApi.startCardChange(lang))}
-                />
-                <SmsUsageCard overview={overview} timezone={timezone} />
-              </div>
+              <PaymentMethodCard
+                overview={overview}
+                busy={busy}
+                onUpdateCard={() => void goToCheckout(() => cachedApi.startCardChange(lang))}
+              />
             </div>
 
             {overview.status !== "free" && (
@@ -233,7 +241,7 @@ export function SubscriptionPage() {
                 <p className="mt-0.5 mb-4 text-sm text-base-content/60">
                   {t(paying ? "subscription.plansHintSwitch" : "subscription.plansHintPay")}
                 </p>
-                <ul className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+                <ul className={cx("grid gap-3", planColumns(overview.plans.length))}>
                   {overview.plans.map((plan) => (
                     <li key={plan.id}>
                       <PlanCard

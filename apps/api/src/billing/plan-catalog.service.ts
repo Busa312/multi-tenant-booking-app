@@ -1,8 +1,9 @@
 import { ConflictException, Injectable, Logger, NotFoundException } from "@nestjs/common";
-import type { AdminPlan, AdminUpdatePlanRequest } from "@booking/shared-types";
+import type { AdminPlan, AdminUpdatePlanRequest, SubscriptionPlan } from "@booking/shared-types";
 import type { Prisma } from "../../generated/prisma/index.js";
 import { PrismaService } from "../prisma/prisma.service.js";
-import { toAdminPlan, toPlanDefinition, validatePlanUpdate, type PlanDefinition } from "./plans.js";
+import { MarketingRebuild } from "./marketing-rebuild.service.js";
+import { toAdminPlan, toPlanDefinition, toWirePlan, validatePlanUpdate, type PlanDefinition } from "./plans.js";
 
 const ORDER = [{ position: "asc" as const }, { id: "asc" as const }];
 
@@ -16,7 +17,10 @@ const ORDER = [{ position: "asc" as const }, { id: "asc" as const }];
 export class PlanCatalog {
   private readonly logger = new Logger(PlanCatalog.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly marketing: MarketingRebuild,
+  ) {}
 
   /** Every plan, in page order, read in the caller's transaction. */
   async allIn(tx: Prisma.TransactionClient): Promise<PlanDefinition[]> {
@@ -27,6 +31,11 @@ export class PlanCatalog {
   /** R550: for the admin page — outside any tenant; the table belongs to none. */
   async list(): Promise<AdminPlan[]> {
     return (await this.allIn(this.prisma.client)).map(toAdminPlan);
+  }
+
+  /** R560: the plans an owner can choose now, as the marketing site shows them — outside any tenant. */
+  async offered(): Promise<SubscriptionPlan[]> {
+    return (await this.allIn(this.prisma.client)).filter((plan) => plan.offered).map(toWirePlan);
   }
 
   /**
@@ -46,6 +55,8 @@ export class PlanCatalog {
       return { before: toPlanDefinition(existing), after: toPlanDefinition(updated) };
     });
     this.logger.log(`plan ${id} changed by the platform admin: ${JSON.stringify(before)} → ${JSON.stringify(after)}`);
+    // R560: the marketing site prints the plans at build time — rebuild it.
+    void this.marketing.rebuild(`plan ${id} changed`);
     return toAdminPlan(after);
   }
 }

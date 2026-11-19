@@ -39,6 +39,7 @@ export function DemoApp({ site }: DemoAppProps) {
               <option value="">Salon&apos;s main language</option>
               <option value="en">English</option>
               <option value="ka">ქართული</option>
+              <option value="ru">Русский</option>
             </select>
           </label>
         </section>

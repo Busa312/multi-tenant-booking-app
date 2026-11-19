@@ -1,0 +1,39 @@
+---
+import { contactPath, localeHome, messagesFor, type Locale } from "../i18n";
+import BaseLayout from "../layouts/BaseLayout.astro";
+import { sectionClasses as c } from "../lib/sectionClasses";
+import Icon from "./Icon.astro";
+import SiteFooter from "./SiteFooter.astro";
+import SiteHeader from "./SiteHeader.astro";
+
+interface Props {
+  locale: Locale;
+  /** R580: where the contact form's API sends the visitor — sent, or not. */
+  result: "thanks" | "sorry";
+}
+
+const { locale, result } = Astro.props;
+const t = messagesFor(locale);
+const copy = result === "thanks" ? t.contact.thanks : t.contact.sorry;
+const path = `contact/${result}/`;
+const action = result === "thanks" ? { href: localeHome(locale), label: t.contact.thanks.back } : { href: contactPath(locale), label: t.contact.sorry.retry };
+---
+
+<BaseLayout locale={locale} t={t} path={path} title={copy.title} description={copy.body} noindex>
+  <SiteHeader locale={locale} t={t} path={path} />
+  <main class:list={["bg-base-200", c.band]}>
+    <div class={c.narrow}>
+      {
+        result === "thanks" && (
+          <span class="mx-auto mb-8 flex size-16 items-center justify-center rounded-full bg-accent text-accent-content">
+            <Icon name="check" class="size-8" />
+          </span>
+        )
+      }
+      <h1 class={c.title}>{copy.title}</h1>
+      <p class={c.lead}>{copy.body}</p>
+      <a href={action.href} class="btn btn-primary btn-lg mt-10 px-10">{action.label}</a>
+    </div>
+  </main>
+  <SiteFooter locale={locale} t={t} path={path} />
+</BaseLayout>

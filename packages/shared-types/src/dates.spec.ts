@@ -13,6 +13,15 @@ describe("date names", () => {
   });
 });
 
+// R570: the booking site's day picker in Russian — day before the month, in the form that follows a number
+describe("Russian date names", () => {
+  it("writes a day as Russian does", () => {
+    const ru = DATE_NAMES.ru;
+    expect(ru.day({ weekday: ru.weekdaysShort[3] ?? "", day: 18, month: ru.monthsShort[10] ?? "" })).toBe("Ср, 18 нояб.");
+    expect(ru.monthsShort[4]).toBe("мая");
+  });
+});
+
 // The CMS in Georgian, where browsers have no Georgian date data
 describe("georgianDate", () => {
   it("writes dates the Georgian way: day before month", () => {

@@ -1,0 +1,33 @@
+---
+import type { Messages } from "../i18n";
+import type { screensFor } from "../lib/screens";
+import { sectionClasses as c } from "../lib/sectionClasses";
+import CheckList from "./CheckList.astro";
+import PhoneFrame from "./PhoneFrame.astro";
+import Screenshot from "./Screenshot.astro";
+import SectionHeading from "./SectionHeading.astro";
+import SmsMock from "./SmsMock.astro";
+
+interface Props {
+  t: Messages;
+  screens: ReturnType<typeof screensFor>;
+  business: { name: string; host: string };
+}
+
+const { t, screens, business } = Astro.props;
+---
+
+<section id="features" class:list={["bg-base-200", c.band]}>
+  <div class:list={[c.container, "grid items-center gap-16 md:grid-cols-2 md:gap-20"]}>
+    <div class="reveal">
+      <SectionHeading eyebrow={t.bookingSite.eyebrow} title={t.bookingSite.title} lead={t.bookingSite.lead} align="start" />
+      <CheckList items={t.bookingSite.points} />
+    </div>
+    <div class="reveal relative mx-auto w-full max-w-sm pb-24 sm:pb-14">
+      <PhoneFrame class="mx-auto w-[78%]">
+        <Screenshot screen={screens.booking} alt={t.screens.booking} sizes="(min-width: 768px) 300px, 70vw" widths={[400, 600, 780]} />
+      </PhoneFrame>
+      <SmsMock business={business} class="absolute bottom-0 -left-2 w-[72%] sm:-left-12" />
+    </div>
+  </div>
+</section>

@@ -1,4 +1,4 @@
-import { passwordResetEmail, setupLinkEmail, toMailLang } from "./mail-templates.js";
+import { contactRequestEmail, passwordResetEmail, setupLinkEmail, toMailLang } from "./mail-templates.js";
 
 const RESET_URL = "https://cms.example.ge/reset-password/t1/abc_DEF-123";
 const SETUP_URL = "https://cms.example.ge/set-password/t1/xyz";
@@ -17,6 +17,14 @@ describe("password reset email", () => {
     const mail = passwordResetEmail({ lang: "ka", salonName: "Vake Nails", email: "nino@example.ge", resetUrl: RESET_URL });
     expect(mail.subject).toMatch(/^პაროლის აღდგენა/);
     expect(mail.text).toContain("30 წუთის");
+    expect(mail.text).toContain(RESET_URL);
+  });
+
+  // R570
+  it("is written in Russian when the CMS was showing Russian", () => {
+    const mail = passwordResetEmail({ lang: "ru", salonName: "Vake Nails", email: "nino@example.ge", resetUrl: RESET_URL });
+    expect(mail.subject).toBe("Сброс пароля · Vake Nails");
+    expect(mail.text).toContain("30 минут");
     expect(mail.text).toContain(RESET_URL);
   });
 
@@ -59,10 +67,32 @@ describe("toMailLang", () => {
   it.each([
     ["en", "en"],
     ["ka", "ka"],
+    ["ru", "ru"],
     [undefined, "ka"],
     ["de", "ka"],
     [42, "ka"],
   ])("reads %p as %p", (input, expected) => {
     expect(toMailLang(input)).toBe(expected);
+  });
+});
+
+// R580
+describe("contact request email", () => {
+  it("tells staff who asked and how to reach them, escaping what they typed", () => {
+    const mail = contactRequestEmail({
+      name: "Nino",
+      business: "<b>Vake</b> Nails",
+      phone: "599 12 34 56",
+      email: null,
+      message: "Two branches, 6 staff.",
+      locale: "ka",
+      adminUrl: "https://api.example.com/admin",
+    });
+    expect(mail.subject).toBe("New contact request · <b>Vake</b> Nails");
+    expect(mail.text).toContain("Phone: 599 12 34 56");
+    expect(mail.text).toContain("Two branches, 6 staff.");
+    expect(mail.text).not.toContain("Email:");
+    expect(mail.html).not.toContain("<b>Vake</b>");
+    expect(mail.html).toContain('href="https://api.example.com/admin"');
   });
 });

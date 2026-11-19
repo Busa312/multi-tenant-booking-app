@@ -38,7 +38,7 @@ export interface CheckoutParams {
   description: string;
   responseUrl: string;
   callbackUrl: string;
-  lang: "ka" | "en";
+  lang: "ka" | "en" | "ru";
   /** R470: refunded automatically once approved — a card change. */
   verification?: boolean;
 }

@@ -6,7 +6,7 @@
 // silently prints English. The booking site and the CMS both read these, so
 // a date reads the same in both, and on the server and in the browser.
 
-export type DateLang = "en" | "ka";
+export type DateLang = "en" | "ka" | "ru";
 
 export interface DateParts {
   weekday: string;
@@ -37,6 +37,16 @@ export const DATE_NAMES: Record<DateLang, DateNames> = {
     weekdays: ["კვირა", "ორშაბათი", "სამშაბათი", "ოთხშაბათი", "ხუთშაბათი", "პარასკევი", "შაბათი"],
     monthsShort: ["იან", "თებ", "მარ", "აპრ", "მაი", "ივნ", "ივლ", "აგვ", "სექ", "ოქტ", "ნოე", "დეკ"],
     months: ["იანვარი", "თებერვალი", "მარტი", "აპრილი", "მაისი", "ივნისი", "ივლისი", "აგვისტო", "სექტემბერი", "ოქტომბერი", "ნოემბერი", "დეკემბერი"],
+    day: ({ weekday, day, month }) => `${weekday}, ${day} ${month}`,
+  },
+  // R570. CLDR's `ru`, capitalised for labels (CLDR writes them lower-case
+  // mid-sentence). `months` is the standalone form ("Ноябрь", a month's
+  // heading); `monthsShort` is the form after a day number ("21 нояб.").
+  ru: {
+    weekdaysShort: ["Вс", "Пн", "Вт", "Ср", "Чт", "Пт", "Сб"],
+    weekdays: ["Воскресенье", "Понедельник", "Вторник", "Среда", "Четверг", "Пятница", "Суббота"],
+    monthsShort: ["янв.", "февр.", "мар.", "апр.", "мая", "июн.", "июл.", "авг.", "сент.", "окт.", "нояб.", "дек."],
+    months: ["Январь", "Февраль", "Март", "Апрель", "Май", "Июнь", "Июль", "Август", "Сентябрь", "Октябрь", "Ноябрь", "Декабрь"],
     day: ({ weekday, day, month }) => `${weekday}, ${day} ${month}`,
   },
 };

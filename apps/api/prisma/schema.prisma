@@ -437,7 +437,6 @@ model Subscription {
 model SubscriptionPlan {
   id              String   @id
   price           Decimal  @db.Decimal(10, 2)
-  smsIncluded     Int      @map("sms_included")
   /// R540: active locations allowed; null = no limit.
   maxLocations    Int?     @map("max_locations")
   prioritySupport Boolean  @default(false) @map("priority_support")
@@ -468,6 +467,7 @@ model SubscriptionPayment {
   cardMasked     String?   @map("card_masked")
   failureReason  String?   @map("failure_reason")
   /// R500: texts beyond the allowance in the month before periodStart, charged with this renewal.
+  /// Historical (R500's former per-plan allowance): no longer written.
   extraTexts       Int       @default(0) @map("extra_texts")
   extraTextsAmount Decimal   @default(0) @map("extra_texts_amount") @db.Decimal(10, 2)
   extraTextsFrom   DateTime? @map("extra_texts_from") @db.Timestamptz
@@ -512,4 +512,21 @@ model ServiceCategory {
 
   @@index([tenantId])
   @@map("service_category")
+}
+
+/// R580: a business asking to get started, from the marketing site's contact
+/// page. Platform-wide: no tenant_id, no RLS — only the platform admin reads it.
+model ContactRequest {
+  id        String    @id @default(uuid()) @db.Uuid
+  name      String
+  business  String
+  phone     String
+  email     String?
+  message   String?
+  locale    String
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  handledAt DateTime? @map("handled_at") @db.Timestamptz
+
+  @@index([createdAt])
+  @@map("contact_request")
 }

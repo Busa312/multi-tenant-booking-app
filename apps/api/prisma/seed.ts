@@ -171,7 +171,8 @@ async function main() {
   console.log(`Seeded tenant "${tenant.subdomain}" — login as owner@demo.local / password123`);
 
   await seedCarWash();
-  await seedBeautyStudio();
+  await seedBeautyStudio(DEMO_BEAUTY);
+  await seedBeautyStudio(AURA_BEAUTY);
 }
 
 /**
@@ -296,6 +297,36 @@ async function seedCarWash() {
   console.log(`Seeded tenant "${tenant.subdomain}" — login as owner@carwash.local / password123`);
 }
 
+interface BeautyStudio {
+  name: string;
+  subdomain: string;
+  email: string;
+  colors: { primary: string; secondary: string; background: string; text: string };
+  /** First hex digit of the studio's fixed ids (uuid("<series>d", n) …), unique per studio. */
+  idSeries: string;
+}
+
+const DEMO_BEAUTY: BeautyStudio = {
+  name: "Demo Beauty Studio",
+  subdomain: "beauty",
+  email: "owner@beauty.local",
+  colors: { primary: "#5a4636", secondary: "#c9b8a6", background: "#f4efe8", text: "#2b211a" },
+  idSeries: "b",
+};
+
+/**
+ * The same menu under a real-sounding name: the business the marketing site's
+ * screenshots show (apps/marketing/scripts/capture-screens.mjs), so they never
+ * say "Demo".
+ */
+const AURA_BEAUTY: BeautyStudio = {
+  name: "Aura Beauty Studio",
+  subdomain: "aura",
+  email: "owner@aura.local",
+  colors: { primary: "#3f4a3c", secondary: "#a9b79c", background: "#f3f2ec", text: "#22281f" },
+  idSeries: "a",
+};
+
 /**
  * A real salon's price list (nails, hair removal, brows, permanent makeup,
  * lashes) for trying R510/R520 by hand: 9 categories in the menu's order, the
@@ -303,178 +334,216 @@ async function seedCarWash() {
  * with a note. The menu gives no durations: the ones here are estimates for
  * the salon to correct.
  */
-async function seedBeautyStudio() {
+/** The beauty studios' copy in Georgian and Russian (R160, R570). */
+const COPY_I18N = {
+  title: { ka: "ფრჩხილები, წამწამები და წარბები", ru: "Ногти, ресницы и брови" },
+  description: { ka: "დაჯავშნე შემდეგი ვიზიტი ონლაინ, ერთ წუთში.", ru: "Запишитесь на следующий визит онлайн за минуту." },
+};
+
+/**
+ * R570: adds a Russian translation to a row seeded before Russian existed —
+ * only where it has none, so a re-run never overwrites a hand-made edit.
+ * Each field is [the row's current map, the Russian text].
+ */
+async function addRussian(
+  model: "service" | "serviceCategory" | "professional",
+  id: string,
+  fields: Record<string, [unknown, string | undefined]>,
+) {
+  const data: Record<string, Record<string, string>> = {};
+  for (const [field, [current, ru]] of Object.entries(fields)) {
+    const map = current && typeof current === "object" ? (current as Record<string, string>) : {};
+    if (ru && !map.ru) data[field] = { ...map, ru };
+  }
+  if (Object.keys(data).length === 0) return;
+  // The three delegates share `update({ where: { id }, data })`.
+  const delegate = prisma[model] as unknown as { update: (args: { where: { id: string }; data: object }) => Promise<unknown> };
+  await delegate.update({ where: { id }, data });
+}
+
+async function seedBeautyStudio(studio: BeautyStudio) {
   const tenant = await prisma.tenant.upsert({
-    where: { subdomain: "beauty" },
+    where: { subdomain: studio.subdomain },
     update: {},
     create: {
-      name: "Demo Beauty Studio",
+      name: studio.name,
       timezone: "Asia/Tbilisi",
-      subdomain: "beauty",
+      subdomain: studio.subdomain,
       onboardingFinishedAt: new Date(),
       configJson: {
-        colors: { primary: "#5a4636", secondary: "#c9b8a6", background: "#f4efe8", text: "#2b211a" },
-        enabledLocales: ["en", "ka"],
+        colors: studio.colors,
+        enabledLocales: ["en", "ka", "ru"],
         copy: {
           title: "Nails, lashes & brows",
-          titleI18n: { ka: "ფრჩხილები, წამწამები და წარბები" },
+          titleI18n: COPY_I18N.title,
           description: "Book your next appointment online in a minute.",
-          descriptionI18n: { ka: "დაჯავშნე შემდეგი ვიზიტი ონლაინ, ერთ წუთში." },
+          descriptionI18n: COPY_I18N.description,
         },
       },
     },
   });
 
   await prisma.tenantUser.upsert({
-    where: { tenantId_email: { tenantId: tenant.id, email: "owner@beauty.local" } },
+    where: { tenantId_email: { tenantId: tenant.id, email: studio.email } },
     update: {},
-    create: { tenantId: tenant.id, email: "owner@beauty.local", passwordHash: await bcrypt.hash("password123", 10), role: "owner" },
+    create: { tenantId: tenant.id, email: studio.email, passwordHash: await bcrypt.hash("password123", 10), role: "owner" },
   });
 
-  const uuid = (prefix: string, n: number) => `00000000-0000-0000-0000-0000000${prefix}${String(n).padStart(3, "0")}`;
+  const uuid = (kind: string, n: number) => `00000000-0000-0000-0000-0000000${studio.idSeries}${kind}${String(n).padStart(3, "0")}`;
 
   const staff = {
-    mariam: { id: uuid("bd", 1), name: "Mariam", nameI18n: { ka: "მარიამი" } },
-    tamar: { id: uuid("bd", 2), name: "Tamar", nameI18n: { ka: "თამარი" } },
-    nino: { id: uuid("bd", 3), name: "Nino", nameI18n: { ka: "ნინო" } },
-    eka: { id: uuid("bd", 4), name: "Eka", nameI18n: { ka: "ეკა" } },
+    mariam: { id: uuid("d", 1), name: "Mariam", nameI18n: { ka: "მარიამი", ru: "Мариам" } },
+    tamar: { id: uuid("d", 2), name: "Tamar", nameI18n: { ka: "თამარი", ru: "Тамар" } },
+    nino: { id: uuid("d", 3), name: "Nino", nameI18n: { ka: "ნინო", ru: "Нино" } },
+    eka: { id: uuid("d", 4), name: "Eka", nameI18n: { ka: "ეკა", ru: "Эка" } },
   };
   for (const professional of Object.values(staff)) {
-    await prisma.professional.upsert({ where: { id: professional.id }, update: {}, create: { tenantId: tenant.id, locationId: null, ...professional } });
+    const row = await prisma.professional.upsert({ where: { id: professional.id }, update: {}, create: { tenantId: tenant.id, locationId: null, ...professional } });
+    await addRussian("professional", row.id, { nameI18n: [row.nameI18n, professional.nameI18n.ru] });
   }
   const nails = [staff.mariam.id, staff.tamar.id];
   const feet = [staff.tamar.id];
   const lashBrow = [staff.nino.id];
   const face = [staff.eka.id];
 
-  type Item = { name: string; ka: string; price: number; minutes: number; from?: boolean; note?: string; noteKa?: string };
-  const menu: { name: string; ka: string; staff: string[]; items: Item[] }[] = [
+  type Item = { name: string; ka: string; ru: string; price: number; minutes: number; from?: boolean; note?: string; noteKa?: string; noteRu?: string };
+  const menu: { name: string; ka: string; ru: string; staff: string[]; items: Item[] }[] = [
     {
       name: "Manicure & gel polish",
       ka: "მანიკური და გელ-ლაქი",
+      ru: "Маникюр и гель-лак",
       staff: nails,
       items: [
-        { name: "Hot Combo: gel polish + manicure", ka: "ჰოთ კომბო: გელ-ლაქი + მანიკური", price: 25, minutes: 75, note: "Cuticle care included.", noteKa: "კუტიკულის მოვლის ჩათვლით." },
-        { name: "Gel polish · Elpaza", ka: "გელ-ლაქი · Elpaza", price: 15, minutes: 60 },
-        { name: "Gel polish · Uno", ka: "გელ-ლაქი · Uno", price: 20, minutes: 60 },
-        { name: "Gel polish · Luxio Premium", ka: "გელ-ლაქი · Luxio Premium", price: 35, minutes: 60 },
-        { name: "Cuticle care", ka: "კუტიკულის მოვლა", price: 15, minutes: 30 },
+        { name: "Hot Combo: gel polish + manicure", ka: "ჰოთ კომბო: გელ-ლაქი + მანიკური", ru: "Хот-комбо: гель-лак + маникюр", price: 25, minutes: 75, note: "Cuticle care included.", noteKa: "კუტიკულის მოვლის ჩათვლით.", noteRu: "Уход за кутикулой включён." },
+        { name: "Gel polish · Elpaza", ka: "გელ-ლაქი · Elpaza", ru: "Гель-лак · Elpaza", price: 15, minutes: 60 },
+        { name: "Gel polish · Uno", ka: "გელ-ლაქი · Uno", ru: "Гель-лак · Uno", price: 20, minutes: 60 },
+        { name: "Gel polish · Luxio Premium", ka: "გელ-ლაქი · Luxio Premium", ru: "Гель-лак · Luxio Premium", price: 35, minutes: 60 },
+        { name: "Cuticle care", ka: "კუტიკულის მოვლა", ru: "Уход за кутикулой", price: 15, minutes: 30 },
       ],
     },
     {
       name: "Extensions",
       ka: "დაგრძელება",
+      ru: "Наращивание",
       staff: nails,
       items: [
-        { name: "Colored gel extensions", ka: "ფერადი გელით დაგრძელება", price: 45, minutes: 150, note: "Up to length 3.", noteKa: "მე-3 სიგრძემდე." },
-        { name: "Milky gel extensions", ka: "რძისფერი გელით დაგრძელება", price: 55, minutes: 150 },
-        { name: "Refill", ka: "კორექცია", price: 40, minutes: 120 },
-        { name: "Milky gel refill", ka: "რძისფერი გელის კორექცია", price: 45, minutes: 120, note: "Up to length 3.", noteKa: "მე-3 სიგრძემდე." },
-        { name: "Extensions with tips", ka: "ტიპსებით დაგრძელება", price: 65, minutes: 150 },
+        { name: "Colored gel extensions", ka: "ფერადი გელით დაგრძელება", ru: "Наращивание цветным гелем", price: 45, minutes: 150, note: "Up to length 3.", noteKa: "მე-3 სიგრძემდე.", noteRu: "До 3-й длины." },
+        { name: "Milky gel extensions", ka: "რძისფერი გელით დაგრძელება", ru: "Наращивание молочным гелем", price: 55, minutes: 150 },
+        { name: "Refill", ka: "კორექცია", ru: "Коррекция", price: 40, minutes: 120 },
+        { name: "Milky gel refill", ka: "რძისფერი გელის კორექცია", ru: "Коррекция молочным гелем", price: 45, minutes: 120, note: "Up to length 3.", noteKa: "მე-3 სიგრძემდე.", noteRu: "До 3-й длины." },
+        { name: "Extensions with tips", ka: "ტიპსებით დაგრძელება", ru: "Наращивание на типсы", price: 65, minutes: 150 },
       ],
     },
     {
       name: "Pedicure",
       ka: "პედიკური",
+      ru: "Педикюр",
       staff: feet,
       items: [
-        { name: "Combo: gel polish + cuticle care", ka: "კომბო: გელ-ლაქი + კუტიკულის მოვლა", price: 45, minutes: 90 },
-        { name: "Combo: regular polish + cuticle care", ka: "კომბო: ჩვეულებრივი ლაქი + კუტიკულის მოვლა", price: 45, minutes: 75 },
-        { name: "Wet pedicure", ka: "სველი პედიკური", price: 80, minutes: 90, note: "Gel polish, cuticle care, scrub and heel care.", noteKa: "გელ-ლაქი, კუტიკულის მოვლა, სკრაბი და ქუსლის მოვლა." },
-        { name: "Men's pedicure", ka: "მამაკაცის პედიკური", price: 80, minutes: 75 },
-        { name: "Regular polish application", ka: "ჩვეულებრივი ლაქის წასმა", price: 30, minutes: 30 },
-        { name: "Gel polish application", ka: "გელ-ლაქის წასმა", price: 30, minutes: 45 },
-        { name: "Cuticle care only (feet)", ka: "მხოლოდ კუტიკულის მოვლა (ფეხი)", price: 30, minutes: 45 },
-        { name: "Polish removal (feet)", ka: "ლაქის მოხსნა (ფეხი)", price: 10, minutes: 15 },
-        { name: "Smart heel treatment", ka: "ქუსლის სმარტ-მოვლა", price: 15, minutes: 20 },
+        { name: "Combo: gel polish + cuticle care", ka: "კომბო: გელ-ლაქი + კუტიკულის მოვლა", ru: "Комбо: гель-лак + уход за кутикулой", price: 45, minutes: 90 },
+        { name: "Combo: regular polish + cuticle care", ka: "კომბო: ჩვეულებრივი ლაქი + კუტიკულის მოვლა", ru: "Комбо: обычный лак + уход за кутикулой", price: 45, minutes: 75 },
+        { name: "Wet pedicure", ka: "სველი პედიკური", ru: "Влажный педикюр", price: 80, minutes: 90, note: "Gel polish, cuticle care, scrub and heel care.", noteKa: "გელ-ლაქი, კუტიკულის მოვლა, სკრაბი და ქუსლის მოვლა.", noteRu: "Гель-лак, уход за кутикулой, скраб и уход за пятками." },
+        { name: "Men's pedicure", ka: "მამაკაცის პედიკური", ru: "Мужской педикюр", price: 80, minutes: 75 },
+        { name: "Regular polish application", ka: "ჩვეულებრივი ლაქის წასმა", ru: "Покрытие обычным лаком", price: 30, minutes: 30 },
+        { name: "Gel polish application", ka: "გელ-ლაქის წასმა", ru: "Покрытие гель-лаком", price: 30, minutes: 45 },
+        { name: "Cuticle care only (feet)", ka: "მხოლოდ კუტიკულის მოვლა (ფეხი)", ru: "Только уход за кутикулой (ноги)", price: 30, minutes: 45 },
+        { name: "Polish removal (feet)", ka: "ლაქის მოხსნა (ფეხი)", ru: "Снятие лака (ноги)", price: 10, minutes: 15 },
+        { name: "Smart heel treatment", ka: "ქუსლის სმარტ-მოვლა", ru: "Смарт-уход за пятками", price: 15, minutes: 20 },
       ],
     },
     {
       name: "Strengthening & removal",
       ka: "გამაგრება და მოხსნა",
+      ru: "Укрепление и снятие",
       staff: nails,
       items: [
-        { name: "Acrylic strengthening", ka: "აკრილით გამაგრება", price: 15, minutes: 30 },
-        { name: "Colored gel strengthening", ka: "ფერადი გელით გამაგრება", price: 30, minutes: 45, note: "25 ₾ together with gel polish.", noteKa: "გელ-ლაქთან ერთად 25 ₾." },
-        { name: "Gel polish removal", ka: "გელ-ლაქის მოხსნა", price: 5, minutes: 15 },
-        { name: "Strengthening removal", ka: "გამაგრების მოხსნა", price: 8, minutes: 15 },
-        { name: "Extension removal", ka: "დაგრძელების მოხსნა", price: 10, minutes: 20, from: true, note: "10 ₾ if the extensions were done at our salon, 15 ₾ otherwise.", noteKa: "10 ₾, თუ დაგრძელება ჩვენთან გაკეთდა, სხვა შემთხვევაში 15 ₾." },
+        { name: "Acrylic strengthening", ka: "აკრილით გამაგრება", ru: "Укрепление акрилом", price: 15, minutes: 30 },
+        { name: "Colored gel strengthening", ka: "ფერადი გელით გამაგრება", ru: "Укрепление цветным гелем", price: 30, minutes: 45, note: "25 ₾ together with gel polish.", noteKa: "გელ-ლაქთან ერთად 25 ₾.", noteRu: "25 ₾ вместе с гель-лаком." },
+        { name: "Gel polish removal", ka: "გელ-ლაქის მოხსნა", ru: "Снятие гель-лака", price: 5, minutes: 15 },
+        { name: "Strengthening removal", ka: "გამაგრების მოხსნა", ru: "Снятие укрепления", price: 8, minutes: 15 },
+        { name: "Extension removal", ka: "დაგრძელების მოხსნა", ru: "Снятие наращивания", price: 10, minutes: 20, from: true, note: "10 ₾ if the extensions were done at our salon, 15 ₾ otherwise.", noteKa: "10 ₾, თუ დაგრძელება ჩვენთან გაკეთდა, სხვა შემთხვევაში 15 ₾.", noteRu: "10 ₾, если наращивание делали у нас, иначе 15 ₾." },
       ],
     },
     {
       name: "Nail design",
       ka: "ფრჩხილის დიზაინი",
+      ru: "Дизайн ногтей",
       staff: nails,
       items: [
-        { name: "French", ka: "ფრენჩი", price: 15, minutes: 20 },
-        { name: "Ombré", ka: "ომბრე", price: 25, minutes: 30 },
-        { name: "Chrome", ka: "ქრომი", price: 20, minutes: 15 },
-        { name: "Stickers", ka: "სტიკერები", price: 2, minutes: 10, from: true, note: "Priced by the number of nails.", noteKa: "ფასი დამოკიდებულია ფრჩხილების რაოდენობაზე." },
-        { name: "Hand-painted / intricate designs", ka: "ხელით მოხატვა / რთული დიზაინი", price: 2, minutes: 15, from: true, note: "Priced by the design.", noteKa: "ფასი დამოკიდებულია დიზაინზე." },
-        { name: "One nail extension", ka: "ერთი ფრჩხილის დაგრძელება", price: 5, minutes: 10 },
-        { name: "One nail strengthening", ka: "ერთი ფრჩხილის გამაგრება", price: 3, minutes: 10 },
+        { name: "French", ka: "ფრენჩი", ru: "Френч", price: 15, minutes: 20 },
+        { name: "Ombré", ka: "ომბრე", ru: "Омбре", price: 25, minutes: 30 },
+        { name: "Chrome", ka: "ქრომი", ru: "Хром", price: 20, minutes: 15 },
+        { name: "Stickers", ka: "სტიკერები", ru: "Наклейки", price: 2, minutes: 10, from: true, note: "Priced by the number of nails.", noteKa: "ფასი დამოკიდებულია ფრჩხილების რაოდენობაზე.", noteRu: "Цена зависит от количества ногтей." },
+        { name: "Hand-painted / intricate designs", ka: "ხელით მოხატვა / რთული დიზაინი", ru: "Роспись / сложный дизайн", price: 2, minutes: 15, from: true, note: "Priced by the design.", noteKa: "ფასი დამოკიდებულია დიზაინზე.", noteRu: "Цена зависит от дизайна." },
+        { name: "One nail extension", ka: "ერთი ფრჩხილის დაგრძელება", ru: "Наращивание одного ногтя", price: 5, minutes: 10 },
+        { name: "One nail strengthening", ka: "ერთი ფრჩხილის გამაგრება", ru: "Укрепление одного ногтя", price: 3, minutes: 10 },
       ],
     },
     {
       name: "Hair removal",
       ka: "ეპილაცია",
+      ru: "Эпиляция",
       staff: face,
       items: [
-        { name: "Electrolysis · 30 minutes", ka: "ელექტროეპილაცია · 30 წუთი", price: 20, minutes: 30 },
-        { name: "Waxing: upper lip", ka: "ცვილით: ზედა ტუჩი", price: 10, minutes: 15 },
-        { name: "Waxing: sideburns", ka: "ცვილით: ბაკენბარდები", price: 15, minutes: 15 },
-        { name: "Waxing: full face", ka: "ცვილით: მთლიანი სახე", price: 35, minutes: 30 },
+        { name: "Electrolysis · 30 minutes", ka: "ელექტროეპილაცია · 30 წუთი", ru: "Электроэпиляция · 30 минут", price: 20, minutes: 30 },
+        { name: "Waxing: upper lip", ka: "ცვილით: ზედა ტუჩი", ru: "Воск: верхняя губа", price: 10, minutes: 15 },
+        { name: "Waxing: sideburns", ka: "ცვილით: ბაკენბარდები", ru: "Воск: виски", price: 15, minutes: 15 },
+        { name: "Waxing: full face", ka: "ცვილით: მთლიანი სახე", ru: "Воск: всё лицо", price: 35, minutes: 30 },
       ],
     },
     {
       name: "Brows",
       ka: "წარბები",
+      ru: "Брови",
       staff: lashBrow,
       items: [
-        { name: "Eyebrow shaping with tweezers", ka: "წარბის ფორმირება პინცეტით", price: 20, minutes: 30 },
-        { name: "Eyebrow waxing", ka: "წარბის ფორმირება ცვილით", price: 25, minutes: 30 },
-        { name: "Brow lamination", ka: "წარბის ლამინირება", price: 40, minutes: 45, from: true, note: "40–50 ₾ depending on the work.", noteKa: "40–50 ₾, სამუშაოს მიხედვით." },
+        { name: "Eyebrow shaping with tweezers", ka: "წარბის ფორმირება პინცეტით", ru: "Коррекция бровей пинцетом", price: 20, minutes: 30 },
+        { name: "Eyebrow waxing", ka: "წარბის ფორმირება ცვილით", ru: "Коррекция бровей воском", price: 25, minutes: 30 },
+        { name: "Brow lamination", ka: "წარბის ლამინირება", ru: "Ламинирование бровей", price: 40, minutes: 45, from: true, note: "40–50 ₾ depending on the work.", noteKa: "40–50 ₾, სამუშაოს მიხედვით.", noteRu: "40–50 ₾ в зависимости от работы." },
       ],
     },
     {
       name: "Permanent makeup",
       ka: "პერმანენტული მაკიაჟი",
+      ru: "Перманентный макияж",
       staff: face,
       items: [
-        { name: "Lips", ka: "ტუჩები", price: 250, minutes: 120 },
-        { name: "Lash line", ka: "წამწამების ხაზი", price: 250, minutes: 120 },
-        { name: "Brows", ka: "წარბები", price: 300, minutes: 150 },
+        { name: "Lips", ka: "ტუჩები", ru: "Губы", price: 250, minutes: 120 },
+        { name: "Lash line", ka: "წამწამების ხაზი", ru: "Межресничка", price: 250, minutes: 120 },
+        { name: "Brows", ka: "წარბები", ru: "Брови", price: 300, minutes: 150 },
       ],
     },
     {
       name: "Lashes",
       ka: "წამწამები",
+      ru: "Ресницы",
       staff: lashBrow,
       items: [
-        { name: "Classic lashes", ka: "კლასიკური წამწამები", price: 50, minutes: 120 },
-        { name: "2D lashes", ka: "2D წამწამები", price: 60, minutes: 150 },
-        { name: "3D lashes", ka: "3D წამწამები", price: 70, minutes: 150 },
-        { name: "4D lashes", ka: "4D წამწამები", price: 80, minutes: 180 },
-        { name: "Mega volume", ka: "მეგა მოცულობა", price: 100, minutes: 180 },
-        { name: "Lash removal", ka: "წამწამების მოხსნა", price: 15, minutes: 20 },
-        { name: "Lash lamination", ka: "წამწამების ლამინირება", price: 80, minutes: 60, from: true, note: "80–100 ₾ depending on the work.", noteKa: "80–100 ₾, სამუშაოს მიხედვით." },
-        { name: "Lash & brow lamination set", ka: "წამწამების და წარბების ლამინირება", price: 100, minutes: 90, from: true, note: "100–120 ₾ depending on the work.", noteKa: "100–120 ₾, სამუშაოს მიხედვით." },
+        { name: "Classic lashes", ka: "კლასიკური წამწამები", ru: "Классические ресницы", price: 50, minutes: 120 },
+        { name: "2D lashes", ka: "2D წამწამები", ru: "2D-ресницы", price: 60, minutes: 150 },
+        { name: "3D lashes", ka: "3D წამწამები", ru: "3D-ресницы", price: 70, minutes: 150 },
+        { name: "4D lashes", ka: "4D წამწამები", ru: "4D-ресницы", price: 80, minutes: 180 },
+        { name: "Mega volume", ka: "მეგა მოცულობა", ru: "Мега-объём", price: 100, minutes: 180 },
+        { name: "Lash removal", ka: "წამწამების მოხსნა", ru: "Снятие ресниц", price: 15, minutes: 20 },
+        { name: "Lash lamination", ka: "წამწამების ლამინირება", ru: "Ламинирование ресниц", price: 80, minutes: 60, from: true, note: "80–100 ₾ depending on the work.", noteKa: "80–100 ₾, სამუშაოს მიხედვით.", noteRu: "80–100 ₾ в зависимости от работы." },
+        { name: "Lash & brow lamination set", ka: "წამწამების და წარბების ლამინირება", ru: "Ламинирование ресниц и бровей", price: 100, minutes: 90, from: true, note: "100–120 ₾ depending on the work.", noteKa: "100–120 ₾, სამუშაოს მიხედვით.", noteRu: "100–120 ₾ в зависимости от работы." },
       ],
     },
   ];
 
   let serviceNumber = 0;
   for (const [categoryIndex, category] of menu.entries()) {
-    const categoryId = uuid("bc", categoryIndex + 1);
-    await prisma.serviceCategory.upsert({
+    const categoryId = uuid("c", categoryIndex + 1);
+    const categoryRow = await prisma.serviceCategory.upsert({
       where: { id: categoryId },
       update: {},
-      create: { id: categoryId, tenantId: tenant.id, name: category.name, nameI18n: { ka: category.ka }, position: categoryIndex },
+      create: { id: categoryId, tenantId: tenant.id, name: category.name, nameI18n: { ka: category.ka, ru: category.ru }, position: categoryIndex },
     });
+    await addRussian("serviceCategory", categoryId, { nameI18n: [categoryRow.nameI18n, category.ru] });
     for (const [position, item] of category.items.entries()) {
       serviceNumber += 1;
-      const serviceId = uuid("be", serviceNumber);
-      await prisma.service.upsert({
+      const serviceId = uuid("e", serviceNumber);
+      const serviceRow = await prisma.service.upsert({
         where: { id: serviceId },
         update: {},
         create: {
@@ -483,14 +552,15 @@ async function seedBeautyStudio() {
           categoryId,
           position,
           name: item.name,
-          nameI18n: { ka: item.ka },
+          nameI18n: { ka: item.ka, ru: item.ru },
           description: item.note ?? null,
-          descriptionI18n: item.noteKa ? { ka: item.noteKa } : undefined,
+          descriptionI18n: item.noteKa ? { ka: item.noteKa, ...(item.noteRu ? { ru: item.noteRu } : {}) } : undefined,
           durationMinutes: item.minutes,
           price: item.price,
           priceFrom: item.from ?? false,
         },
       });
+      await addRussian("service", serviceId, { nameI18n: [serviceRow.nameI18n, item.ru], descriptionI18n: [serviceRow.descriptionI18n, item.noteRu] });
       for (const professionalId of category.staff) {
         await prisma.serviceProfessional.upsert({
           where: { serviceId_professionalId: { serviceId, professionalId } },
@@ -512,10 +582,29 @@ async function seedBeautyStudio() {
     });
   }
 
+  // R570: a studio seeded before Russian existed publishes in it too.
+  const config = (tenant.configJson ?? {}) as { enabledLocales?: string[]; copy?: { titleI18n?: object; descriptionI18n?: object } };
+  if (!config.enabledLocales?.includes("ru")) {
+    await prisma.tenant.update({
+      where: { id: tenant.id },
+      data: {
+        configJson: {
+          ...config,
+          enabledLocales: [...(config.enabledLocales ?? ["en", "ka"]), "ru"],
+          copy: {
+            ...config.copy,
+            titleI18n: { ...config.copy?.titleI18n, ru: COPY_I18N.title.ru },
+            descriptionI18n: { ...config.copy?.descriptionI18n, ru: COPY_I18N.description.ru },
+          },
+        },
+      },
+    });
+  }
+
   await seedSubscription(tenant.id);
 
   // eslint-disable-next-line no-console
-  console.log(`Seeded tenant "${tenant.subdomain}" — ${serviceNumber} services in ${menu.length} categories — login as owner@beauty.local / password123`);
+  console.log(`Seeded tenant "${tenant.subdomain}" — ${serviceNumber} services in ${menu.length} categories — login as ${studio.email} / password123`);
 }
 
 /** R480: a 14-day trial from when the salon was first seeded; left alone on re-runs. */

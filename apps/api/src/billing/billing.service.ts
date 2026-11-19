@@ -25,12 +25,12 @@ import type { Prisma, Subscription, SubscriptionPayment } from "../../generated/
 import { PrismaService } from "../prisma/prisma.service.js";
 import { TenantContextService } from "../tenant/tenant-context.service.js";
 import { RevalidationService } from "../cms/revalidation.service.js";
+import { zonedMonth } from "../common/timezone.js";
 import { addCycle, TRIAL_MS } from "./billing-config.js";
 import { FlittClient, FlittError, type FlittOrder } from "./flitt.client.js";
 import { PlanCatalog } from "./plan-catalog.service.js";
 import { DEFAULT_PLAN, locationLimit, planFits, planIn, toMinorUnits, toWirePlan, type PlanDefinition } from "./plans.js";
 import { matchesPayment, settle } from "./settle-payment.js";
-import { EXTRA_TEXT_PRICE, extraTexts, usageWindow } from "./sms-usage.js";
 import { deriveStatus, nextPeriodStart, renewalDue, type DerivedStatus } from "./subscription-status.js";
 
 /** R470: the card check's amount, refunded by Flitt at once. */
@@ -46,7 +46,8 @@ const PROCESSING_CHECK_MS = 3000;
 const PROCESSING_CHECKS = 3;
 const FINAL_STATUSES = new Set(["approved", "declined", "expired", "reversed"]);
 
-export type CheckoutLang = "ka" | "en";
+/** R570: Flitt's payment page opens in the CMS's language. */
+export type CheckoutLang = "ka" | "en" | "ru";
 
 /** `<tenant id>.<kind>.<suffix>`: what lets a callback find its tenant (system_design.md §12b). */
 export function orderIdFor(tenantId: string, kind: SubscriptionPaymentKind, suffix: string): string {
@@ -71,8 +72,6 @@ const toSummary = (payment: SubscriptionPayment): SubscriptionPaymentSummary => 
   status: payment.status as SubscriptionPaymentStatus,
   periodStart: payment.periodStart?.toISOString() ?? null,
   periodEnd: payment.periodEnd?.toISOString() ?? null,
-  extraTexts: payment.extraTexts,
-  extraTextsAmount: payment.extraTextsAmount.toFixed(2),
   cardMasked: payment.cardMasked,
   failureReason: payment.failureReason,
   createdAt: payment.createdAt.toISOString(),
@@ -180,12 +179,11 @@ export class BillingService {
   async overview(): Promise<SubscriptionOverview> {
     const { tenantId } = this.tenantContext.current;
     const now = new Date();
-    const { subscription, payments, sms, activeLocations, plans } = await this.prisma.forTenant(async (tx) => {
+    const { subscription, payments, activeLocations, plans } = await this.prisma.forTenant(async (tx) => {
       const current = await this.subscriptionIn(tx, tenantId);
       return {
         subscription: current,
         plans: await this.catalog.allIn(tx),
-        sms: await this.smsUsageIn(tx, tenantId, current, now),
         activeLocations: await this.activeLocationsIn(tx, tenantId),
         payments: await tx.subscriptionPayment.findMany({
         where: {
@@ -213,55 +211,23 @@ export class BillingService {
       card: subscription.cardMasked ? { masked: subscription.cardMasked, brand: subscription.cardBrand } : null,
       plans: plans.filter((plan) => plan.offered || plan.id === subscription.planId || plan.id === subscription.nextPlanId).map(toWirePlan),
       payments: payments.map(toSummary),
-      sms,
       billingAvailable: this.flitt.configured,
       activeLocations,
       locationLimit: this.limitOf(subscription, plans, now),
     };
   }
 
-  /** R500: texts used in the current usage window (billing month, or calendar month outside one), and what's extra. */
-  private async smsUsageIn(tx: Prisma.TransactionClient, tenantId: string, subscription: Subscription, now: Date): Promise<SubscriptionOverview["sms"]> {
+  /** R500: texts sent this calendar month on the salon's clock — the platform's cost (no plan limits them). */
+  private async textsThisMonthIn(tx: Prisma.TransactionClient, tenantId: string, now: Date): Promise<number> {
     const { timezone } = await tx.tenant.findUniqueOrThrow({ where: { id: tenantId }, select: { timezone: true } });
-    const window = usageWindow({
-      derived: this.derive(subscription, now),
-      paidThrough: subscription.paidThrough,
-      currentPeriodStart: subscription.paidThrough ? await this.periodStartIn(tx, tenantId, subscription.paidThrough) : null,
-      cancelAtPeriodEnd: subscription.cancelAtPeriodEnd,
-      now,
-      cycle: this.config.cycle,
-      timeZone: timezone,
-    });
-    const used = await this.textsIn(tx, tenantId, window.start, window.end);
-    const included = planIn(await this.catalog.allIn(tx), subscription.planId)?.smsIncluded ?? 0;
-    const extra = extraTexts(used, included);
-    return {
-      used,
-      included,
-      periodStart: window.start.toISOString(),
-      periodEnd: window.end.toISOString(),
-      billingMonth: window.kind === "billing",
-      billable: window.billable,
-      extra: extra.count,
-      extraAmount: extra.amount,
-      extraTextPrice: EXTRA_TEXT_PRICE,
-    };
+    const month = zonedMonth(now, timezone);
+    return this.textsIn(tx, tenantId, month.start, month.end);
   }
 
   /** SMS parts the provider accepted in [start, end). */
   private async textsIn(tx: Prisma.TransactionClient, tenantId: string, start: Date, end: Date): Promise<number> {
     const { _sum } = await tx.smsMessage.aggregate({ where: { tenantId, sentAt: { gte: start, lt: end } }, _sum: { parts: true } });
     return _sum.parts ?? 0;
-  }
-
-  /** Where the paid month ending at `paidThrough` began: the start of the payment that bought it. */
-  private async periodStartIn(tx: Prisma.TransactionClient, tenantId: string, paidThrough: Date): Promise<Date | null> {
-    const payment = await tx.subscriptionPayment.findFirst({
-      where: { tenantId, status: "approved", kind: { in: ["signup", "renewal"] }, periodEnd: paidThrough },
-      orderBy: { settledAt: "desc" },
-      select: { periodStart: true },
-    });
-    return payment?.periodStart ?? null;
   }
 
   /**
@@ -442,15 +408,8 @@ export class BillingService {
         return { orderId, existing: true, createdAt: existing.createdAt, amount: existing.amount.toFixed(2), description: "", rectoken: subscription.rectoken };
       }
 
-      // R500: the month just ended's extra texts ride along, against the
-      // allowance of the plan that month was paid for. That month is over, so
-      // the count can't move: a retried renewal charges the same.
-      const endedFrom = await this.periodStartIn(tx, tenantId, subscription.paidThrough);
-      const allowance = planIn(plans, subscription.planId)?.smsIncluded ?? 0;
-      const extra = endedFrom
-        ? extraTexts(await this.textsIn(tx, tenantId, endedFrom, subscription.paidThrough), allowance)
-        : extraTexts(0, allowance);
-      const amount = ((toMinorUnits(plan.price) + extra.tetri) / 100).toFixed(2);
+      // R500: texts are unlimited, so a renewal is the plan's price and nothing else.
+      const amount = plan.price;
 
       await tx.subscriptionPayment.create({
         data: {
@@ -461,12 +420,9 @@ export class BillingService {
           amount,
           periodStart: subscription.paidThrough,
           periodEnd: addCycle(subscription.paidThrough, this.config.cycle),
-          extraTexts: extra.count,
-          extraTextsAmount: extra.amount,
-          extraTextsFrom: extra.count > 0 ? endedFrom : null,
         },
       });
-      const description = `Subscription: ${plan.id} plan${extra.count > 0 ? ` + ${extra.count} extra texts` : ""}`;
+      const description = `Subscription: ${plan.id} plan`;
       return { orderId, existing: false, createdAt: now, amount, description, rectoken: subscription.rectoken };
     });
     if (!claim) return "none";
@@ -508,15 +464,14 @@ export class BillingService {
   async adminSummary(): Promise<AdminTenantSummary["subscription"]> {
     const { tenantId } = this.tenantContext.current;
     const now = new Date();
-    const { subscription, sms } = await this.prisma.forTenant(async (tx) => {
-      const current = await this.subscriptionIn(tx, tenantId);
-      return { subscription: current, sms: await this.smsUsageIn(tx, tenantId, current, now) };
-    });
+    const { subscription, texts } = await this.prisma.forTenant(async (tx) => ({
+      subscription: await this.subscriptionIn(tx, tenantId),
+      texts: await this.textsThisMonthIn(tx, tenantId, now),
+    }));
     const derived = this.derive(subscription, now);
     return {
-      // R500: so the platform sees who outgrows their plan
-      smsUsed: sms.used,
-      smsIncluded: sms.included,
+      // R500: the platform's SMS cost for this salon
+      smsThisMonth: texts,
       status: derived.status,
       planId: subscription.planId as SubscriptionPlanId,
       accessUntil: derived.accessUntil.toISOString(),

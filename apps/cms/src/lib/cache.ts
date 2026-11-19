@@ -1,4 +1,5 @@
 import type {
+  CmsLang,
   AppointmentSummary,
   CmsAppointmentListQuery,
   CmsDashboardQuery,
@@ -267,8 +268,8 @@ export const cachedApi = {
       rememberSubscription(result.subscription);
       return result;
     }),
-  startCheckout: (planId: SubscriptionPlanId, lang: "ka" | "en") => cmsApiClient.startCheckout({ planId, lang }),
-  startCardChange: (lang: "ka" | "en") => cmsApiClient.startCardChange({ lang }),
+  startCheckout: (planId: SubscriptionPlanId, lang: CmsLang) => cmsApiClient.startCheckout({ planId, lang }),
+  startCardChange: (lang: CmsLang) => cmsApiClient.startCardChange({ lang }),
   // R380: never cached — a short list, and a block must show the moment it's made.
   // Blocking changes what every listed appointment says about its customer.
   listBlockedPhones: () => cmsApiClient.listBlockedPhones(),

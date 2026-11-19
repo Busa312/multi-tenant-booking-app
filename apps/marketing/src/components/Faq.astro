@@ -1,0 +1,33 @@
+---
+import type { Messages } from "../i18n";
+import { sectionClasses as c } from "../lib/sectionClasses";
+import Icon from "./Icon.astro";
+import SectionHeading from "./SectionHeading.astro";
+
+interface Props {
+  t: Messages;
+}
+
+const { t } = Astro.props;
+---
+
+<section id="faq" class:list={["bg-base-200", c.band]}>
+  <div class="mx-auto w-full max-w-3xl">
+    <div class="reveal">
+      <SectionHeading eyebrow={t.faq.eyebrow} title={t.faq.title} />
+    </div>
+    <div class="mt-16 border-b border-base-300">
+      {
+        t.faq.items.map((item) => (
+          <details class="group border-t border-base-300">
+            <summary class="flex cursor-pointer list-none items-center justify-between gap-6 py-6 text-lg font-medium md:text-xl [&::-webkit-details-marker]:hidden">
+              {item.q}
+              <Icon name="arrow" class="size-5 shrink-0 rotate-90 transition-transform group-open:-rotate-90 motion-reduce:transition-none" />
+            </summary>
+            <p class="pb-6 pe-10 text-lg leading-relaxed text-base-content/60">{item.a}</p>
+          </details>
+        ))
+      }
+    </div>
+  </div>
+</section>

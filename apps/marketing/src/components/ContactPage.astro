@@ -1,0 +1,69 @@
+---
+import { messagesFor, type Locale } from "../i18n";
+import BaseLayout from "../layouts/BaseLayout.astro";
+import { contactAction, contactLimits as max } from "../lib/contactForm";
+import { sectionClasses as c } from "../lib/sectionClasses";
+import { contactEmail } from "../lib/site";
+import ContactField from "./ContactField.astro";
+import SiteFooter from "./SiteFooter.astro";
+import SiteHeader from "./SiteHeader.astro";
+
+interface Props {
+  locale: Locale;
+}
+
+const { locale } = Astro.props;
+const t = messagesFor(locale);
+const f = t.contact;
+---
+
+<BaseLayout locale={locale} t={t} path="contact/" title={f.meta.title} description={f.meta.description}>
+  <SiteHeader locale={locale} t={t} path="contact/" />
+  <main class:list={["bg-base-200", c.band]}>
+    <div class={c.narrow}>
+      <p class={c.eyebrow}>{f.eyebrow}</p>
+      <h1 class={c.title}>{f.title}</h1>
+      <p class={c.lead}>{f.lead}</p>
+    </div>
+
+    <!-- R580: a plain form, no script. The API stores the request and sends the
+         visitor back to /contact/thanks/ (or /contact/sorry/) in this language. -->
+    <form method="post" action={contactAction} class="mx-auto mt-14 flex max-w-2xl flex-col gap-6 rounded-box border border-base-300 bg-base-100 p-6 md:mt-16 md:p-10">
+      <input type="hidden" name="locale" value={locale} />
+      <div class="grid gap-6 sm:grid-cols-2">
+        <ContactField label={f.name} name="name" required maxlength={max.name} autocomplete="name" />
+        <ContactField label={f.business} name="business" required maxlength={max.business} autocomplete="organization" />
+        <ContactField
+          label={f.phone}
+          name="phone"
+          type="tel"
+          required
+          maxlength={max.phone}
+          autocomplete="tel"
+          placeholder={f.phonePlaceholder}
+          pattern="\+?[0-9 ()\-]{6,40}"
+        />
+        <ContactField label={f.email} name="email" type="email" optionalLabel={f.optional} maxlength={max.email} autocomplete="email" />
+      </div>
+      <label class="flex flex-col gap-2">
+        <span class="text-sm font-medium">
+          {f.message}
+          <span class="font-normal text-base-content/50"> · {f.optional}</span>
+        </span>
+        <textarea class="textarea textarea-lg w-full" name="message" rows="4" maxlength={max.message} placeholder={f.messagePlaceholder}></textarea>
+      </label>
+      <!-- A field people never see; a bot that fills it is thanked and ignored. -->
+      <div class="absolute -left-[9999px]" aria-hidden="true">
+        <label>Website <input name="website" tabindex="-1" autocomplete="off" /></label>
+      </div>
+      <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <p class="text-sm text-base-content/60">{f.privacy}</p>
+        <button type="submit" class="btn btn-primary btn-lg px-10">{f.submit}</button>
+      </div>
+    </form>
+    <p class="mt-8 text-center text-base-content/60">
+      {f.orEmail} <a href={`mailto:${contactEmail}`} class="font-medium text-base-content underline underline-offset-4">{contactEmail}</a>
+    </p>
+  </main>
+  <SiteFooter locale={locale} t={t} path="contact/" />
+</BaseLayout>

@@ -3,10 +3,12 @@ import { ConfigService } from "@nestjs/config";
 import { ApiExcludeController } from "@nestjs/swagger";
 import type { FastifyReply } from "fastify";
 import type {
+  AdminContactRequest,
   AdminLoginRequest,
   AdminPlan,
   AdminSession,
   AdminTenantSummary,
+  AdminUpdateContactRequest,
   AdminUpdatePlanRequest,
   AdminUpdateSubscriptionRequest,
   OnboardTenantRequest,
@@ -18,6 +20,7 @@ import { OnboardingService } from "../internal/onboarding.service.js";
 import { OwnerSetupLinkService } from "../internal/owner-setup-link.service.js";
 import { BillingService } from "../billing/billing.service.js";
 import { PlanCatalog } from "../billing/plan-catalog.service.js";
+import { ContactService } from "../contact/contact.service.js";
 import { PrismaService } from "../prisma/prisma.service.js";
 import { TenantContextService } from "../tenant/tenant-context.service.js";
 import { AdminAuthService } from "./admin-auth.service.js";
@@ -45,6 +48,7 @@ export class AdminApiController {
     private readonly prisma: PrismaService,
     private readonly tenantContext: TenantContextService,
     private readonly setupLinks: OwnerSetupLinkService,
+    private readonly contact: ContactService,
     config: ConfigService,
   ) {
     this.cookie = adminCookieConfig((key) => config.get<string>(key));
@@ -118,6 +122,24 @@ export class AdminApiController {
   updatePlan(@Param("id") id: string, @Body() body: AdminUpdatePlanRequest): Promise<AdminPlan> {
     if (!/^[a-z][a-z0-9_]{0,31}$/.test(id)) throw new BadRequestException("Invalid plan id");
     return this.plans.update(id, body);
+  }
+
+  // R580: requests from the marketing site's contact page
+  @Get("contact-requests")
+  @UseGuards(AdminSessionGuard)
+  @RateLimit({ name: "admin-read", ...LIMIT_READ })
+  listContactRequests(): Promise<AdminContactRequest[]> {
+    return this.contact.list();
+  }
+
+  @Post("contact-requests/:id")
+  @HttpCode(200)
+  @UseGuards(AdminSessionGuard)
+  @RateLimit({ name: "admin-write", max: 120, windowSeconds: 60 * 60 })
+  updateContactRequest(@Param("id") id: string, @Body() body: AdminUpdateContactRequest): Promise<AdminContactRequest> {
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(id)) throw new BadRequestException("Invalid request id");
+    if (typeof body?.handled !== "boolean") throw new BadRequestException("handled must be true or false");
+    return this.contact.setHandled(id, body.handled);
   }
 
   @Post("tenants")

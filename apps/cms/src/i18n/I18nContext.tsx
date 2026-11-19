@@ -1,8 +1,10 @@
 import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from "react";
 import enRaw from "./messages/en.json";
 import kaRaw from "./messages/ka.json";
+import ruRaw from "./messages/ru.json";
 
-export type Lang = "en" | "ka";
+/** The CMS's languages; Russian is R570. Same as `CmsLang` in shared-types. */
+export type Lang = "en" | "ka" | "ru";
 
 // Widen JSON's inferred string-literal types to plain `string` so every locale
 // is assignable to one shared Messages shape — which also makes a missing or
@@ -12,13 +14,15 @@ export type Messages = Widen<typeof enRaw>;
 
 const en: Messages = enRaw;
 const ka: Messages = kaRaw;
-const DICTS: Record<Lang, Messages> = { en, ka };
+const ru: Messages = ruRaw;
+const DICTS: Record<Lang, Messages> = { en, ka, ru };
 
 // Language names are shown as endonyms (each in its own script), so they are the
 // same regardless of the active language.
 export const LOCALES: { code: Lang; label: string }[] = [
   { code: "en", label: "English" },
   { code: "ka", label: "ქართული" },
+  { code: "ru", label: "Русский" },
 ];
 
 const STORAGE_KEY = "booking_cms_lang";
@@ -51,10 +55,11 @@ function interpolate(template: string, vars?: Vars): string {
 
 function detectInitial(): Lang {
   const stored = localStorage.getItem(STORAGE_KEY);
-  if (stored === "en" || stored === "ka") {
+  if (stored === "en" || stored === "ka" || stored === "ru") {
     return stored;
   }
-  return navigator.language.toLowerCase().startsWith("ka") ? "ka" : "en";
+  const browser = navigator.language.toLowerCase();
+  return browser.startsWith("ka") ? "ka" : browser.startsWith("ru") ? "ru" : "en";
 }
 
 export function I18nProvider({ children }: { children: ReactNode }) {

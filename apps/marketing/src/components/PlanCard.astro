@@ -1,0 +1,52 @@
+---
+import { contactPath, type Locale, type Messages } from "../i18n";
+import type { MarketingPlan } from "../lib/plans";
+import Icon from "./Icon.astro";
+
+interface Props {
+  plan: MarketingPlan;
+  locale: Locale;
+  t: Messages;
+  /** The last (top) plan of several, set dark. */
+  top?: boolean;
+}
+
+const { plan, locale, t, top = false } = Astro.props;
+const p = t.pricing;
+const name = p.planNames[plan.id];
+// The top plan is set dark, the others on paper — a tier, not a recommendation.
+const dark = top;
+const features = [
+  p.locations(plan.locations),
+  ...p.included,
+  ...(plan.prioritySupport ? [p.prioritySupport] : []),
+];
+---
+
+<article class={dark ? "reveal flex flex-col rounded-box bg-neutral p-8 text-neutral-content md:p-10" : "reveal flex flex-col rounded-box border border-base-300 bg-base-100 p-8 md:p-10"}>
+  <div class="flex min-h-7 flex-wrap items-center justify-between gap-2">
+    <h3 class="text-xl font-semibold tracking-tight">{name}</h3>
+    {plan.early && <span class="badge badge-accent badge-sm">{p.earlyBadge}</span>}
+  </div>
+  <p class="mt-8 flex items-baseline gap-2">
+    <span class="font-display text-7xl font-semibold tracking-tight">{plan.price}</span>
+    <span class="text-2xl font-semibold">₾</span>
+    <span class={dark ? "text-neutral-content/60" : "text-base-content/60"}>{p.perMonth}</span>
+  </p>
+  <ul class="mt-8 flex flex-1 flex-col gap-3">
+    {
+      features.map((feature) => (
+        <li class="flex gap-3">
+          <Icon name="check" class="mt-0.5 size-5 shrink-0" />
+          <span>{feature}</span>
+        </li>
+      ))
+    }
+  </ul>
+  <a
+    href={contactPath(locale)}
+    class={dark ? "btn btn-lg mt-10 border-none bg-neutral-content text-neutral" : "btn btn-primary btn-lg mt-10"}
+  >
+    {p.cta}
+  </a>
+</article>

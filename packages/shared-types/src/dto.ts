@@ -417,11 +417,14 @@ export interface SetPasswordRequest {
   password: string;
 }
 
+/** The CMS's languages (R570 added Russian); also the language of its emails and of Flitt's payment page. */
+export type CmsLang = "en" | "ka" | "ru";
+
 // R310: always answered the same way, whether or not the account exists
 export interface ForgotPasswordRequest {
   subdomain: string;
   email: string;
-  /** R310: the CMS's language ("en" | "ka"); the email is written in it. */
+  /** R310: the CMS's language (a `CmsLang`); the email is written in it. */
   locale?: string;
 }
 
@@ -557,10 +560,45 @@ export interface AdminTenantSummary {
     /** null = never paid. */
     paidThrough: string | null;
     free: boolean;
-    /** R500: texts in the current usage window, and the plan's allowance. */
-    smsUsed: number;
-    smsIncluded: number;
+    /** R500: texts sent this calendar month (salon's clock) — the platform's cost; no salon has a limit. */
+    smsThisMonth: number;
   };
+}
+
+/** R560: the plans an owner can choose now, in page order — read by the marketing site when it builds. */
+export interface OfferedPlansResponse {
+  plans: SubscriptionPlan[];
+}
+
+/** R580: what the marketing site's contact form posts (as an HTML form). */
+export interface ContactFormRequest {
+  name: string;
+  business: string;
+  phone: string;
+  email?: string;
+  message?: string;
+  /** The page's language: "ka" | "en" | "ru". */
+  locale?: string;
+  /** Honeypot: hidden from people, so anything in it means a bot. */
+  website?: string;
+}
+
+/** R580: one contact request as the platform admin sees it. */
+export interface AdminContactRequest {
+  id: string;
+  name: string;
+  business: string;
+  phone: string;
+  email: string | null;
+  message: string | null;
+  locale: string;
+  createdAt: string;
+  /** null = still open. */
+  handledAt: string | null;
+}
+
+export interface AdminUpdateContactRequest {
+  handled: boolean;
 }
 
 /** R550: a plan as the platform admin sees and edits it. */
@@ -573,7 +611,6 @@ export interface AdminPlan extends SubscriptionPlan {
 export interface AdminUpdatePlanRequest {
   /** GEL per month, e.g. "90.00". */
   price?: string;
-  smsIncluded?: number;
   /** null = no limit. */
   maxLocations?: number | null;
   prioritySupport?: boolean;
@@ -604,8 +641,7 @@ export interface SubscriptionPlan {
   id: SubscriptionPlanId;
   /** GEL per month, two decimals. */
   price: string;
-  smsIncluded: number;
-  /** R540: active locations the plan allows; null = no limit. */
+  /** R540: active locations the plan allows; null = no limit. Texts are unlimited on every plan (R500). */
   maxLocations: number | null;
   prioritySupport: boolean;
 }
@@ -631,9 +667,6 @@ export interface SubscriptionPaymentSummary {
   status: SubscriptionPaymentStatus;
   periodStart: string | null;
   periodEnd: string | null;
-  /** R500: texts beyond the allowance in the month before `periodStart`, charged with this renewal (included in `amount`). */
-  extraTexts: number;
-  extraTextsAmount: string;
   cardMasked: string | null;
   failureReason: string | null;
   createdAt: string;
@@ -656,26 +689,6 @@ export interface SubscriptionOverview {
   plans: SubscriptionPlan[];
   /** Newest first. */
   payments: SubscriptionPaymentSummary[];
-  /**
-   * R500: texts used (SMS parts) in the current usage window against the
-   * plan's allowance — the billing month, or the calendar month outside one.
-   */
-  sms: {
-    used: number;
-    included: number;
-    periodStart: string;
-    /** Exclusive. */
-    periodEnd: string;
-    /** true = the salon's paid month; false = the calendar month (trial, free use, lapsed). */
-    billingMonth: boolean;
-    /** Whether extra texts in this window will be charged, with the renewal at `periodEnd`. */
-    billable: boolean;
-    /** Texts beyond the allowance so far, and their price (GEL). */
-    extra: number;
-    extraAmount: string;
-    /** GEL per extra text. */
-    extraTextPrice: string;
-  };
   /** false = no payment provider configured here: nothing can be paid. */
   billingAvailable: boolean;
   /** R540: the salon's active locations, and how many it may have now (null = no limit). */

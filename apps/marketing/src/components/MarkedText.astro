@@ -1,0 +1,13 @@
+---
+import type { MarkedTitle } from "../i18n/types";
+import Highlight from "./Highlight.astro";
+
+interface Props {
+  title: MarkedTitle;
+}
+
+const { title } = Astro.props;
+const tight = /^[,.;:!?]/.test(title.after);
+---
+
+{title.before}{title.before ? " " : ""}<Highlight tight={tight}>{title.mark}</Highlight>{title.after}

@@ -18,7 +18,6 @@ export const ICON_NAMES = [
   "chevron_right",
   "close",
   "content_copy",
-  "content_cut",
   "credit_card",
   "dark_mode",
   "delete",

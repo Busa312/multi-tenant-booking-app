@@ -18,7 +18,6 @@ export function toPlanDefinition(row: PlanRow): PlanDefinition {
   return {
     id: row.id as SubscriptionPlanId,
     price: row.price.toFixed(2),
-    smsIncluded: row.smsIncluded,
     maxLocations: row.maxLocations,
     prioritySupport: row.prioritySupport,
     offered: row.offered,
@@ -76,7 +75,6 @@ export function planFits(plan: SubscriptionPlan, active: number): boolean {
 }
 
 const PRICE = /^\d{1,6}(\.\d{1,2})?$/;
-const MAX_SMS = 1_000_000;
 const MAX_LOCATIONS = 1000;
 
 /**
@@ -91,12 +89,6 @@ export function validatePlanUpdate(body: AdminUpdatePlanRequest | null | undefin
     const price = typeof body.price === "string" ? body.price.trim() : "";
     if (!PRICE.test(price) || Number(price) < 1) throw new BadRequestException("price must be at least 1.00 GEL, with up to two decimals");
     data.price = price;
-  }
-  if (body.smsIncluded !== undefined) {
-    if (!Number.isInteger(body.smsIncluded) || body.smsIncluded < 0 || body.smsIncluded > MAX_SMS) {
-      throw new BadRequestException(`smsIncluded must be a whole number, 0–${MAX_SMS}`);
-    }
-    data.smsIncluded = body.smsIncluded;
   }
   if (body.maxLocations !== undefined) {
     if (body.maxLocations !== null && (!Number.isInteger(body.maxLocations) || body.maxLocations < 1 || body.maxLocations > MAX_LOCATIONS)) {

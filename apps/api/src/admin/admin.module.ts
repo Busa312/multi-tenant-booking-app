@@ -1,4 +1,5 @@
 import { Module } from "@nestjs/common";
+import { ContactModule } from "../contact/contact.module.js";
 import { OnboardingModule } from "../internal/onboarding.module.js";
 import { BillingModule } from "../billing/billing.module.js";
 import { AdminAuthService } from "./admin-auth.service.js";
@@ -8,7 +9,7 @@ import { AdminPageController } from "./admin-page.controller.js";
 
 // R430: the platform admin page and its API
 @Module({
-  imports: [OnboardingModule, BillingModule],
+  imports: [OnboardingModule, BillingModule, ContactModule],
   controllers: [AdminPageController, AdminApiController],
   providers: [AdminAuthService, AdminSessionGuard],
 })

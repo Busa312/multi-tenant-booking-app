@@ -4,12 +4,12 @@
  * that comes from a salon or a user is escaped before it goes into the HTML.
  */
 
-/** The CMS's languages (apps/cms/src/i18n). */
-export type MailLang = "en" | "ka";
+/** The CMS's languages (apps/cms/src/i18n; Russian is R570). */
+export type MailLang = "en" | "ka" | "ru";
 
 /** A language from a request; anything else is Georgian, the CMS's main audience. */
 export function toMailLang(value: unknown): MailLang {
-  return value === "en" ? "en" : "ka";
+  return value === "en" || value === "ru" ? value : "ka";
 }
 
 export interface MailContent {
@@ -78,25 +78,33 @@ export interface PasswordResetEmail {
 
 /** R310: the forgot-password link, in the language the CMS was showing. Valid 30 minutes. */
 export function passwordResetEmail({ lang, salonName, email, resetUrl }: PasswordResetEmail): MailContent {
-  const part: Part =
-    lang === "en"
-      ? {
-          subject: `Reset your password · ${salonName}`,
-          blocks: [
-            { kind: "p", text: `Someone asked to reset the password of ${email} at ${salonName}.` },
-            { kind: "button", label: "Choose a new password", href: resetUrl },
-            { kind: "p", text: "The link works once, for 30 minutes. If it wasn't you, ignore this email: your password stays as it is." },
-          ],
-        }
-      : {
-          subject: `პაროლის აღდგენა · ${salonName}`,
-          blocks: [
-            { kind: "p", text: `მოთხოვნილია ${email}-ის პაროლის აღდგენა (${salonName}).` },
-            { kind: "button", label: "ახალი პაროლის არჩევა", href: resetUrl },
-            { kind: "p", text: "ბმული ერთხელ მუშაობს, 30 წუთის განმავლობაში. თუ ეს თქვენ არ ყოფილხართ, ყურადღება არ მიაქციოთ ამ წერილს: პაროლი არ შეიცვლება." },
-          ],
-        };
-  return compose([part]);
+  const parts: Record<MailLang, Part> = {
+    en: {
+      subject: `Reset your password · ${salonName}`,
+      blocks: [
+        { kind: "p", text: `Someone asked to reset the password of ${email} at ${salonName}.` },
+        { kind: "button", label: "Choose a new password", href: resetUrl },
+        { kind: "p", text: "The link works once, for 30 minutes. If it wasn't you, ignore this email: your password stays as it is." },
+      ],
+    },
+    ru: {
+      subject: `Сброс пароля · ${salonName}`,
+      blocks: [
+        { kind: "p", text: `Кто-то запросил сброс пароля для ${email} в ${salonName}.` },
+        { kind: "button", label: "Выбрать новый пароль", href: resetUrl },
+        { kind: "p", text: "Ссылка срабатывает один раз и действует 30 минут. Если это были не вы, просто проигнорируйте письмо: пароль останется прежним." },
+      ],
+    },
+    ka: {
+      subject: `პაროლის აღდგენა · ${salonName}`,
+      blocks: [
+        { kind: "p", text: `მოთხოვნილია ${email}-ის პაროლის აღდგენა (${salonName}).` },
+        { kind: "button", label: "ახალი პაროლის არჩევა", href: resetUrl },
+        { kind: "p", text: "ბმული ერთხელ მუშაობს, 30 წუთის განმავლობაში. თუ ეს თქვენ არ ყოფილხართ, ყურადღება არ მიაქციოთ ამ წერილს: პაროლი არ შეიცვლება." },
+      ],
+    },
+  };
+  return compose([parts[lang]]);
 }
 
 export interface SetupLinkEmail {
@@ -138,4 +146,36 @@ export function setupLinkEmail({ salonName, workspace, email, cmsUrl, setPasswor
     ],
   };
   return compose([ka, en]);
+}
+
+export interface ContactRequestEmail {
+  name: string;
+  business: string;
+  phone: string;
+  email: string | null;
+  message: string | null;
+  locale: string;
+  /** The admin page, where the request is marked handled. */
+  adminUrl: string | null;
+}
+
+/** R580: a new request from the marketing site's contact page, for platform staff (in English, as the admin page is). */
+export function contactRequestEmail(request: ContactRequestEmail): MailContent {
+  const lines = [
+    `Name: ${request.name}`,
+    `Business: ${request.business}`,
+    `Phone: ${request.phone}`,
+    ...(request.email ? [`Email: ${request.email}`] : []),
+    `Language: ${request.locale}`,
+  ];
+  return compose([
+    {
+      subject: `New contact request · ${request.business}`,
+      blocks: [
+        { kind: "lines", lines },
+        ...(request.message ? [{ kind: "p" as const, text: request.message }] : []),
+        ...(request.adminUrl ? [{ kind: "button" as const, label: "Open the admin page", href: request.adminUrl }] : []),
+      ],
+    },
+  ]);
 }

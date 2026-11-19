@@ -1,0 +1,11 @@
+---
+// The highlighter: the one phrase on a screen that matters most (accent role).
+interface Props {
+  /** Punctuation follows directly: no padding on the right, or the comma looks detached. */
+  tight?: boolean;
+}
+
+const { tight = false } = Astro.props;
+---
+
+<mark class:list={["rounded-[0.12em] bg-accent text-accent-content box-decoration-clone", tight ? "pl-[0.12em]" : "px-[0.12em]"]}><slot /></mark>

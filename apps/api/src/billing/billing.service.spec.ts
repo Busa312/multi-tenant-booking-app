@@ -5,6 +5,7 @@ import type { TenantContextService } from "../tenant/tenant-context.service.js";
 import { BillingService, orderIdFor, tenantOfOrder } from "./billing.service.js";
 import type { FlittClient, FlittOrder } from "./flitt.client.js";
 import type { RevalidationService } from "../cms/revalidation.service.js";
+import type { MarketingRebuild } from "./marketing-rebuild.service.js";
 import { PlanCatalog } from "./plan-catalog.service.js";
 
 const TENANT = "11111111-1111-1111-1111-111111111111";
@@ -30,7 +31,6 @@ interface SubRow {
 interface PlanRow {
   id: string;
   price: Prisma.Decimal;
-  smsIncluded: number;
   maxLocations: number | null;
   prioritySupport: boolean;
   offered: boolean;
@@ -38,14 +38,14 @@ interface PlanRow {
 }
 
 /** The plans as the subscription_plan migration seeds them (R470/R540). */
-const plan = (id: string, price: string, smsIncluded: number, maxLocations: number | null, offered: boolean, position: number): PlanRow => ({
-  id, price: new Prisma.Decimal(price), smsIncluded, maxLocations, prioritySupport: id === "pro", offered, position,
+const plan = (id: string, price: string, maxLocations: number | null, offered: boolean, position: number): PlanRow => ({
+  id, price: new Prisma.Decimal(price), maxLocations, prioritySupport: id === "pro", offered, position,
 });
 const SEEDED_PLANS = [
-  plan("early", "60.00", 600, 1, true, 0),
-  plan("early_pro", "90.00", 1000, 3, true, 1),
-  plan("standard", "90.00", 600, 1, false, 2),
-  plan("pro", "150.00", 1500, null, true, 3),
+  plan("early", "60.00", 1, true, 0),
+  plan("early_pro", "90.00", 3, true, 1),
+  plan("standard", "90.00", 1, false, 2),
+  plan("pro", "150.00", null, true, 3),
 ];
 
 interface PaymentRow {
@@ -172,7 +172,7 @@ function setup(
     status: jest.fn(),
   };
   const revalidation = { revalidateTenant: jest.fn().mockResolvedValue(undefined) };
-  const service = new BillingService(prisma, tenantContext, flitt as unknown as FlittClient, revalidation as unknown as RevalidationService, new PlanCatalog(prisma));
+  const service = new BillingService(prisma, tenantContext, flitt as unknown as FlittClient, revalidation as unknown as RevalidationService, new PlanCatalog(prisma, { rebuild: jest.fn() } as unknown as MarketingRebuild));
   return { service, sub, payments, tx, flitt, revalidation };
 }
 
@@ -334,37 +334,21 @@ describe("BillingService.renewIfDue", () => {
     expect(sub.paidThrough?.getTime()).toBeGreaterThan(now);
   });
 
-  // R500
-  it("adds the month just ended's extra texts to the renewal, as one charge", async () => {
+  // R500: texts are unlimited on every plan
+  it("charges only the plan's price, however many texts were sent", async () => {
     const ended = { periodStart: days(-30.5), periodEnd: days(-0.5) };
-    const { service, flitt, payments, tx } = setup(paying, { smsParts: 620, payments: [ended] });
+    const { service, flitt, payments, tx } = setup(paying, { smsParts: 5000, payments: [ended] });
     flitt.recurring.mockImplementation(({ orderId }: { orderId: string }) =>
-      Promise.resolve({ order_id: orderId, order_status: "approved", amount: "6140", currency: "GEL" }),
+      Promise.resolve({ order_id: orderId, order_status: "approved", amount: "6000", currency: "GEL" }),
     );
 
     await expect(service.renewIfDue(new Date(now))).resolves.toBe("settled");
 
-    expect(flitt.recurring).toHaveBeenCalledWith(expect.objectContaining({ amount: 6140, description: "Subscription: early plan + 20 extra texts" }));
+    expect(flitt.recurring).toHaveBeenCalledWith(expect.objectContaining({ amount: 6000, description: "Subscription: early plan" }));
     const renewal = payments.find((p) => p.kind === "renewal");
-    expect(renewal).toMatchObject({ extraTexts: 20, extraTextsFrom: ended.periodStart, status: "approved" });
-    expect((renewal?.extraTextsAmount as Prisma.Decimal).toFixed(2)).toBe("1.40");
-    expect(Number(renewal?.amount)).toBe(61.4);
-    // Counted over exactly the month that ended.
-    const where = tx.smsMessage.aggregate.mock.calls[0]?.[0]?.where as { sentAt: { gte: Date; lt: Date } };
-    expect(where.sentAt).toEqual({ gte: ended.periodStart, lt: paying.paidThrough });
-  });
-
-  it("charges extra texts against the allowance of the plan the month was paid for, not the next one", async () => {
-    const ended = { periodStart: days(-30.5), periodEnd: days(-0.5) };
-    const { service, flitt } = setup({ ...paying, nextPlanId: "pro" }, { smsParts: 620, payments: [ended] });
-    flitt.recurring.mockImplementation(({ orderId }: { orderId: string }) =>
-      Promise.resolve({ order_id: orderId, order_status: "approved", amount: "15140", currency: "GEL" }),
-    );
-
-    await service.renewIfDue(new Date(now));
-
-    // Early's 600 texts, not Pro's 1,500: 20 extra on top of Pro's price.
-    expect(flitt.recurring).toHaveBeenCalledWith(expect.objectContaining({ amount: 15140 }));
+    expect(Number(renewal?.amount)).toBe(60);
+    expect(renewal).toMatchObject({ extraTexts: 0 });
+    expect(tx.smsMessage.aggregate).not.toHaveBeenCalled();
   });
 
   it("renews on the plan the owner switched to", async () => {
@@ -430,51 +414,23 @@ describe("BillingService.update / confirm", () => {
 });
 
 // R500
-describe("BillingService.overview — texts this month", () => {
-  it("sums this calendar month's SMS parts against the plan's allowance", async () => {
-    const { service, tx } = setup({ planId: "pro" }, { smsParts: 214 });
+describe("BillingService — texts", () => {
+  it("shows the owner no text count: there is no limit to count against", async () => {
+    const { service, tx } = setup({ planId: "early" }, { smsParts: 5000 });
 
-    const { sms } = await service.overview();
+    const overview = await service.overview();
 
-    expect(sms).toMatchObject({ used: 214, included: 1500 });
+    expect(overview).not.toHaveProperty("sms");
+    expect(tx.smsMessage.aggregate).not.toHaveBeenCalled();
+  });
+
+  it("tells the platform admin this calendar month's texts, its own cost", async () => {
+    const { service, tx } = setup({}, { smsParts: 214 });
+
+    expect(await service.adminSummary()).toMatchObject({ smsThisMonth: 214 });
     const where = tx.smsMessage.aggregate.mock.calls[0]?.[0]?.where as { tenantId: string; sentAt: { gte: Date; lt: Date } };
     expect(where.tenantId).toBe(TENANT);
-    expect(where.sentAt.gte.toISOString()).toBe(sms.periodStart);
-    expect(where.sentAt.lt.toISOString()).toBe(sms.periodEnd);
-  });
-
-  it("is zero, not missing, in a month with no texts", async () => {
-    const { service } = setup();
-
-    expect((await service.overview()).sms).toMatchObject({ used: 0, included: 600 });
-  });
-
-  it("counts a trial's texts by calendar month and never charges them", async () => {
-    const { service } = setup({}, { smsParts: 650 });
-
-    expect((await service.overview()).sms).toMatchObject({ billingMonth: false, billable: false, extra: 50, extraAmount: "3.50" });
-  });
-
-  it("counts a paying salon's texts over its paid month, and prices what's extra at 0.07 ₾", async () => {
-    const start = days(-10);
-    const end = days(20);
-    const { service } = setup(
-      { trialEndsAt: days(-30), paidThrough: end },
-      { smsParts: 620, payments: [{ periodStart: start, periodEnd: end }] },
-    );
-
-    const { sms } = await service.overview();
-
-    expect(sms).toMatchObject({
-      billingMonth: true,
-      billable: true,
-      periodStart: start.toISOString(),
-      periodEnd: end.toISOString(),
-      used: 620,
-      extra: 20,
-      extraAmount: "1.40",
-      extraTextPrice: "0.07",
-    });
+    expect(where.sentAt.lt.getTime() - where.sentAt.gte.getTime()).toBeGreaterThanOrEqual(28 * 86_400_000);
   });
 });
 
@@ -555,13 +511,6 @@ describe("BillingService — plans edited by the admin", () => {
     await service.renewIfDue();
 
     expect(flitt.recurring).toHaveBeenCalledWith(expect.objectContaining({ amount: 7000 }));
-  });
-
-  it("counts texts against the plan's current allowance", async () => {
-    const generous = SEEDED_PLANS.map((row) => (row.id === "early" ? { ...row, smsIncluded: 1800 } : row));
-    const { service } = setup({}, { plans: generous, smsParts: 700 });
-
-    expect((await service.overview()).sms).toMatchObject({ used: 700, included: 1800, extra: 0 });
   });
 
   it("offers owners only the plans marked offered, plus the one they're on", async () => {

@@ -109,13 +109,15 @@
 /* Typography. One family at two widths: Archivo at normal width for text, and
    condensed (`font-display`) for headings and times — the timetable voice.
    Noto Sans Georgian follows it in both stacks so Georgian is set in a real
-   face at the same widths, not whatever the OS falls back to. The files are
+   face at the same widths, not whatever the OS falls back to, and Noto Sans
+   after that for Russian (R570): Archivo has no Cyrillic, and Noto Sans has
+   the same width axis, so condensed headings stay condensed. The files are
    self-hosted (@fontsource-variable, imported in index.css) and split by
-   unicode-range, so an English session never downloads the Georgian one.
+   unicode-range, so a session only downloads the scripts it shows.
    font-sans resets the width so text nested inside a heading isn't condensed. */
 @theme {
-  --font-sans: "Archivo Variable", "Noto Sans Georgian Variable", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "Archivo Variable", "Noto Sans Georgian Variable", "Noto Sans Variable", ui-sans-serif, system-ui, sans-serif;
   --font-sans--font-variation-settings: "wdth" 100;
-  --font-display: "Archivo Variable", "Noto Sans Georgian Variable", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Archivo Variable", "Noto Sans Georgian Variable", "Noto Sans Variable", ui-sans-serif, system-ui, sans-serif;
   --font-display--font-variation-settings: "wdth" 78;
 }

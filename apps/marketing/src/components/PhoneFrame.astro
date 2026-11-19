@@ -1,0 +1,19 @@
+---
+interface Props {
+  class?: string;
+}
+
+const { class: className = "" } = Astro.props;
+---
+
+<!-- A phone drawn in CSS around a real booking-site screenshot (390×844, as
+     captured). The outer box is a size container and the bezel and corners
+     are in cqw — shares of the phone's own width. (Percent padding would be a
+     share of the *parent's* width and swell the bezel in a wide row.) -->
+<div class:list={["[container-type:inline-size]", className]}>
+  <div class="rounded-[14cqw] bg-neutral p-[2.6cqw] shadow-2xl ring-1 ring-base-300">
+    <div class="relative aspect-[390/844] overflow-hidden rounded-[11.4cqw] bg-base-100">
+      <slot />
+    </div>
+  </div>
+</div>

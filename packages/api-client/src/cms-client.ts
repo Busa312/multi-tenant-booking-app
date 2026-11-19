@@ -1,4 +1,5 @@
 import type {
+  CmsLang,
   AppointmentSummary,
   AvailabilitySlot,
   BusinessHours,
@@ -244,12 +245,12 @@ export class CmsApiClient {
   }
 
   /** Flitt's payment page for a month of the plan; the browser goes there next. */
-  startCheckout(payload: StartCheckoutRequest & { lang?: "ka" | "en" }) {
+  startCheckout(payload: StartCheckoutRequest & { lang?: CmsLang }) {
     return this.http.post<CheckoutResponse>("/cms/subscription/checkout", payload);
   }
 
   /** A refunded 1 GEL check on Flitt's page that replaces the saved card. */
-  startCardChange(payload: { lang?: "ka" | "en" }) {
+  startCardChange(payload: { lang?: CmsLang }) {
     return this.http.post<CheckoutResponse>("/cms/subscription/card", payload);
   }
 

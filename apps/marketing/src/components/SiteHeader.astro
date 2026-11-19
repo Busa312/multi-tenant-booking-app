@@ -1,0 +1,52 @@
+---
+import { contactPath, localeHome, type Locale, type Messages } from "../i18n";
+import { brandName, cmsUrl } from "../lib/site";
+import LanguageLinks from "./LanguageLinks.astro";
+import Logo from "./Logo.astro";
+import MobileMenu from "./MobileMenu.astro";
+
+interface Props {
+  locale: Locale;
+  t: Messages;
+  /** The page under the language's home, for the language links (empty = home). */
+  path?: string;
+}
+
+const { locale, t, path = "" } = Astro.props;
+// Sections of the home page — from the contact page too, so through the home's path.
+const home = localeHome(locale);
+const links = [
+  { href: `${home}#features`, label: t.nav.features },
+  { href: `${home}#how-it-works`, label: t.nav.howItWorks },
+  { href: `${home}#pricing`, label: t.nav.pricing },
+  { href: `${home}#faq`, label: t.nav.faq },
+];
+---
+
+<header class="sticky top-0 z-50 border-b border-base-300/60 bg-base-100/75 backdrop-blur-xl backdrop-saturate-150">
+  <nav class="mx-auto flex h-14 max-w-6xl items-center gap-2 px-4 sm:px-6">
+    <a href={localeHome(locale)} aria-label={`${brandName} — ${t.nav.home}`} class="me-6 shrink-0 whitespace-nowrap">
+      <Logo />
+    </a>
+    <!-- Section links from lg up: Russian and Georgian labels run long, so tablets get the menu. -->
+    <ul class="hidden items-center gap-7 text-sm whitespace-nowrap text-base-content/70 lg:flex">
+      {
+        links.map((link) => (
+          <li>
+            <a href={link.href} class="transition-colors hover:text-base-content">
+              {link.label}
+            </a>
+          </li>
+        ))
+      }
+    </ul>
+    <div class="ms-auto flex items-center gap-1">
+      <div class="me-1 hidden sm:block">
+        <LanguageLinks locale={locale} path={path} label={t.nav.language} variant="codes" />
+      </div>
+      <a href={cmsUrl} class="btn btn-ghost btn-sm hidden font-normal lg:inline-flex">{t.nav.signIn}</a>
+      <a href={contactPath(locale)} class="btn btn-primary btn-sm ms-1 whitespace-nowrap">{t.nav.cta}</a>
+      <MobileMenu locale={locale} t={t} links={links} path={path} />
+    </div>
+  </nav>
+</header>

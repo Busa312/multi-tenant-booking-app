@@ -1,0 +1,52 @@
+---
+import { getImage, Image } from "astro:assets";
+import type { Screen } from "../lib/screens";
+
+interface Props {
+  screen: Screen;
+  alt: string;
+  /** The displayed width, for the browser to pick a file: an `<img sizes>` value. */
+  sizes: string;
+  widths: number[];
+  /** In the first view: load at once instead of waiting until scrolled near. */
+  eager?: boolean;
+  /** The page's largest first-view image (its LCP): also fetched ahead of everything else. One per page. */
+  priority?: boolean;
+}
+
+const { screen, alt, sizes, widths, eager = false, priority = false } = Astro.props;
+
+// Astro's <Image> turns the PNG into WebP files at the widths asked for and
+// writes width/height, so the space is held before the file arrives (no
+// layout shift). WebP, not AVIF: for these flat UI shots AVIF came out the
+// same size or larger, and decodes slower.
+const format = "webp";
+const quality = 82;
+
+// A CMS shot has a dark twin, offered to visitors whose OS is dark (the CMS
+// follows it too) through a <source> in front of the light <Image>.
+const dark = screen.dark ? await getImage({ src: screen.dark, widths, format, quality }) : null;
+const img = {
+  src: screen.light,
+  alt,
+  widths,
+  sizes,
+  format,
+  quality,
+  loading: eager || priority ? "eager" : "lazy",
+  fetchpriority: priority ? "high" : "auto",
+  decoding: "async",
+  class: "block h-auto w-full",
+} as const;
+---
+
+{
+  dark ? (
+    <picture>
+      <source media="(prefers-color-scheme: dark)" type="image/webp" srcset={dark.srcSet.attribute} sizes={sizes} />
+      <Image {...img} />
+    </picture>
+  ) : (
+    <Image {...img} />
+  )
+}

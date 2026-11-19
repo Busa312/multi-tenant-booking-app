@@ -14,7 +14,7 @@ export interface WidgetOptions {
    * Medium and small open the full flow over the page when used. Default "full".
    */
   size?: WidgetSize;
-  /** "en" or "ka". Default: the salon's main language. */
+  /** "en", "ka" or "ru". Default: the salon's main language. */
   locale?: string;
   /** Services to start with ticked (full size, and the flow medium/small open). */
   serviceIds?: string[];

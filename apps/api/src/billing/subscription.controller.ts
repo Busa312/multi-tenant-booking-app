@@ -21,7 +21,7 @@ import {
 } from "../common/dto.js";
 import { BillingService, type CheckoutLang } from "./billing.service.js";
 
-const langOf = (value: unknown): CheckoutLang => (value === "en" ? "en" : "ka");
+const langOf = (value: unknown): CheckoutLang => (value === "en" || value === "ru" ? value : "ka");
 // Where Flitt calls back and sends the payer, unless API_PUBLIC_URL says otherwise.
 const originOf = (request: FastifyRequest): string => `${request.protocol}://${request.hostname}`;
 

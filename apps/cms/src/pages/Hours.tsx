@@ -152,10 +152,12 @@ export function HoursPage() {
       <div className="grid max-w-4xl items-start gap-4 2xl:max-w-none 2xl:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)] 2xl:gap-5">
         {error && <Alert flush className="2xl:col-span-2">{error}</Alert>}
 
-        {!locked && data && (
+        {/* Mounted before the data arrives (just "whole organisation" until then),
+            so the cards below don't jump down when it does. */}
+        {!locked && (
           <div className="2xl:col-span-2">
             <HoursScopePicker
-              professionals={data.professionals}
+              professionals={data?.professionals ?? []}
               value={professionalId}
               onChange={(next) => {
                 // The draft is per-scope, so switching away drops it. Ask first

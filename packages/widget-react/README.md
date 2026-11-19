@@ -87,7 +87,7 @@ It never shows a scrollbar of its own. To make it narrower, give it a
 |---|---|---|---|
 | `site` | `string` | — (required) | The salon's booking site, a full `https://` URL. |
 | `size` | `"full" \| "medium" \| "small"` | `"full"` | See [Choose a size](#choose-a-size). |
-| `locale` | `string` | salon's main language | `"en"` or `"ka"`. A language the salon doesn't publish in falls back to its main one. |
+| `locale` | `string` | salon's main language | `"en"`, `"ka"` or `"ru"`. A language the salon doesn't publish in falls back to its main one. |
 | `serviceIds` | `string[]` | none | Services to start with ticked. |
 | `locationId` | `string` | none | The branch to book at, for a salon with several. Skips the branch step. |
 | `onBooked` | `(detail: { startAt: string }) => void` | none | Called when a customer completes a booking. See [Reacting to a booking](#reacting-to-a-booking). |

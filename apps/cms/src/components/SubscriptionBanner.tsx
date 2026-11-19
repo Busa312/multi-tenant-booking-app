@@ -8,12 +8,11 @@ import { Alert, ButtonLink } from "./ui/index.js";
 
 // The trial warning appears this close to its end.
 const TRIAL_WARNING_MS = 3 * 24 * 60 * 60_000;
-// R500: the texts warning appears from this share of the allowance.
-const SMS_WARNING_SHARE = 0.8;
 
 /**
- * R480/R490/R500: tells the owner, on every page, when the trial is about to end, a
- * payment is due, booking is paused, or the month's texts are nearly or all used — with the way to the subscription page.
+ * R480/R490: tells the owner, on every page, when the trial is about to end, a
+ * payment is due, or booking is paused — with the way to the subscription page.
+ * (Texts are unlimited, R500, so there is nothing to warn about there.)
  * Rendered for owners only (AppShell), and not on that page itself.
  */
 export function SubscriptionBanner() {
@@ -54,12 +53,6 @@ export function SubscriptionBanner() {
     message = t("subscription.bannerPastDue", { date: date(overview.graceEndsAt) });
   } else if (overview.status === "trial" && new Date(overview.trialEndsAt).getTime() - Date.now() < TRIAL_WARNING_MS) {
     message = t("subscription.bannerTrial", { date: date(overview.trialEndsAt) });
-  } else if (overview.sms.billable && overview.sms.included > 0 && overview.sms.used >= overview.sms.included) {
-    // R500: at 100% — and what going on costs
-    message = t("subscription.bannerSmsFull", { included: overview.sms.included, price: overview.sms.extraTextPrice });
-  } else if (overview.sms.billable && overview.sms.used >= SMS_WARNING_SHARE * overview.sms.included) {
-    // R500: at 80%
-    message = t("subscription.bannerSmsNearly", { used: overview.sms.used, included: overview.sms.included });
   }
   if (!message) return null;
 

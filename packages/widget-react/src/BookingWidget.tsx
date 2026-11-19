@@ -8,7 +8,7 @@ export interface BookingWidgetProps {
   site: string;
   /** "full" (default), "medium" or "small". */
   size?: WidgetSize;
-  /** "en" or "ka". Default: the salon's main language. */
+  /** "en", "ka" or "ru". Default: the salon's main language. */
   locale?: string;
   /** Services to start with ticked. */
   serviceIds?: string[];

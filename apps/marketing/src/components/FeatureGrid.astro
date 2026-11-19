@@ -1,0 +1,24 @@
+---
+import type { Messages } from "../i18n";
+import { sectionClasses as c } from "../lib/sectionClasses";
+import FeatureCard from "./FeatureCard.astro";
+import SectionHeading from "./SectionHeading.astro";
+
+interface Props {
+  t: Messages;
+}
+
+const { t } = Astro.props;
+---
+
+<section class:list={["bg-base-100", c.band]}>
+  <div class={c.container}>
+    <div class="reveal">
+      <SectionHeading eyebrow={t.features.eyebrow} title={t.features.title} />
+    </div>
+    <!-- Two wide cards, four narrow, two wide: rows that close on a 4-column grid. -->
+    <div class="mt-16 grid gap-4 sm:grid-cols-2 md:mt-20 lg:grid-cols-4">
+      {t.features.items.map((feature, index) => <FeatureCard feature={feature} wide={index < 2 || index >= t.features.items.length - 2} />)}
+    </div>
+  </div>
+</section>

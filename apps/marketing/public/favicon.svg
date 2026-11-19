@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 28 28">
+  <style>
+    .tile { fill: #15181b; } .tick { stroke: #ffffff; } .dot { fill: #ffe45c; stroke: #ffffff; }
+    @media (prefers-color-scheme: dark) { .tile { fill: #e9eae6; } .tick { stroke: #131518; } .dot { stroke: #131518; } }
+  </style>
+  <rect class="tile" width="28" height="28" rx="8"/>
+  <path class="tick" d="m8.5 14.5 3.5 3.5 7.5-8" fill="none" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle class="dot" cx="22.5" cy="5.5" r="3.5" stroke-width="1.5"/>
+</svg>

@@ -1,0 +1,23 @@
+---
+import Icon from "./Icon.astro";
+
+interface Props {
+  items: string[];
+  onDark?: boolean;
+}
+
+const { items, onDark = false } = Astro.props;
+---
+
+<ul class="mt-10 flex flex-col">
+  {
+    items.map((item) => (
+      <li class={onDark ? "flex gap-4 border-t border-neutral-content/15 py-4" : "flex gap-4 border-t border-base-300 py-4"}>
+        <span class={onDark ? "mt-0.5 grid size-6 shrink-0 place-items-center rounded-full bg-neutral-content text-neutral" : "mt-0.5 grid size-6 shrink-0 place-items-center rounded-full bg-primary text-primary-content"}>
+          <Icon name="check" class="size-3.5" />
+        </span>
+        <span class="text-lg leading-snug">{item}</span>
+      </li>
+    ))
+  }
+</ul>

@@ -1,0 +1,42 @@
+---
+import { messagesFor, type Locale } from "../i18n";
+import BaseLayout from "../layouts/BaseLayout.astro";
+import { screensFor } from "../lib/screens";
+import { demoBusiness } from "../lib/site";
+import BookingSiteSection from "./BookingSiteSection.astro";
+import CalendarSection from "./CalendarSection.astro";
+import Faq from "./Faq.astro";
+import FeatureGrid from "./FeatureGrid.astro";
+import FinalCta from "./FinalCta.astro";
+import Hero from "./Hero.astro";
+import HowItWorks from "./HowItWorks.astro";
+import Pricing from "./Pricing.astro";
+import ProofStrip from "./ProofStrip.astro";
+import SiteFooter from "./SiteFooter.astro";
+import SiteHeader from "./SiteHeader.astro";
+
+interface Props {
+  locale: Locale;
+}
+
+const { locale } = Astro.props;
+const t = messagesFor(locale);
+const screens = screensFor(locale);
+const business = demoBusiness(Astro.site);
+---
+
+<BaseLayout locale={locale} t={t}>
+  <SiteHeader locale={locale} t={t} />
+  <main>
+    <Hero locale={locale} t={t} screens={screens} />
+    <ProofStrip t={t} />
+    <BookingSiteSection t={t} screens={screens} business={business} />
+    <CalendarSection t={t} screens={screens} />
+    <FeatureGrid t={t} />
+    <HowItWorks t={t} />
+    <Pricing locale={locale} t={t} />
+    <Faq t={t} />
+    <FinalCta locale={locale} t={t} />
+  </main>
+  <SiteFooter locale={locale} t={t} />
+</BaseLayout>

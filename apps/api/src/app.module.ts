@@ -13,6 +13,7 @@ import { HealthModule } from "./health/health.module.js";
 import { RateLimitModule } from "./rate-limit/rate-limit.module.js";
 import { AdminModule } from "./admin/admin.module.js";
 import { BillingModule } from "./billing/billing.module.js";
+import { ContactModule } from "./contact/contact.module.js";
 
 @Module({
   imports: [
@@ -28,6 +29,7 @@ import { BillingModule } from "./billing/billing.module.js";
     OnboardingModule,
     AdminModule,
     BillingModule,
+    ContactModule,
   ],
 })
 export class AppModule implements NestModule {
