@@ -3,7 +3,7 @@
   "extends": ["//"],
   "tasks": {
     "build": {
-      "env": ["API_URL"],
+      "env": ["API_URL", "BLOCK_SEARCH_ENGINES"],
       "passThroughEnv": [
         "REVALIDATE_SECRET",
         "BOOKING_SITE_API_KEY",

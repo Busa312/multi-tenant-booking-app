@@ -1,9 +1,6 @@
-# GitLab CI port of .github/workflows/ci.yml and .github/workflows/deploy-api.yml.
-#
-# Required CI/CD variables (Settings -> CI/CD -> Variables), both masked and
-# scoped to the `production` environment:
-#   PROD_DATABASE_URL       Neon owner/migration role connection string
-#   RENDER_DEPLOY_HOOK_API  Render deploy hook URL
+# GitLab CI port of .github/workflows/ci.yml: checks only. Deploys don't come
+# from CI — Render and Vercel follow each environment's branch and Render's
+# pre-deploy command runs the migrations (system_design.md §10).
 #
 # Also enable Settings -> CI/CD -> General pipelines -> "Auto-cancel redundant
 # pipelines". `interruptible` below marks which jobs may be cancelled, but that
@@ -11,11 +8,10 @@
 
 stages:
   - check
-  - deploy
 
 default:
   # Pinned from .nvmrc (Node 20). The full image rather than -slim on purpose:
-  # the merge-request job shells out to `git`, and `curl` posts the deploy hook.
+  # the merge-request job shells out to `git`.
   image: node:20-bookworm
   interruptible: true
 
@@ -75,34 +71,3 @@ checks:main:
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
   script:
     - pnpm exec turbo run lint typecheck test build
-
-deploy:api:
-  stage: deploy
-  extends: .node
-  # A migration must never be killed part-way through, so this job opts out of
-  # auto-cancellation and `resource_group` serialises concurrent deploys into a
-  # queue — together they are GitLab's equivalent of the workflow's
-  # `cancel-in-progress: false`.
-  interruptible: false
-  resource_group: deploy-api
-  environment:
-    name: production
-  rules:
-    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
-      changes:
-        - apps/api/**/*
-        - packages/shared-types/**/*
-        - packages/api-client/**/*
-        - packages/config/**/*
-        - pnpm-lock.yaml
-        - .gitlab-ci.yml
-  variables:
-    # Prisma reads DATABASE_URL; the value is the Neon owner/migration role,
-    # never the booking_app runtime role — table owners bypass RLS, see
-    # docker/postgres/init.sql.
-    DATABASE_URL: $PROD_DATABASE_URL
-  script:
-    - pnpm --filter @booking/api prisma:generate
-    # Gates the deploy: a failed migration means Render is never triggered.
-    - pnpm --filter @booking/api prisma:deploy
-    - curl -f -X POST "$RENDER_DEPLOY_HOOK_API"

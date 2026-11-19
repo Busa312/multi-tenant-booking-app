@@ -4,6 +4,8 @@ const production = process.env.NODE_ENV === "production";
 // The CMS embeds this site in an iframe for its live colour preview, so it —
 // and only it — may frame these pages.
 const cmsOrigin = process.env.NEXT_PUBLIC_CMS_ORIGIN ?? "";
+// R390: staging keeps search engines out (src/lib/search-indexing.ts reads the same variable).
+const blockSearchEngines = process.env.BLOCK_SEARCH_ENGINES?.trim().toLowerCase() === "true";
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
@@ -36,6 +38,8 @@ const nextConfig = {
           { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=(), payment=()" },
           { key: "Content-Security-Policy", value: `frame-ancestors 'self' ${cmsOrigin}`.trim() },
           ...(production ? [{ key: "Strict-Transport-Security", value: "max-age=63072000; includeSubDomains" }] : []),
+          // Not a robots.txt "Disallow": a crawler has to fetch a page to see noindex.
+          ...(blockSearchEngines ? [{ key: "X-Robots-Tag", value: "noindex, nofollow" }] : []),
         ],
       },
       {

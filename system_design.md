@@ -115,6 +115,10 @@ Self-serve signup, automated domain verification, and fuller tenant management (
 
 - **Local**: `docker-compose.yml` — Postgres, Redis, and all three apps, one command.
 - **Production**: managed Postgres (RDS/Cloud SQL/Neon-class) and managed Redis (ElastiCache/Upstash-class) rather than self-run containers, for backups/failover/HA. Apps run as containers on a PaaS or lightweight orchestrator (Fly.io, Railway, ECS) — `docker-compose` itself isn't a production orchestrator. ISR pages from `public-site` sit behind a CDN/edge cache.
+- **Environments.** Two copies of the whole stack, sharing nothing (database, Redis, secrets, admin login, payment merchant):
+  - **Staging** — branch `main`, on `bukme.website`. Flitt's test merchant, short billing months, test salons only. Its booking sites tell search engines not to index them (`BLOCK_SEARCH_ENGINES=true` on the public site).
+  - **Production** — branch `production`, on the production domain. A release is a merge of `main` into `production`, tagged (`v1.0.0`); a hotfix branches from `production` and is merged back into `main`.
+- **Deploys** come from the hosts' own Git integrations, not from CI: each Render service and Vercel project follows its environment's branch. Migrations run in the Render service's pre-deploy command (`pnpm --filter @booking/api prisma:deploy`) against that environment's database, so a failed migration stops the deploy. Nothing outside an environment holds its database URL.
 - This topology holds through the 500-tenant stage without changes; see §11 for what's added as scale increases.
 
 ## 11. Scaling Plan
