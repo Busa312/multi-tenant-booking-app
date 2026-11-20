@@ -125,7 +125,6 @@ export const ru: Messages = {
     eyebrow: "Цены",
     title: "Простая помесячная оплата.",
     lead: "В каждом тарифе — сайт записи, календарь и вся ваша команда. Начните с 14 бесплатных дней.",
-    planNames: { early: "Ранний доступ", early_pro: "Ранний Pro", standard: "Стандарт", pro: "Pro" },
     perMonth: "в месяц",
     earlyBadge: "Цена раннего доступа",
     locations: (limit) =>

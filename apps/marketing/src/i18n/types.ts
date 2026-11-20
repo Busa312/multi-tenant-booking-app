@@ -1,4 +1,3 @@
-import type { PlanId } from "../lib/plans";
 
 export const locales = ["ka", "en", "ru"] as const;
 export type Locale = (typeof locales)[number];
@@ -88,7 +87,6 @@ export interface Messages {
     eyebrow: string;
     title: string;
     lead: string;
-    planNames: Record<PlanId, string>;
     perMonth: string;
     earlyBadge: string;
     locations: (limit: number | null) => string;

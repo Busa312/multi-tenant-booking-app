@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import type { SubscriptionOverview, SubscriptionPaymentSummary, SubscriptionPlan } from "@booking/shared-types";
+import { planName, type SubscriptionOverview, type SubscriptionPaymentSummary, type SubscriptionPlan } from "@booking/shared-types";
 import { useI18n } from "../i18n/I18nContext.js";
 import { cachedApi } from "../lib/cache.js";
 import { cx } from "../lib/cx.js";
@@ -155,7 +155,7 @@ export function SubscriptionPage() {
   }
 
   function planAction(plan: SubscriptionPlan): { label: string; disabled: boolean; onClick: () => void } {
-    const name = t(`subscription.plan_${plan.id}`);
+    const name = planName(plan, lang);
     if (!overview) return { label: name, disabled: true, onClick: () => undefined };
     if (overview.status === "free") return { label: name, disabled: true, onClick: () => undefined };
 

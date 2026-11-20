@@ -3,6 +3,7 @@
 import type { AppointmentStatus, AppointmentSummary, TenantUserRole, Visit, VisitSlot, NoShowHistory } from "./entities";
 import type { TenantColors } from "./colors";
 import type { LocalizedText } from "./i18n";
+import type { PlanName } from "./plans";
 
 export interface UpdateTenantColorsRequest {
   colors: TenantColors;
@@ -609,12 +610,26 @@ export interface AdminPlan extends SubscriptionPlan {
 
 /** R550: the fields of one plan to change; only what is sent changes. */
 export interface AdminUpdatePlanRequest {
+  /** The name in English, 1–60 characters. */
+  name?: string;
+  /** Georgian and Russian names ({"ka": …, "ru": …}); a missing one shows the English name. null clears them. */
+  nameI18n?: LocalizedText | null;
   /** GEL per month, e.g. "90.00". */
   price?: string;
   /** null = no limit. */
   maxLocations?: number | null;
   prioritySupport?: boolean;
   offered?: boolean;
+}
+
+/** R550: a new plan, added by the platform admin. Its id is made from the English name. */
+export interface AdminCreatePlanRequest {
+  name: string;
+  nameI18n?: LocalizedText | null;
+  price: string;
+  maxLocations: number | null;
+  prioritySupport: boolean;
+  offered: boolean;
 }
 
 /** R430: the platform admin grants (or takes back) free use, or extends a trial. */
@@ -628,7 +643,8 @@ export interface AdminUpdateSubscriptionRequest {
 
 // ---- R470–R490: salons paying the platform ----
 
-export type SubscriptionPlanId = "early" | "early_pro" | "standard" | "pro";
+/** R550: a plan's id — "early", "early_pro", "standard", "pro", or one made from a new plan's name. */
+export type SubscriptionPlanId = string;
 
 /**
  * Derived, never stored (R480): free (granted by the platform), trial, active
@@ -639,6 +655,10 @@ export type SubscriptionStatus = "free" | "trial" | "active" | "past_due" | "lap
 
 export interface SubscriptionPlan {
   id: SubscriptionPlanId;
+  /** R550: the name in English; show it through planName(), which picks the reader's language. */
+  name: string;
+  /** Georgian and Russian names; a missing one falls back to `name`. */
+  nameI18n: LocalizedText | null;
   /** GEL per month, two decimals. */
   price: string;
   /** R540: active locations the plan allows; null = no limit. Texts are unlimited on every plan (R500). */
@@ -662,6 +682,8 @@ export interface SubscriptionPaymentSummary {
   orderId: string;
   kind: SubscriptionPaymentKind;
   planId: SubscriptionPlanId | null;
+  /** The plan paid for, named (R550) — it may no longer be one the salon can choose. null for a card change. */
+  plan: PlanName | null;
   /** GEL, two decimals. */
   amount: string;
   status: SubscriptionPaymentStatus;

@@ -125,7 +125,6 @@ export const en: Messages = {
     eyebrow: "Pricing",
     title: "Simple monthly pricing.",
     lead: "Every plan has the booking site, the calendar and your whole team. Start with 14 days free.",
-    planNames: { early: "Early adopter", early_pro: "Early Pro", standard: "Standard", pro: "Pro" },
     perMonth: "per month",
     earlyBadge: "Early-adopter price",
     locations: (limit) => (limit === null ? "Any number of locations" : limit === 1 ? "1 location" : `Up to ${limit} locations`),

@@ -18,7 +18,6 @@ import type {
   SubscriptionPaymentKind,
   SubscriptionPaymentStatus,
   SubscriptionPaymentSummary,
-  SubscriptionPlanId,
   UpdateSubscriptionRequest,
 } from "@booking/shared-types";
 import type { Prisma, Subscription, SubscriptionPayment } from "../../generated/prisma/index.js";
@@ -63,19 +62,24 @@ export function tenantOfOrder(orderId: unknown): string | null {
 
 const locationLimitBody = (limit: number, message: string): PlanLocationLimitResponse => ({ code: "plan_location_limit", message, limit });
 
-const toSummary = (payment: SubscriptionPayment): SubscriptionPaymentSummary => ({
-  id: payment.id,
-  orderId: payment.orderId,
-  kind: payment.kind as SubscriptionPaymentKind,
-  planId: payment.planId as SubscriptionPlanId | null,
-  amount: payment.amount.toFixed(2),
-  status: payment.status as SubscriptionPaymentStatus,
-  periodStart: payment.periodStart?.toISOString() ?? null,
-  periodEnd: payment.periodEnd?.toISOString() ?? null,
-  cardMasked: payment.cardMasked,
-  failureReason: payment.failureReason,
-  createdAt: payment.createdAt.toISOString(),
-});
+/** `plans` = every plan: a payment's plan may no longer be one the salon can choose (R550 names it anyway). */
+const toSummary = (payment: SubscriptionPayment, plans: readonly PlanDefinition[]): SubscriptionPaymentSummary => {
+  const plan = planIn(plans, payment.planId);
+  return {
+    id: payment.id,
+    orderId: payment.orderId,
+    kind: payment.kind as SubscriptionPaymentKind,
+    planId: payment.planId,
+    plan: plan ? { name: plan.name, nameI18n: plan.nameI18n } : null,
+    amount: payment.amount.toFixed(2),
+    status: payment.status as SubscriptionPaymentStatus,
+    periodStart: payment.periodStart?.toISOString() ?? null,
+    periodEnd: payment.periodEnd?.toISOString() ?? null,
+    cardMasked: payment.cardMasked,
+    failureReason: payment.failureReason,
+    createdAt: payment.createdAt.toISOString(),
+  };
+};
 
 /**
  * R470–R490: salons paying the platform (system_design.md §12b). Every method
@@ -201,8 +205,8 @@ export class BillingService {
     const derived = this.derive(subscription, now);
     return {
       status: derived.status,
-      planId: subscription.planId as SubscriptionPlanId,
-      nextPlanId: subscription.nextPlanId as SubscriptionPlanId | null,
+      planId: subscription.planId,
+      nextPlanId: subscription.nextPlanId,
       trialEndsAt: subscription.trialEndsAt.toISOString(),
       paidThrough: subscription.paidThrough?.toISOString() ?? null,
       graceEndsAt: derived.graceEndsAt?.toISOString() ?? null,
@@ -210,7 +214,7 @@ export class BillingService {
       bookingPaused: derived.bookingPaused,
       card: subscription.cardMasked ? { masked: subscription.cardMasked, brand: subscription.cardBrand } : null,
       plans: plans.filter((plan) => plan.offered || plan.id === subscription.planId || plan.id === subscription.nextPlanId).map(toWirePlan),
-      payments: payments.map(toSummary),
+      payments: payments.map((payment) => toSummary(payment, plans)),
       billingAvailable: this.flitt.configured,
       activeLocations,
       locationLimit: this.limitOf(subscription, plans, now),
@@ -337,8 +341,11 @@ export class BillingService {
         this.logger.warn(`status check for ${orderId} failed: ${(error as Error).message}`);
       }
     }
-    const settled = await this.prisma.forTenant((tx) => tx.subscriptionPayment.findUniqueOrThrow({ where: { orderId } }));
-    return { payment: toSummary(settled), subscription: await this.overview() };
+    const { settled, plans } = await this.prisma.forTenant(async (tx) => ({
+      settled: await tx.subscriptionPayment.findUniqueOrThrow({ where: { orderId } }),
+      plans: await this.catalog.allIn(tx),
+    }));
+    return { payment: toSummary(settled, plans), subscription: await this.overview() };
   }
 
   /**
@@ -422,7 +429,7 @@ export class BillingService {
           periodEnd: addCycle(subscription.paidThrough, this.config.cycle),
         },
       });
-      const description = `Subscription: ${plan.id} plan`;
+      const description = `Subscription: ${plan.name} plan`;
       return { orderId, existing: false, createdAt: now, amount, description, rectoken: subscription.rectoken };
     });
     if (!claim) return "none";
@@ -473,7 +480,7 @@ export class BillingService {
       // R500: the platform's SMS cost for this salon
       smsThisMonth: texts,
       status: derived.status,
-      planId: subscription.planId as SubscriptionPlanId,
+      planId: subscription.planId,
       accessUntil: derived.accessUntil.toISOString(),
       paidThrough: subscription.paidThrough?.toISOString() ?? null,
       free: subscription.free,

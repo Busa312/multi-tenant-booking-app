@@ -1,4 +1,4 @@
-import type { SubscriptionPaymentStatus, SubscriptionPaymentSummary } from "@booking/shared-types";
+import { planName, type SubscriptionPaymentStatus, type SubscriptionPaymentSummary } from "@booking/shared-types";
 import { useI18n } from "../i18n/I18nContext.js";
 import { formatInstantDate } from "../lib/tenantTime.js";
 import { usePagination } from "../lib/usePagination.js";
@@ -48,9 +48,9 @@ export function SubscriptionInvoices({ payments, timezone }: SubscriptionInvoice
               <div className="tabular-nums">{date(payment.createdAt)}</div>
               <div className="min-w-0">
                 <div className="font-semibold">
-                  {payment.kind === "card" || !payment.planId
+                  {payment.kind === "card" || !payment.plan
                     ? t("subscription.itemCard")
-                    : t("subscription.itemPlan", { plan: t(`subscription.plan_${payment.planId}`) })}
+                    : t("subscription.itemPlan", { plan: planName(payment.plan, lang) })}
                 </div>
                 {payment.periodStart && payment.periodEnd && payment.status === "approved" && (
                   <div className="text-xs text-base-content/60 tabular-nums">

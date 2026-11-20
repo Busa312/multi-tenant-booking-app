@@ -684,11 +684,23 @@ export class DashboardSummaryDto {
 
 // ---- R470–R490: subscriptions ----
 
-const PLAN_IDS = ["early", "early_pro", "standard", "pro"];
+// R550: plan ids aren't a fixed list — the platform admin adds and deletes plans.
+const PLAN_ID_EXAMPLE = "early";
 const SUBSCRIPTION_STATUSES = ["free", "trial", "active", "past_due", "lapsed"];
 
-export class SubscriptionPlanDto {
-  @ApiProperty({ enum: PLAN_IDS }) id!: string;
+export class PlanNameDto {
+  @ApiProperty({ example: "Early adopter", description: "R550: the name in English" }) name!: string;
+  @ApiProperty({
+    nullable: true,
+    type: Object,
+    example: { ka: "ადრეული მომხმარებელი", ru: "Ранний доступ" },
+    description: "Georgian and Russian names; a missing one falls back to `name`",
+  })
+  nameI18n!: Record<string, string> | null;
+}
+
+export class SubscriptionPlanDto extends PlanNameDto {
+  @ApiProperty({ example: PLAN_ID_EXAMPLE }) id!: string;
   @ApiProperty({ example: "60.00", description: "GEL per month" }) price!: string;
   @ApiProperty({ nullable: true, type: Number, description: "R540: active locations allowed; null = no limit" })
   maxLocations!: number | null;
@@ -704,7 +716,9 @@ export class SubscriptionPaymentSummaryDto {
   @ApiProperty() id!: string;
   @ApiProperty() orderId!: string;
   @ApiProperty({ enum: ["signup", "renewal", "card"] }) kind!: string;
-  @ApiProperty({ enum: PLAN_IDS, nullable: true, type: String }) planId!: string | null;
+  @ApiProperty({ example: PLAN_ID_EXAMPLE, nullable: true, type: String }) planId!: string | null;
+  @ApiProperty({ type: PlanNameDto, nullable: true, description: "The plan paid for, named; null for a card change" })
+  plan!: PlanNameDto | null;
   @ApiProperty({ example: "60.00" }) amount!: string;
   @ApiProperty({ enum: ["pending", "approved", "declined", "expired"] }) status!: string;
   @ApiProperty({ nullable: true, type: String }) periodStart!: string | null;
@@ -721,8 +735,8 @@ export class SubscriptionCardDto {
 
 export class SubscriptionOverviewDto {
   @ApiProperty({ enum: SUBSCRIPTION_STATUSES, description: "R480: derived, never stored" }) status!: string;
-  @ApiProperty({ enum: PLAN_IDS }) planId!: string;
-  @ApiProperty({ enum: PLAN_IDS, nullable: true, type: String, description: "Takes effect at the next renewal" })
+  @ApiProperty({ example: PLAN_ID_EXAMPLE }) planId!: string;
+  @ApiProperty({ example: null, nullable: true, type: String, description: "Takes effect at the next renewal" })
   nextPlanId!: string | null;
   @ApiProperty() trialEndsAt!: string;
   @ApiProperty({ nullable: true, type: String, description: "null = never paid" }) paidThrough!: string | null;
@@ -745,7 +759,7 @@ export class ConfirmPaymentResponseDto {
 }
 
 export class StartCheckoutRequestDto {
-  @ApiProperty({ enum: ["early", "early_pro", "pro"] }) planId!: string;
+  @ApiProperty({ example: PLAN_ID_EXAMPLE, description: "One of the offered plans" }) planId!: string;
   @ApiPropertyOptional({ enum: ["ka", "en", "ru"], description: "Language of Flitt's payment page" }) lang?: string;
 }
 
@@ -759,6 +773,6 @@ export class CheckoutResponseDto {
 }
 
 export class UpdateSubscriptionRequestDto {
-  @ApiPropertyOptional({ enum: PLAN_IDS, description: "Switch at the next renewal" }) planId?: string;
+  @ApiPropertyOptional({ example: PLAN_ID_EXAMPLE, description: "Switch at the next renewal" }) planId?: string;
   @ApiPropertyOptional() cancelAtPeriodEnd?: boolean;
 }

@@ -1,11 +1,11 @@
-import type { Messages } from "../i18n";
+import type { Locale, Messages } from "../i18n";
 import type { MarketingPlan } from "./plans";
 import { brandName, contactEmail } from "./site";
 
 // R560: schema.org data for search engines, made only from what the page
 // itself says — its description, its plans and prices, its questions — so
 // the two can't disagree. No ratings or reviews: there are none to cite.
-export function structuredData(t: Messages, plans: MarketingPlan[], urls: { home: string; page: string }) {
+export function structuredData(t: Messages, locale: Locale, plans: MarketingPlan[], urls: { home: string; page: string }) {
   const organization = `${urls.home}#organization`;
   return {
     "@context": "https://schema.org",
@@ -37,7 +37,7 @@ export function structuredData(t: Messages, plans: MarketingPlan[], urls: { home
         publisher: { "@id": organization },
         offers: plans.map((plan) => ({
           "@type": "Offer",
-          name: t.pricing.planNames[plan.id],
+          name: plan.name[locale],
           price: plan.price.toFixed(2),
           priceCurrency: "GEL",
           url: `${urls.page}#pricing`,

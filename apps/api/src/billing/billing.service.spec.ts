@@ -30,6 +30,8 @@ interface SubRow {
 
 interface PlanRow {
   id: string;
+  name: string;
+  nameI18n: null;
   price: Prisma.Decimal;
   maxLocations: number | null;
   prioritySupport: boolean;
@@ -39,7 +41,7 @@ interface PlanRow {
 
 /** The plans as the subscription_plan migration seeds them (R470/R540). */
 const plan = (id: string, price: string, maxLocations: number | null, offered: boolean, position: number): PlanRow => ({
-  id, price: new Prisma.Decimal(price), maxLocations, prioritySupport: id === "pro", offered, position,
+  id, name: id, nameI18n: null, price: new Prisma.Decimal(price), maxLocations, prioritySupport: id === "pro", offered, position,
 });
 const SEEDED_PLANS = [
   plan("early", "60.00", 1, true, 0),

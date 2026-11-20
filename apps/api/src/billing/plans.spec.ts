@@ -1,10 +1,12 @@
 import { BadRequestException } from "@nestjs/common";
-import { locationLimit, planFits, type PlanDefinition, validatePlanUpdate } from "./plans.js";
+import type { AdminUpdatePlanRequest } from "@booking/shared-types";
+import { Prisma } from "../../generated/prisma/index.js";
+import { locationLimit, planFits, planIdFrom, type PlanDefinition, validatePlanCreate, validatePlanUpdate } from "./plans.js";
 
 const PLANS: PlanDefinition[] = [
-  { id: "early", price: "60.00", maxLocations: 1, prioritySupport: false, offered: true },
-  { id: "early_pro", price: "90.00", maxLocations: 3, prioritySupport: false, offered: true },
-  { id: "pro", price: "150.00", maxLocations: null, prioritySupport: true, offered: true },
+  { id: "early", name: "Early adopter", nameI18n: null, price: "60.00", maxLocations: 1, prioritySupport: false, offered: true },
+  { id: "early_pro", name: "Early Pro", nameI18n: null, price: "90.00", maxLocations: 3, prioritySupport: false, offered: true },
+  { id: "pro", name: "Pro", nameI18n: null, price: "150.00", maxLocations: null, prioritySupport: true, offered: true },
 ];
 
 function plan(id: string): PlanDefinition {
@@ -74,6 +76,68 @@ describe("validatePlanUpdate", () => {
       {},
     ]) {
       expect(() => validatePlanUpdate(body)).toThrow(BadRequestException);
+    }
+  });
+});
+
+// R550: plans are named, added and deleted on the admin page
+describe("validatePlanUpdate: names", () => {
+  it("renames a plan, trimmed, and keeps only the Georgian and Russian names beside the English one", () => {
+    expect(validatePlanUpdate({ name: "  Studio  ", nameI18n: { en: "ignored", ka: " სტუდია ", ru: "" } })).toEqual({
+      name: "Studio",
+      nameI18n: { ka: "სტუდია" },
+    });
+  });
+
+  it("clears the translations with null", () => {
+    expect(validatePlanUpdate({ nameI18n: null })).toEqual({ nameI18n: Prisma.DbNull });
+  });
+
+  it.each<AdminUpdatePlanRequest>([
+    { name: "" },
+    { name: "   " },
+    { name: "x".repeat(61) },
+    { name: 5 as never },
+    { nameI18n: { ka: "x".repeat(61) } },
+    { nameI18n: { de: "Studio" } },
+  ])(
+    "refuses %j",
+    (body) => {
+      expect(() => validatePlanUpdate(body)).toThrow(BadRequestException);
+    },
+  );
+});
+
+describe("validatePlanCreate", () => {
+  const valid = { name: "Studio", nameI18n: { ka: "სტუდია", ru: "Студия" }, price: "45", maxLocations: 2, prioritySupport: false, offered: true };
+
+  it("accepts a complete plan", () => {
+    expect(validatePlanCreate(valid)).toEqual({ ...valid, nameI18n: { ka: "სტუდია", ru: "Студия" } });
+  });
+
+  it("needs a name and a price, and checks the rest like an edit", () => {
+    expect(() => validatePlanCreate({ ...valid, name: " " })).toThrow(BadRequestException);
+    expect(() => validatePlanCreate({ ...valid, price: "0.50" })).toThrow(BadRequestException);
+    expect(() => validatePlanCreate({ ...valid, maxLocations: 0 })).toThrow(BadRequestException);
+    expect(() => validatePlanCreate({ ...valid, offered: "yes" as never })).toThrow(BadRequestException);
+    expect(() => validatePlanCreate(null)).toThrow(BadRequestException);
+  });
+});
+
+describe("planIdFrom", () => {
+  it("makes the id from the English name", () => {
+    expect(planIdFrom("Studio Plus", new Set())).toBe("studio_plus");
+    expect(planIdFrom("  Pro — 2026! ", new Set())).toBe("pro_2026");
+  });
+
+  it("never reuses an id that is taken", () => {
+    expect(planIdFrom("Pro", new Set(["pro"]))).toBe("pro_2");
+    expect(planIdFrom("Pro", new Set(["pro", "pro_2"]))).toBe("pro_3");
+  });
+
+  it("always gives an id the admin API accepts, whatever the name", () => {
+    for (const name of ["სტუდია", "2 locations", "___", "a".repeat(60)]) {
+      expect(planIdFrom(name, new Set(["plan"]))).toMatch(/^[a-z][a-z0-9_]{0,31}$/);
     }
   });
 });
