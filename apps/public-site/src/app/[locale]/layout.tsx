@@ -4,6 +4,7 @@ import Link from "next/link";
 import { BookingProgressReset } from "@/components/BookingProgressReset";
 import { PreviewColorListener } from "@/components/PreviewColorListener";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
+import { PoweredBy } from "@/components/PoweredBy";
 import { SalonNotFoundDocument } from "@/components/SalonNotFoundDocument";
 import { isLocale } from "@/i18n/locales";
 import { localePath } from "@/lib/locale-path";
@@ -102,7 +103,7 @@ export default async function RootLayout({ children, params }: LayoutProps) {
           <main className="mx-auto w-full max-w-3xl flex-1 px-4 pt-6 pb-16 sm:pt-10">{children}</main>
 
           <footer className="border-t border-base-300">
-            <div className="mx-auto flex w-full max-w-3xl flex-wrap items-center justify-between gap-2 px-4 py-5 text-sm text-base-content/65">
+            <div className="mx-auto flex w-full max-w-3xl flex-wrap items-center justify-between gap-2 px-4 pt-5 pb-3 text-sm text-base-content/65">
               <span className="truncate font-semibold text-base-content">{context.tenant.name}</span>
               <nav className="flex flex-wrap items-center gap-x-4 gap-y-1" aria-label={context.t("legal.footerNav")}>
                 {/* R340 */}
@@ -117,6 +118,7 @@ export default async function RootLayout({ children, params }: LayoutProps) {
                 </Link>
               </nav>
             </div>
+            <PoweredBy locale={context.locale} t={context.t} />
           </footer>
         </div>
       </body>

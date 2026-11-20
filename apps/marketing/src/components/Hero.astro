@@ -18,9 +18,12 @@ const { locale, t, screens } = Astro.props;
 
 <section class="overflow-hidden px-4 pb-20 pt-16 sm:px-6 md:pb-32 md:pt-28">
   <div class="mx-auto max-w-5xl text-center">
-    <p class="text-sm font-semibold text-base-content/60 md:text-lg">{t.hero.eyebrow}</p>
-    <h1 class="mt-4 text-[2.6rem] font-semibold leading-(--heading-leading) tracking-tight text-balance sm:text-6xl md:text-7xl lg:text-8xl">
-      <MarkedText title={t.hero.title} />
+    <!-- The heading opens with what the product is, in the words people search
+         for (the page title says the same); the slogan follows. The share card
+         (scripts/capture-og.mjs) draws only the slogan, via data-headline. -->
+    <h1 class="text-[2.6rem] font-semibold leading-(--heading-leading) tracking-tight text-balance sm:text-6xl md:text-7xl lg:text-8xl">
+      <span class="mb-4 block text-sm leading-normal tracking-normal text-base-content/60 md:text-lg">{t.hero.eyebrow}<span class="sr-only">:</span></span>
+      <span data-headline><MarkedText title={t.hero.title} /></span>
     </h1>
     <p class="mx-auto mt-8 max-w-2xl text-lg leading-relaxed text-base-content/60 text-pretty md:text-2xl">
       {t.hero.lead}

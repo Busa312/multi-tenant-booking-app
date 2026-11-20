@@ -1,6 +1,6 @@
 {
   "name": "@booking/widget-demo",
-  "version": "0.0.0",
+  "version": "1.0.1",
   "private": true,
   "description": "R410: a stand-in salon website for trying the booking widget. Not deployed; started only on demand.",
   "type": "module",
