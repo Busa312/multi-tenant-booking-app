@@ -1,4 +1,4 @@
-import type { SubscriptionPlan } from "@booking/shared-types";
+import { planName, type SubscriptionPlan } from "@booking/shared-types";
 import { useI18n } from "../i18n/I18nContext.js";
 import { cx } from "../lib/cx.js";
 import { Button, Icon, Pill } from "./ui/index.js";
@@ -16,7 +16,7 @@ interface PlanCardProps {
 
 /** One plan on the Subscription page (R470): what it costs, what it includes, and the way onto it. */
 export function PlanCard({ plan, current, badge, action, note }: PlanCardProps) {
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
 
   // R540
   function locationsFeature(): string {
@@ -35,7 +35,7 @@ export function PlanCard({ plan, current, badge, action, note }: PlanCardProps) 
   return (
     <article className={cx("flex h-full flex-col gap-3 rounded-field border p-4", current ? "border-primary bg-base-200/60" : "border-base-300")}>
       <div className="flex items-center justify-between gap-2">
-        <h3 className="font-display text-xl leading-tight font-bold">{t(`subscription.plan_${plan.id}`)}</h3>
+        <h3 className="font-display text-xl leading-tight font-bold">{planName(plan, lang)}</h3>
         {badge && <Pill tone={current ? "success" : "neutral"}>{badge}</Pill>}
       </div>
 

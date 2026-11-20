@@ -1,5 +1,6 @@
 import { API_URL } from "astro:env/server";
-import type { OfferedPlansResponse, SubscriptionPlan, SubscriptionPlanId } from "@booking/shared-types";
+import { planName, type OfferedPlansResponse, type SubscriptionPlan, type SubscriptionPlanId } from "@booking/shared-types";
+import type { Locale } from "../i18n";
 
 // R560: the plans owners can choose now, read from the API (GET /plans) when
 // the site builds — so the page is still static, with the prices in its HTML.
@@ -8,8 +9,9 @@ import type { OfferedPlansResponse, SubscriptionPlan, SubscriptionPlanId } from 
 export type PlanId = SubscriptionPlanId;
 
 export interface MarketingPlan {
-  /** Names are the CMS's (its `plan_<id>` messages), translated in the catalogs. */
   id: PlanId;
+  /** R550: the plan's name in each language, as the platform admin set it — the same the CMS shows. */
+  name: Record<Locale, string>;
   /** Monthly price in GEL. Texts are unlimited on every plan (R500). */
   price: number;
   /** Active locations allowed (R540); null = any number. */
@@ -23,6 +25,7 @@ const EARLY: ReadonlySet<PlanId> = new Set(["early", "early_pro"]);
 
 const toMarketingPlan = (plan: SubscriptionPlan): MarketingPlan => ({
   id: plan.id,
+  name: { ka: planName(plan, "ka"), en: planName(plan, "en"), ru: planName(plan, "ru") },
   price: Number(plan.price),
   locations: plan.maxLocations,
   early: EARLY.has(plan.id),
@@ -32,9 +35,9 @@ const toMarketingPlan = (plan: SubscriptionPlan): MarketingPlan => ({
 // R470's starting values, for builds with no API to ask (CI, a quick local
 // build). Never used on Vercel: there a missing API_URL fails the build.
 const STARTING_PLANS: SubscriptionPlan[] = [
-  { id: "early", price: "60.00", maxLocations: 1, prioritySupport: false },
-  { id: "early_pro", price: "90.00", maxLocations: 3, prioritySupport: false },
-  { id: "pro", price: "150.00", maxLocations: null, prioritySupport: true },
+  { id: "early", name: "Early adopter", nameI18n: { ka: "ადრეული მომხმარებელი", ru: "Ранний доступ" }, price: "60.00", maxLocations: 1, prioritySupport: false },
+  { id: "early_pro", name: "Early Pro", nameI18n: { ka: "ადრეული პრო", ru: "Ранний Pro" }, price: "90.00", maxLocations: 3, prioritySupport: false },
+  { id: "pro", name: "Pro", nameI18n: { ka: "პრო", ru: "Pro" }, price: "150.00", maxLocations: null, prioritySupport: true },
 ];
 
 async function fetchPlans(): Promise<SubscriptionPlan[]> {

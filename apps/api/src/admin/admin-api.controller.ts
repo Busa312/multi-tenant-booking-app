@@ -1,9 +1,10 @@
-import { BadRequestException, Body, Controller, Get, HttpCode, NotFoundException, Param, Post, Req, Res, UseGuards } from "@nestjs/common";
+import { BadRequestException, Body, Controller, Delete, Get, HttpCode, NotFoundException, Param, Post, Req, Res, UseGuards } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { ApiExcludeController } from "@nestjs/swagger";
 import type { FastifyReply } from "fastify";
 import type {
   AdminContactRequest,
+  AdminCreatePlanRequest,
   AdminLoginRequest,
   AdminPlan,
   AdminSession,
@@ -20,6 +21,7 @@ import { OnboardingService } from "../internal/onboarding.service.js";
 import { OwnerSetupLinkService } from "../internal/owner-setup-link.service.js";
 import { BillingService } from "../billing/billing.service.js";
 import { PlanCatalog } from "../billing/plan-catalog.service.js";
+import { PLAN_ID } from "../billing/plans.js";
 import { ContactService } from "../contact/contact.service.js";
 import { PrismaService } from "../prisma/prisma.service.js";
 import { TenantContextService } from "../tenant/tenant-context.service.js";
@@ -120,8 +122,25 @@ export class AdminApiController {
   @UseGuards(AdminSessionGuard)
   @RateLimit({ name: "admin-write", max: 120, windowSeconds: 60 * 60 })
   updatePlan(@Param("id") id: string, @Body() body: AdminUpdatePlanRequest): Promise<AdminPlan> {
-    if (!/^[a-z][a-z0-9_]{0,31}$/.test(id)) throw new BadRequestException("Invalid plan id");
+    if (!PLAN_ID.test(id)) throw new BadRequestException("Invalid plan id");
     return this.plans.update(id, body);
+  }
+
+  @Post("plans")
+  @UseGuards(AdminSessionGuard)
+  @RateLimit({ name: "admin-write", max: 120, windowSeconds: 60 * 60 })
+  createPlan(@Body() body: AdminCreatePlanRequest): Promise<AdminPlan> {
+    return this.plans.create(body);
+  }
+
+  // R550: only a plan no salon has ever used; the catalog says why otherwise.
+  @Delete("plans/:id")
+  @HttpCode(204)
+  @UseGuards(AdminSessionGuard)
+  @RateLimit({ name: "admin-write", max: 120, windowSeconds: 60 * 60 })
+  async deletePlan(@Param("id") id: string): Promise<void> {
+    if (!PLAN_ID.test(id)) throw new BadRequestException("Invalid plan id");
+    await this.plans.remove(id);
   }
 
   // R580: requests from the marketing site's contact page

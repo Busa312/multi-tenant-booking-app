@@ -13,7 +13,7 @@ interface Props {
 
 const { plan, locale, t, top = false } = Astro.props;
 const p = t.pricing;
-const name = p.planNames[plan.id];
+const name = plan.name[locale];
 // The top plan is set dark, the others on paper — a tier, not a recommendation.
 const dark = top;
 const features = [

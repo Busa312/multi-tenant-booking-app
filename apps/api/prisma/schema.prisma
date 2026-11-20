@@ -436,6 +436,9 @@ model Subscription {
 /// R470/R550: the plans, edited by the platform admin. Platform-wide: no tenant_id, no RLS.
 model SubscriptionPlan {
   id              String   @id
+  /// R550: the plan's name in English; nameI18n holds Georgian and Russian ({"ka": …, "ru": …}).
+  name            String
+  nameI18n        Json?    @map("name_i18n")
   price           Decimal  @db.Decimal(10, 2)
   /// R540: active locations allowed; null = no limit.
   maxLocations    Int?     @map("max_locations")

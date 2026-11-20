@@ -6,7 +6,7 @@ export const en: Messages = {
   htmlLang: "en",
   ogLocale: "en_US",
   meta: {
-    title: "Online booking for your services",
+    title: "Online booking system for service businesses",
     description:
       "A booking site in your colors, one calendar for your whole team, and confirmations by text. Clients book your services in a minute — 14 days free.",
   },
@@ -22,7 +22,7 @@ export const en: Messages = {
     home: "Home",
   },
   hero: {
-    eyebrow: "Online booking for service businesses",
+    eyebrow: "Online booking system for service businesses",
     title: { before: "Your service gets", mark: "booked", after: " while you work." },
     lead: "A booking site in your colors, one calendar for your whole team, and confirmations by text. Clients book in a minute — no app, no password.",
     primaryCta: "Start your free trial",
@@ -125,7 +125,6 @@ export const en: Messages = {
     eyebrow: "Pricing",
     title: "Simple monthly pricing.",
     lead: "Every plan has the booking site, the calendar and your whole team. Start with 14 days free.",
-    planNames: { early: "Early adopter", early_pro: "Early Pro", standard: "Standard", pro: "Pro" },
     perMonth: "per month",
     earlyBadge: "Early-adopter price",
     locations: (limit) => (limit === null ? "Any number of locations" : limit === 1 ? "1 location" : `Up to ${limit} locations`),

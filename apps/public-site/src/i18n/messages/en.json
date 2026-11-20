@@ -165,6 +165,9 @@
     "updated": "Last updated: {date}",
     "footerNav": "Site information"
   },
+  "footer": {
+    "poweredBy": "Powered by {link}"
+  },
   "notFound": {
     "title": "Page not found",
     "body": "Check the address and try again."

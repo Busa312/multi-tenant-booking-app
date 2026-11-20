@@ -31,6 +31,26 @@ describe("admin page", () => {
     expect(html).toContain("/owner-link");
   });
 
+  // One section at a time, and the long lists paged, so the page isn't one long scroll.
+  it("puts each section on its own page, with the long lists paged", () => {
+    const html = renderAdminPage("n", config);
+    for (const page of ["salons", "new-salon", "contacts", "plans"]) {
+      expect(html).toContain(`data-page="${page}"`);
+      expect(html).toContain(`href="#${page}"`);
+    }
+    expect(html).toContain('id="tenants-pager"');
+    expect(html).toContain('id="contacts-pager"');
+  });
+
+  // R550
+  it("lets plans be named in three languages, added and deleted", () => {
+    const html = renderAdminPage("n", config);
+    expect(html).toContain('id="plan-form"');
+    expect(html).toContain('id="p-name-ka"');
+    expect(html).toContain('id="p-name-ru"');
+    expect(html).toContain('method: "DELETE"');
+  });
+
   it("uses no inline event handlers, which the policy would block", () => {
     expect(renderAdminPage("n", config)).not.toMatch(/\son[a-z]+=/);
   });

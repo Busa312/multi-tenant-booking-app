@@ -7,3 +7,4 @@ export * from "./booking";
 export * from "./services";
 export * from "./dates";
 export * from "./redact";
+export * from "./plans";

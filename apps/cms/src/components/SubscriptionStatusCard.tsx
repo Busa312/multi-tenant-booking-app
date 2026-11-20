@@ -1,4 +1,4 @@
-import type { SubscriptionOverview, SubscriptionStatus } from "@booking/shared-types";
+import { planName, type SubscriptionOverview, type SubscriptionStatus } from "@booking/shared-types";
 import { useI18n } from "../i18n/I18nContext.js";
 import { formatInstantDate } from "../lib/tenantTime.js";
 import { Button, Card, Eyebrow, Pill, type PillTone } from "./ui/index.js";
@@ -33,7 +33,9 @@ export function SubscriptionStatusCard({ overview, timezone, busy, onCancel, onR
   const date = (iso: string) => formatInstantDate(iso, timezone, lang);
   const plan = overview.plans.find((candidate) => candidate.id === overview.planId);
   const paying = overview.paidThrough !== null && (overview.status === "active" || overview.status === "past_due");
-  const nextPlanName = overview.nextPlanId ? t(`subscription.plan_${overview.nextPlanId}`) : null;
+  // R550: the next plan is among overview.plans; an id the list lacks is shown as it is rather than not at all.
+  const nextPlan = overview.nextPlanId ? overview.plans.find((candidate) => candidate.id === overview.nextPlanId) : undefined;
+  const nextPlanName = overview.nextPlanId ? (nextPlan ? planName(nextPlan, lang) : overview.nextPlanId) : null;
 
   const lines: string[] = [];
   if (overview.status === "free") lines.push(t("subscription.free"));
@@ -67,7 +69,7 @@ export function SubscriptionStatusCard({ overview, timezone, busy, onCancel, onR
               : overview.status === "trial"
                 ? t("subscription.statusTrial")
                 : overview.paidThrough
-                  ? t(`subscription.plan_${overview.planId}`)
+                  ? plan ? planName(plan, lang) : overview.planId
                   : t("subscription.trialEnded")}
           </div>
         </div>

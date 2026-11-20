@@ -31,7 +31,7 @@ const isHome = path === "";
 const shareSource = shareImageFor(locale);
 const share = shareSource && (await getImage({ src: shareSource, format: "jpg", quality: 85 }));
 // The product and its plans are described once, on the home page.
-const jsonLd = isHome ? toJsonLd(structuredData(t, await loadPlans(), { home: absolute("/"), page: canonical })) : null;
+const jsonLd = isHome ? toJsonLd(structuredData(t, locale, await loadPlans(), { home: absolute("/"), page: canonical })) : null;
 ---
 
 <!doctype html>

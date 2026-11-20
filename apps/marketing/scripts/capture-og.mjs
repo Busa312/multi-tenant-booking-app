@@ -28,7 +28,8 @@ try {
 
     await page.evaluate(async () => {
       const logo = document.querySelector("header a span");
-      const headline = document.querySelector("h1");
+      // The slogan only: the home page's h1 also opens with a small keyword line.
+      const headline = document.querySelector("h1 [data-headline]") ?? document.querySelector("h1");
       const shot = document.querySelector("main img");
       const host = document.querySelector('link[rel="canonical"]')?.getAttribute("href");
       if (!logo || !headline || !shot || !host) throw new Error("The page is missing its logo, headline, screenshot or canonical link");

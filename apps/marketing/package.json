@@ -1,6 +1,6 @@
 {
   "name": "@booking/marketing",
-  "version": "0.0.0",
+  "version": "1.0.1",
   "private": true,
   "description": "R560: the platform's own marketing site (Astro, static). Never shows a salon's data.",
   "type": "module",
