@@ -102,6 +102,13 @@
 
   html {
     scrollbar-gutter: stable;
+    /* Whatever the browser scrolls to — a focused field, an in-page link —
+       stays clear of the sticky header (h-14), and on phones of the wizard's
+       sticky back/next bar, so it's never hidden behind them. */
+    scroll-padding-top: 4.5rem;
+    @media (width < 40rem) {
+      scroll-padding-bottom: 5.5rem;
+    }
   }
 
   body {

@@ -144,7 +144,7 @@ export const en: Messages = {
       },
       {
         q: "Do clients pay online?",
-        a: "No. A booking is a reservation; clients pay you in person, as they do today.",
+        a: "No. A booking is a reservation; clients pay you in person.",
       },
       {
         q: "What happens when the free trial ends?",

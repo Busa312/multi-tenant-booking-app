@@ -36,8 +36,8 @@ export function ServiceList({
   const titled = groups.some((group) => group.category !== null);
 
   return (
-    // scroll-mt clears the sticky header when the hero's "Services" link jumps here.
-    <section aria-labelledby="services-heading" id="services" className="scroll-mt-20">
+    // The hero's "Services" link jumps here (the page's scroll padding clears the sticky header).
+    <section aria-labelledby="services-heading" id="services">
       <h2 className={`mb-6 ${SECTION_HEADING}`} id="services-heading">
         {heading}
       </h2>

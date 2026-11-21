@@ -11,7 +11,11 @@
 // coming Saturday by default) unless that day already has those bookings, so
 // the calendar isn't empty. Everything goes into your local database only.
 // Override any of: CMS_URL, API_URL, SITE_URL (the demo business's booking
-// site), SHOT_DATE (YYYY-MM-DD), CHROMIUM_PATH.
+// site), SHOT_DATE (YYYY-MM-DD), CHROMIUM_PATH. ONLY=site retakes just the
+// booking-site phone shots (after a booking-site change; needs only the API
+// and public-site running), ONLY=cms just the CMS ones.
+//
+//   ONLY=site node scripts/capture-screens.mjs
 
 import { mkdir } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
@@ -30,6 +34,8 @@ const comingSaturday = () => {
   return day.toISOString().slice(0, 10);
 };
 const SHOT_DATE = process.env.SHOT_DATE ?? comingSaturday();
+const ONLY = process.env.ONLY;
+if (ONLY !== undefined && ONLY !== "site" && ONLY !== "cms") throw new Error(`ONLY must be "site" or "cms", not "${ONLY}"`);
 
 // The seed's fixed ids for Aura (id series "a"): professionals "ad…", services "ae…".
 const seedId = (kind, n) => `00000000-0000-0000-0000-0000000a${kind}${String(n).padStart(3, "0")}`;
@@ -104,7 +110,7 @@ const browser = await chromium.launch(process.env.CHROMIUM_PATH ? { executablePa
 await mkdir(OUT, { recursive: true });
 try {
   for (const lang of ["en", "ka", "ru"]) {
-    for (const scheme of ["light", "dark"]) {
+    for (const scheme of ONLY === "site" ? [] : ["light", "dark"]) {
       // The CMS follows the OS theme, and keeps its language in localStorage.
       const context = await browser.newContext({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 2, colorScheme: scheme, reducedMotion: "reduce" });
       const page = await context.newPage();
@@ -128,6 +134,10 @@ try {
       await context.close();
     }
 
+    if (ONLY === "cms") {
+      console.log(`✓ ${lang}`);
+      continue;
+    }
     // The booking site has one look per business, so no dark shot. 390×844 = PhoneFrame.
     const context = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true, reducedMotion: "reduce" });
     const phone = await context.newPage();
@@ -149,4 +159,4 @@ try {
 } finally {
   await browser.close();
 }
-console.log(`Screens written to ${OUT} (bookings on ${SHOT_DATE}).`);
+console.log(`Screens written to ${OUT}${ONLY === "site" ? "" : ` (bookings on ${SHOT_DATE})`}.`);
