@@ -36,11 +36,11 @@ export function ConfirmationPanel({
     <section className="flex flex-col gap-5">
       {/* Mark, heading, what's next — set flush left like the rest of the flow. */}
       <header className="flex flex-col items-start gap-3">
-        <svg className="size-10 text-success" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="square" aria-hidden="true">
+        <svg className="size-14 rounded-full bg-success p-3.5 text-success-content" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
           <path d="M20 6 9 17l-5-5" />
         </svg>
         <h1 className={PAGE_HEADING}>{t("booking.confirmed.heading")}</h1>
-        <p className="max-w-xl text-base-content/70">
+        <p className="max-w-xl text-pretty text-base-content/65">
           {/* R270: texted to the verified phone once SMS is live; until then this screen is the copy */}
           {confirmation.linkTexted
             ? t("booking.confirmed.bodyTexted", { phone: confirmation.phoneNumber })
@@ -68,7 +68,7 @@ export function ConfirmationPanel({
         t={t}
       />
 
-      <div className="flex flex-col items-start gap-2 rounded-box bg-base-200 p-4">
+      <div className="flex flex-col items-start gap-3 rounded-box bg-base-200 p-5">
         <a
           className="btn btn-primary"
           href={confirmation.manageUrl}

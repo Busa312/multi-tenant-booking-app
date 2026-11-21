@@ -112,7 +112,7 @@ export function StepDetails({
           />
         </label>
 
-        <span className="-mt-2 text-xs text-base-content/60">{t("booking.details.phoneHint")}</span>
+        <span className="-mt-2 text-xs text-base-content/65">{t("booking.details.phoneHint")}</span>
 
         {error && (
           <p className="alert alert-soft alert-error" role="alert">
@@ -121,7 +121,7 @@ export function StepDetails({
         )}
 
         {/* R340: what booking agrees to, before any data is sent */}
-        <p className="text-xs text-base-content/60">
+        <p className="text-xs text-base-content/65">
           {t("booking.details.consentBefore")}
           <Link className="link" href={href("/terms")} target="_blank">
             {t("legal.termsTitle")}

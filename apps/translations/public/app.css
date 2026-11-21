@@ -1,0 +1,362 @@
+/* The CMS's colors (apps/cms/src/theme.css): ink on cool paper, hairline
+   rules, the yellow highlighter for what's unsaved. System fonts — a local
+   tool loads nothing from anywhere. */
+
+:root {
+  color-scheme: light;
+  --paper: #ffffff;
+  --paper-2: #f2f3f0;
+  --rule: #d9dcd5;
+  --ink: #15181b;
+  --muted: #5d636a;
+  --highlight: #ffe45c;
+  --highlight-ink: #15181b;
+  --warn: #c0362c;
+  --warn-soft: #fbe9e7;
+  --code: #5b6b7a;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+    --paper: #1c1f23;
+    --paper-2: #131518;
+    --rule: #32373d;
+    --ink: #e9eae6;
+    --muted: #9aa1a8;
+    --highlight: #ffe45c;
+    --highlight-ink: #15181b;
+    --warn: #ef8478;
+    --warn-soft: #3a2422;
+    --code: #9aa8b5;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--paper-2);
+  color: var(--ink);
+  font: 14px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans Georgian", "BPG Nino Mtavruli", sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+.muted {
+  color: var(--muted);
+}
+
+[hidden] {
+  display: none !important;
+}
+
+:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+
+/* Header: search, the app filter and the issue filter, always in reach. */
+.top {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: var(--paper);
+  border-bottom: 1px solid var(--rule);
+  padding: 12px 20px 10px;
+}
+
+.top-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+h1 {
+  margin: 0 8px 0 0;
+  font-size: 17px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+#search {
+  flex: 1;
+  min-width: 0;
+  max-width: 520px;
+  height: 34px;
+  padding: 0 12px;
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  background: var(--paper);
+  color: inherit;
+  font: inherit;
+}
+
+#reload {
+  margin-left: auto;
+}
+
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 24px;
+  margin-top: 10px;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.chip {
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.chip[aria-pressed="true"] {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: var(--paper);
+}
+
+.chip .count {
+  margin-left: 6px;
+  opacity: 0.6;
+  font-variant-numeric: tabular-nums;
+}
+
+.button {
+  height: 32px;
+  padding: 0 14px;
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  background: var(--paper);
+  color: inherit;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.button.primary {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: var(--paper);
+}
+
+.button:disabled {
+  opacity: 0.5;
+  cursor: progress;
+}
+
+main {
+  padding: 16px 20px 120px;
+}
+
+.notice {
+  margin-bottom: 16px;
+  padding: 10px 14px;
+  border: 1px solid var(--warn);
+  border-radius: 6px;
+  background: var(--warn-soft);
+  white-space: pre-line;
+}
+
+/* The table: the key, then one column per language. */
+.table {
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  background: var(--paper);
+}
+
+.row {
+  display: grid;
+  grid-template-columns: minmax(200px, 0.75fr) repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  padding: 10px 12px;
+  border-top: 1px solid var(--rule);
+}
+
+.row.head {
+  position: sticky;
+  top: var(--header-height, 96px);
+  z-index: 5;
+  border-top: 0;
+  background: var(--paper);
+  border-bottom: 1px solid var(--rule);
+  border-radius: 6px 6px 0 0;
+  font-weight: 700;
+}
+
+#rows .row:first-child {
+  border-top: 0;
+}
+
+.key {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+}
+
+.key-path {
+  font: 12px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace;
+  overflow-wrap: anywhere;
+}
+
+.tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.tag {
+  padding: 0 6px;
+  border-radius: 4px;
+  background: var(--paper-2);
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 18px;
+}
+
+.tag.warn {
+  background: var(--warn-soft);
+  color: var(--warn);
+}
+
+.tag.unsaved {
+  background: var(--highlight);
+  color: var(--highlight-ink);
+}
+
+.cell textarea {
+  display: block;
+  width: 100%;
+  min-height: 34px;
+  max-height: 320px;
+  padding: 6px 8px;
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  background: var(--paper);
+  color: inherit;
+  font: inherit;
+  resize: vertical;
+  field-sizing: content;
+}
+
+.cell textarea:hover {
+  border-color: var(--muted);
+}
+
+.cell textarea.changed {
+  border-color: var(--highlight);
+  box-shadow: inset 4px 0 0 var(--highlight);
+}
+
+.cell textarea.warn {
+  border-color: var(--warn);
+}
+
+.cell .hint {
+  margin: 4px 0 0;
+  color: var(--warn);
+  font-size: 12px;
+}
+
+.cell .hint.soft {
+  color: var(--muted);
+}
+
+/* A value that is code (a function, a constant): shown, changed in the file. */
+.cell .code {
+  padding: 6px 8px;
+  border: 1px dashed var(--rule);
+  border-radius: 6px;
+  color: var(--code);
+  font: 12px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 160px;
+  overflow: auto;
+}
+
+.cell .missing {
+  padding: 6px 8px;
+  border: 1px dashed var(--warn);
+  border-radius: 6px;
+  color: var(--warn);
+  font-size: 12px;
+}
+
+.more {
+  display: block;
+  margin: 16px auto 0;
+}
+
+/* The save bar: how many changes, and the two things to do with them. */
+.savebar {
+  position: fixed;
+  inset: auto 0 0;
+  z-index: 20;
+  background: var(--paper);
+  border-top: 1px solid var(--rule);
+  padding: 10px 20px;
+}
+
+.savebar-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.savebar p {
+  flex: 1;
+  margin: 0;
+}
+
+.toast {
+  position: fixed;
+  right: 20px;
+  bottom: 72px;
+  z-index: 30;
+  max-width: min(520px, calc(100vw - 40px));
+  padding: 10px 14px;
+  border-radius: 6px;
+  background: var(--ink);
+  color: var(--paper);
+  white-space: pre-line;
+}
+
+@media (max-width: 900px) {
+  .top-row {
+    flex-wrap: wrap;
+  }
+  #search {
+    order: 1;
+    flex-basis: 100%;
+    max-width: none;
+  }
+  .row {
+    grid-template-columns: 1fr;
+  }
+  .row.head {
+    display: none;
+  }
+  .cell::before {
+    content: attr(data-label);
+    display: block;
+    margin-bottom: 2px;
+    color: var(--muted);
+    font-size: 12px;
+  }
+}

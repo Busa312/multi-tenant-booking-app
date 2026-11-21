@@ -14,7 +14,8 @@
     "typecheck": "turbo run typecheck",
     "db:migrate": "pnpm --filter @booking/api prisma:migrate",
     "db:generate": "pnpm --filter @booking/api prisma:generate",
-    "db:seed": "pnpm --filter @booking/api prisma:seed"
+    "db:seed": "pnpm --filter @booking/api prisma:seed",
+    "translations": "pnpm --filter @booking/translations start"
   },
   "devDependencies": {
     "turbo": "^2.1.3",

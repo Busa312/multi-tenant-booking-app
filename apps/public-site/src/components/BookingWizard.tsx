@@ -408,8 +408,8 @@ export function BookingWizard({
   }
 
   return (
-    <div className="flex flex-col gap-5">
-      <h1 className="text-sm font-bold">{t("booking.title")}</h1>
+    <div className="flex flex-col gap-6">
+      <h1 className="text-sm font-semibold text-primary">{t("booking.title")}</h1>
       <StepProgress
         steps={steps.map((id) => t(`booking.steps.${id}`))}
         current={stepIndex}

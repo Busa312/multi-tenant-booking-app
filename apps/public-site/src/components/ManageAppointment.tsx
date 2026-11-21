@@ -92,7 +92,7 @@ export function ManageAppointment({
   };
 
   return (
-    <div className="flex flex-col gap-5">
+    <div className="flex flex-col gap-6">
       <h1 className={PAGE_HEADING}>{t("manage.heading")}</h1>
 
       <p className={`badge badge-soft badge-lg -mt-2 font-semibold ${isCancelled ? "badge-error" : "badge-primary"}`}>
@@ -135,7 +135,7 @@ export function ManageAppointment({
         <div className={SUMMARY_ROW}>
           <dt className={SUMMARY_TERM}>{t("booking.summary.total")}</dt>
           {/* R520 */}
-          <dd className="text-xl font-extrabold tabular-nums">{priceText(t, current.price, current.priceFrom)}</dd>
+          <dd className="text-xl font-semibold tabular-nums">{priceText(t, current.price, current.priceFrom)}</dd>
         </div>
       </dl>
 

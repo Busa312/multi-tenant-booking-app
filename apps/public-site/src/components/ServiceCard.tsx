@@ -4,7 +4,7 @@ import type { Service } from "@booking/shared-types";
 interface ServiceCardProps {
   service: Service;
   minutesLabel: (count: number) => string;
-  /** Visible label of the per-service booking link; the service name completes it for screen readers. */
+  /** The pill's label; with the service name it is the row link's accessible name. */
   bookLabel: string;
   href: (path: string) => string;
   text: (plain: string, i18n: unknown) => string;
@@ -20,25 +20,25 @@ export function ServiceCard({ service, minutesLabel, bookLabel, href, text, pric
   const description = service.description ? text(service.description, service.descriptionI18n) : null;
 
   return (
-    // One line of the price list. The link is stretched over the whole row
-    // (`after:inset-0`), so the row is one large touch target.
-    <article className="group relative flex flex-wrap items-baseline gap-x-6 gap-y-1 py-4">
-      <div className="min-w-0 flex-1 basis-64">
-        <Name className="text-lg font-semibold">{name}</Name>
+    // One row of an inset list, and the whole row is the link — straight into
+    // the wizard with this service already ticked. It highlights on hover like
+    // a list row; the pill at the end, like an app store's "Get", says what a
+    // press does. The highlight is inset (-mx-3/px-3) so it keeps clear of the
+    // tile's rounded edge.
+    <Link
+      className="-mx-3 flex items-center gap-4 rounded-xl px-3 py-4 transition-colors hover:bg-base-300/50 active:bg-base-300/70 motion-reduce:transition-none"
+      href={`${href("/book")}?serviceIds=${encodeURIComponent(service.id)}`}
+      aria-label={`${bookLabel}: ${name}`}
+    >
+      <div className="min-w-0 flex-1">
+        <Name className="font-semibold">{name}</Name>
         {description && <p className="mt-0.5 text-sm text-pretty text-base-content/65">{description}</p>}
+        <p className="mt-1 text-sm text-base-content/65 tabular-nums">{minutesLabel(service.durationMinutes)}</p>
       </div>
-      <p className="flex items-baseline gap-4 tabular-nums">
-        <span className="text-sm text-base-content/65">{minutesLabel(service.durationMinutes)}</span>
-        <span className="text-lg font-bold whitespace-nowrap">{price}</span>
-      </p>
-      {/* Straight into the wizard with this service already ticked. */}
-      <Link
-        className="font-semibold whitespace-nowrap text-primary underline-offset-4 group-hover:underline after:absolute after:inset-0"
-        href={`${href("/book")}?serviceIds=${encodeURIComponent(service.id)}`}
-        aria-label={`${bookLabel}: ${name}`}
-      >
-        {bookLabel} <span aria-hidden="true">→</span>
-      </Link>
-    </article>
+      <p className="font-semibold whitespace-nowrap tabular-nums">{price}</p>
+      <span className="btn btn-soft btn-primary btn-sm flex-none px-4" aria-hidden="true">
+        {bookLabel}
+      </span>
+    </Link>
   );
 }

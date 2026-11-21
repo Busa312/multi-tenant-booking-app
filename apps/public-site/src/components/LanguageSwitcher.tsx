@@ -31,7 +31,7 @@ export function LanguageSwitcher({ current, defaultLocale, enabledLocales, label
   const path = isLocale(first) ? pathname.slice(first.length + 1) || "/" : pathname;
 
   return (
-    <nav className="flex flex-none items-center gap-1" aria-label={label}>
+    <nav className="flex flex-none items-center gap-0.5" aria-label={label}>
       {LOCALES.filter((locale) => available.includes(locale)).map((locale) => {
         const href = localePath(locale, defaultLocale, path);
         return (
@@ -41,7 +41,7 @@ export function LanguageSwitcher({ current, defaultLocale, enabledLocales, label
             hrefLang={locale}
             lang={locale}
             aria-label={LOCALE_LABELS[locale]}
-            className={`btn btn-ghost btn-sm px-2 ${locale === current ? "font-bold underline decoration-2 underline-offset-4" : "font-normal text-base-content/65"}`}
+            className={`btn btn-ghost btn-sm px-3 ${locale === current ? "bg-base-200 font-semibold" : "font-normal text-base-content/65"}`}
             aria-current={locale === current ? "true" : undefined}
             onClick={(event) => {
               // Keep the query (a preselected service or branch) across the switch.

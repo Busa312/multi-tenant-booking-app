@@ -1,5 +1,5 @@
 import { getPublicApiClient } from "@/lib/api";
-import { loadPageContext, resolveCopy } from "@/lib/page-context";
+import { loadPageContext, resolveCopy, titleNamesSalon } from "@/lib/page-context";
 import { todayInTimezone } from "@/lib/tenant-time";
 import { priceText } from "@/lib/price";
 import { TenantIntro } from "@/components/TenantIntro";
@@ -7,6 +7,8 @@ import { BookCta } from "@/components/BookCta";
 import { ServiceList } from "@/components/ServiceList";
 import { OpeningHoursList } from "@/components/OpeningHoursList";
 import { LocationList } from "@/components/LocationList";
+import { ChevronRight } from "@/components/ChevronRight";
+import { MORE_LINK } from "@/lib/pageClasses";
 
 export const revalidate = 60;
 
@@ -27,11 +29,24 @@ export default async function HomePage({ params }: { params: { locale: string } 
   const today = new Date(`${todayInTimezone(context.tenant.timezone)}T00:00:00Z`).getUTCDay();
 
   return (
-    <div className="flex flex-col gap-12 sm:gap-16">
-      {/* The salon's own color, flat and full strength — its poster, not a tint of it. */}
-      <div className="flex flex-col items-start gap-8 rounded-box bg-primary px-6 py-10 text-primary-content sm:px-10 sm:py-14">
-        <TenantIntro title={title} description={description} />
-        <BookCta label={context.t("home.book")} href={context.href} />
+    <div className="flex flex-col gap-20 sm:gap-28">
+      {/* A product page's opening: the salon's words, large and centered, and one clear action. */}
+      <div className="flex flex-col items-center gap-9 pt-4 text-center sm:pt-8">
+        <TenantIntro
+          // The salon's name above its own title, unless the title already says it (in any language).
+          eyebrow={titleNamesSalon(context) ? null : context.tenant.name}
+          title={title}
+          description={description}
+        />
+        <div className="flex flex-wrap items-center justify-center gap-x-7 gap-y-4">
+          <BookCta label={context.t("home.book")} href={context.href} />
+          {services.length > 0 && (
+            <a className={MORE_LINK} href="#services">
+              {context.t("home.servicesTitle")}
+              <ChevronRight />
+            </a>
+          )}
+        </div>
       </div>
 
       <ServiceList

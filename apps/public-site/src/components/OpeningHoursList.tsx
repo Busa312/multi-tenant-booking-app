@@ -1,6 +1,7 @@
 import type { OpeningHours } from "@booking/shared-types";
 import { DATE_NAMES } from "@/i18n/dates";
 import type { Locale } from "@/i18n/locales";
+import { SECTION_HEADING, TILE_LIST } from "@/lib/pageClasses";
 
 interface OpeningHoursListProps {
   /** Open days only; a weekday that is missing is closed. */
@@ -26,22 +27,22 @@ export function OpeningHoursList({ hours, today, locale, heading, closedLabel, t
 
   return (
     <section aria-labelledby="hours-heading">
-      <h2 className="mb-4 text-2xl font-extrabold tracking-tight" id="hours-heading">
+      <h2 className={`mb-6 ${SECTION_HEADING}`} id="hours-heading">
         {heading}
       </h2>
-      <dl className="divide-y divide-base-300 border-y-2 border-accent">
+      <dl className={TILE_LIST}>
         {WEEK.map((dayOfWeek) => {
           const day = hours.find((entry) => entry.dayOfWeek === dayOfWeek);
           const isToday = dayOfWeek === today;
           return (
             <div
               key={dayOfWeek}
-              className={`flex items-baseline justify-between gap-4 py-2.5 ${isToday ? "font-bold" : ""}`}
+              className={`flex items-center justify-between gap-4 py-3.5 ${isToday ? "font-semibold" : ""}`}
               aria-current={isToday ? "date" : undefined}
             >
               <dt>
                 {names[dayOfWeek]}
-                {isToday && <span className="badge badge-secondary badge-sm ml-2 align-middle">{todayLabel}</span>}
+                {isToday && <span className="badge badge-primary badge-sm ml-2 align-middle">{todayLabel}</span>}
               </dt>
               <dd className={day ? "tabular-nums" : "text-base-content/65"}>
                 {day ? `${day.opens}–${day.closes}` : closedLabel}

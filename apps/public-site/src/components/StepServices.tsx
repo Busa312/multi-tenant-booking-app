@@ -79,7 +79,7 @@ export function StepServices({ services, categories, professionals, selectedIds,
                   return (
                     <li key={service.id}>
                       <label
-                        className="flex cursor-pointer items-center gap-3.5 rounded-box border border-base-300 bg-base-100 px-4 py-3.5 transition-colors hover:border-base-content/50 data-disabled:cursor-not-allowed data-disabled:opacity-55 data-disabled:hover:border-base-300 data-selected:border-primary data-selected:bg-base-200 data-selected:shadow-[inset_4px_0_0_var(--color-primary)]"
+                        className="flex cursor-pointer items-center gap-3.5 rounded-box border border-base-300 bg-base-100 px-5 py-4 transition-[border-color,box-shadow] hover:border-base-content/40 data-disabled:cursor-not-allowed data-disabled:opacity-55 data-disabled:hover:border-base-300 data-selected:border-primary data-selected:ring-1 data-selected:ring-primary motion-reduce:transition-none"
                         data-selected={isSelected || undefined}
                         data-disabled={disabled || undefined}
                       >
@@ -120,11 +120,11 @@ export function StepServices({ services, categories, professionals, selectedIds,
                 open={open.has(key)}
                 onToggle={(event) => setGroupOpen(key, event.currentTarget.open)}
               >
-                <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2 py-2 [&::-webkit-details-marker]:hidden">
-                  <h3 className="text-sm font-bold text-base-content/70">
+                <summary className="flex min-h-14 cursor-pointer list-none items-center gap-2 py-3 [&::-webkit-details-marker]:hidden">
+                  <h3 className="text-lg font-semibold tracking-tight">
                     {group.category ? text(group.category.name, group.category.nameI18n) : t("home.otherServices")}
                   </h3>
-                  <span className="text-sm text-base-content/50 tabular-nums">· {group.services.length}</span>
+                  <span className="text-sm text-base-content/50 tabular-nums">{group.services.length}</span>
                   {chosenHere > 0 && (
                     <span className="badge badge-primary badge-sm tabular-nums">
                       {t("booking.services.selectedInCategory", { count: chosenHere })}

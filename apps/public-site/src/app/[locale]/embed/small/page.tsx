@@ -16,7 +16,7 @@ export default async function EmbedSmallPage({ params }: { params: { locale: str
   return (
     <section className="flex flex-wrap items-center justify-between gap-3 p-4">
       <div className="min-w-0">
-        <p className="truncate text-lg leading-tight font-extrabold tracking-tight">{context.tenant.name}</p>
+        <p className="truncate text-lg leading-tight font-semibold tracking-tight">{context.tenant.name}</p>
         {today && <p className="text-sm text-base-content/65">{today}</p>}
       </div>
       <EmbedOpenButton fallbackHref={context.href("/book")} className="btn btn-primary">

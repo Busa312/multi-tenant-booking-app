@@ -16,12 +16,14 @@ export function PoweredBy({ locale, t }: PoweredByProps) {
   // Each language places the link where its grammar wants it ("Powered by {link}").
   const [before = "", after = ""] = t("footer.poweredBy").split("{link}");
   return (
-    <p className="mx-auto w-full max-w-3xl px-4 pb-5 text-xs text-base-content/65">
-      {before}
-      <a className="link link-hover" href={site.href}>
-        {site.label}
-      </a>
-      {after}
-    </p>
+    <div className="mx-auto w-full max-w-3xl px-4 pb-[max(1.5rem,env(safe-area-inset-bottom))]">
+      <p className="border-t border-base-300 pt-4">
+        {before}
+        <a className="hover:text-base-content hover:underline" href={site.href}>
+          {site.label}
+        </a>
+        {after}
+      </p>
+    </div>
   );
 }

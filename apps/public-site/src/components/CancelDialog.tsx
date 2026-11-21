@@ -38,7 +38,7 @@ export function CancelDialog({ onConfirm, onClose, t }: CancelDialogProps) {
       }}
     >
       <div className="modal-box sm:max-w-md">
-        <h2 className="text-lg font-bold">{t("manage.cancelHeading")}</h2>
+        <h2 className="text-xl font-semibold tracking-tight">{t("manage.cancelHeading")}</h2>
         <div className="modal-action flex-wrap">
           <button type="button" className="btn btn-primary" onClick={onClose} disabled={isSaving}>
             {t("manage.cancelKeep")}

@@ -1,0 +1,19 @@
+{
+  "name": "@booking/translations",
+  "version": "1.0.1",
+  "private": true,
+  "description": "A local editor for every app's translations: shows English, Georgian and Russian side by side and writes changes into the source files. Not deployed; started only on demand.",
+  "type": "module",
+  "scripts": {
+    "start": "node src/server.mjs",
+    "typecheck": "tsc --noEmit",
+    "test": "node --test src/"
+  },
+  "dependencies": {
+    "typescript": "^5.6.3"
+  },
+  "devDependencies": {
+    "@booking/config": "workspace:*",
+    "@types/node": "^20.16.10"
+  }
+}

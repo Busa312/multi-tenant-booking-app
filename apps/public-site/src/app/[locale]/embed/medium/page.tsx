@@ -21,12 +21,12 @@ export default async function EmbedMediumPage({ params }: { params: { locale: st
   return (
     <section className="flex flex-col gap-4 p-5">
       <header>
-        <h1 className="text-2xl leading-tight font-extrabold tracking-tight">{context.tenant.name}</h1>
+        <h1 className="text-2xl leading-tight font-semibold tracking-tight">{context.tenant.name}</h1>
         {today && <p className="mt-0.5 text-sm text-base-content/65">{today}</p>}
       </header>
 
       {services.length > 0 && (
-        <ul className="divide-y divide-base-300 border-y-2 border-accent">
+        <ul className="divide-y divide-base-300 rounded-box bg-base-200 px-4">
           {services.slice(0, SHOWN).map((service) => {
             const name = context.text(service.name, service.nameI18n);
             return (

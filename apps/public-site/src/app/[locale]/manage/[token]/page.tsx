@@ -32,7 +32,7 @@ export default async function ManagePage({ params }: { params: { locale: string;
   if (!result.ok) {
     return (
       <div className="flex flex-col items-start gap-4">
-        <h1 className="text-3xl font-extrabold tracking-tight text-balance sm:text-4xl">{context.t("manage.heading")}</h1>
+        <h1 className="text-4xl font-semibold tracking-tight text-balance sm:text-5xl">{context.t("manage.heading")}</h1>
         <p className="alert alert-soft alert-warning w-full">{context.t("manage.invalid")}</p>
         <Link className="btn btn-primary" href={context.href("/manage/resend")}>
           {context.t("manage.lostLink")}

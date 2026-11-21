@@ -14,13 +14,13 @@ export function LegalDocument({ document, salon, updatedLabel }: LegalDocumentPr
   return (
     <article className="flex max-w-2xl flex-col gap-6">
       <header className="flex flex-col gap-2">
-        <h1 className="text-3xl font-extrabold tracking-tight text-balance sm:text-4xl">{document.title}</h1>
-        <p className="text-sm text-base-content/60">{updatedLabel}</p>
+        <h1 className="text-4xl font-semibold tracking-tight text-balance sm:text-5xl">{document.title}</h1>
+        <p className="text-sm text-base-content/65">{updatedLabel}</p>
         <p className="leading-relaxed text-base-content/80">{fill(document.intro, salon)}</p>
       </header>
       {document.sections.map((section) => (
         <section key={section.heading} className="flex flex-col gap-2">
-          <h2 className="text-lg font-semibold">{section.heading}</h2>
+          <h2 className="text-xl font-semibold tracking-tight">{section.heading}</h2>
           {section.paragraphs.map((paragraph) => (
             <p key={paragraph.slice(0, 40)} className="leading-relaxed text-base-content/80">
               {fill(paragraph, salon)}

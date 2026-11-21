@@ -1,5 +1,6 @@
 import { localizedAddress } from "@booking/shared-types";
 import type { Location } from "@booking/shared-types";
+import { TILE } from "@/lib/pageClasses";
 import { BookCta } from "./BookCta";
 
 interface LocationCardProps {
@@ -21,12 +22,12 @@ export function LocationCard({ location, bookLabel, href, text }: LocationCardPr
   const fullAddress = localizedAddress(location, text);
 
   return (
-    <article className="h-full border-t-2 border-accent pt-4">
+    <article className={`h-full ${TILE} p-6`}>
       <div className="flex h-full flex-col gap-3">
-        <h3 className="text-lg font-semibold">{name}</h3>
+        <h3 className="text-xl font-semibold tracking-tight">{name}</h3>
         <address className="flex flex-col gap-1.5 not-italic">
           <a
-            className="link link-hover inline-flex items-start gap-2 text-base-content/75"
+            className="inline-flex items-start gap-2 text-base-content/70 hover:text-base-content hover:underline"
             href={mapHref(location, fullAddress)}
             target="_blank"
             rel="noopener noreferrer"
@@ -39,7 +40,7 @@ export function LocationCard({ location, bookLabel, href, text }: LocationCardPr
           </a>
           {location.phone && (
             <a
-              className="link link-hover inline-flex items-center gap-2 text-base-content/75"
+              className="inline-flex items-center gap-2 text-base-content/70 hover:text-base-content hover:underline"
               href={`tel:${location.phone.replace(/\s/g, "")}`}
             >
               <svg className="size-4 flex-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">

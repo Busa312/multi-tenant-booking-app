@@ -1,6 +1,7 @@
 import { groupServices, type Service, type ServiceCategory } from "@booking/shared-types";
 import { DisclosureChevron } from "./DisclosureChevron";
 import { ServiceCard } from "./ServiceCard";
+import { SECTION_HEADING, TILE } from "@/lib/pageClasses";
 
 interface ServiceListProps {
   services: Service[];
@@ -35,18 +36,21 @@ export function ServiceList({
   const titled = groups.some((group) => group.category !== null);
 
   return (
-    <section aria-labelledby="services-heading">
-      <h2 className="mb-4 text-2xl font-extrabold tracking-tight" id="services-heading">
+    // The hero's "Services" link jumps here (the page's scroll padding clears the sticky header).
+    <section aria-labelledby="services-heading" id="services">
+      <h2 className={`mb-6 ${SECTION_HEADING}`} id="services-heading">
         {heading}
       </h2>
 
       {services.length === 0 ? (
-        <p className="border-y-2 border-accent py-8 text-base-content/65">{emptyLabel}</p>
+        <p className={`${TILE} px-5 py-8 text-base-content/65`}>{emptyLabel}</p>
       ) : (
-        <div className={titled ? "border-b-2 border-accent" : undefined}>
+        <div className="flex flex-col gap-3">
           {groups.map((group, index) => {
+            // The tile pads the list by 8px on every side, the room a row's inset hover
+            // highlight (ServiceCard) needs to stay clear of the tile's edge.
             const list = (
-              <ul className={titled ? "divide-y divide-base-300 border-t border-base-300" : "divide-y divide-base-300 border-y-2 border-accent"}>
+              <ul className="divide-y divide-base-300">
                 {group.services.map((service) => (
                   <li key={service.id}>
                     <ServiceCard
@@ -62,22 +66,28 @@ export function ServiceList({
                 ))}
               </ul>
             );
-            if (!titled) return <div key="all">{list}</div>;
-            // R510: each category opens and closes on its own; the first starts open.
+            if (!titled) {
+              return (
+                <div key="all" className={`${TILE} px-5 py-2`}>
+                  {list}
+                </div>
+              );
+            }
+            // R510: each category is a tile that opens and closes on its own; the first starts open.
             // Native <details>: no script, keyboard and screen readers for free, and
             // the browser's find-in-page opens a closed category to show a match.
             return (
-              <details key={group.category?.id ?? "other"} className="group border-t-2 border-accent" open={index === 0}>
-                <summary className="flex min-h-12 cursor-pointer list-none items-center gap-3 py-3 [&::-webkit-details-marker]:hidden">
-                  <h3 className="text-xl font-bold tracking-tight">
+              <details key={group.category?.id ?? "other"} className={`group ${TILE} px-5`} open={index === 0}>
+                <summary className="flex min-h-14 cursor-pointer list-none items-center gap-3 py-4 [&::-webkit-details-marker]:hidden">
+                  <h3 className="text-lg font-semibold tracking-tight">
                     {group.category ? text(group.category.name, group.category.nameI18n) : otherLabel}
                   </h3>
-                  <span className="text-sm text-base-content/60 tabular-nums">· {group.services.length}</span>
+                  <span className="text-sm text-base-content/50 tabular-nums">{group.services.length}</span>
                   <span className="ml-auto">
                     <DisclosureChevron />
                   </span>
                 </summary>
-                {list}
+                <div className="border-t border-base-300 py-2">{list}</div>
               </details>
             );
           })}

@@ -17,7 +17,7 @@ interface DayPickerProps {
 }
 
 const WEEK = 7;
-const NAV = "btn btn-square btn-ghost text-xl";
+const NAV = "btn btn-circle btn-ghost text-xl";
 
 /** Whole days from one calendar date to another (both parse as UTC midnight). */
 function daysBetween(from: string, to: string): number {
@@ -72,7 +72,7 @@ export function DayPicker({ date, today, lastDate, timezone, locale, onPick, t }
               role="radio"
               aria-checked={day === date}
               aria-label={formatDay(day, timezone, locale)}
-              className="flex w-full cursor-pointer flex-col items-center gap-1 rounded-field border border-base-300 bg-base-100 py-2 transition-colors hover:border-base-content/50 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-base-300 aria-checked:border-primary aria-checked:bg-primary aria-checked:text-primary-content motion-reduce:transition-none"
+              className="flex w-full cursor-pointer flex-col items-center gap-1 rounded-field border border-base-300 bg-base-100 py-2.5 transition-colors hover:border-base-content/40 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-base-300 aria-checked:border-primary aria-checked:bg-primary aria-checked:text-primary-content motion-reduce:transition-none"
               disabled={day > lastDate}
               onClick={() => onPick(day)}
             >

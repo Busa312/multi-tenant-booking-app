@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Translations</title>
+    <link rel="stylesheet" href="/app.css" />
+    <script type="module" src="/app.js"></script>
+  </head>
+  <body>
+    <header class="top">
+      <div class="top-row">
+        <h1>Translations</h1>
+        <input id="search" type="search" placeholder="Search keys and text" aria-label="Search keys and text" autocomplete="off" />
+        <button id="reload" type="button" class="button">Reload from disk</button>
+      </div>
+      <div class="filters">
+        <div id="sources" class="chips" role="group" aria-label="App"></div>
+        <div id="issues" class="chips" role="group" aria-label="Show"></div>
+      </div>
+    </header>
+
+    <main>
+      <div id="errors" class="notice" role="alert" hidden></div>
+      <p id="loading" class="muted">Loading…</p>
+      <div id="table" class="table" hidden>
+        <div class="row head">
+          <div>Key</div>
+          <div lang="en">English</div>
+          <div lang="ka">ქართული</div>
+          <div lang="ru">Русский</div>
+        </div>
+        <div id="rows"></div>
+      </div>
+      <p id="empty" class="muted" hidden>No strings match.</p>
+      <button id="more" type="button" class="button more" hidden></button>
+    </main>
+
+    <footer id="savebar" class="savebar" hidden>
+      <div class="savebar-row">
+        <p><strong id="dirty-count"></strong> <span class="muted">Saving writes into the source files — commit and deploy to publish.</span></p>
+        <button id="discard" type="button" class="button">Discard</button>
+        <button id="save" type="button" class="button primary">Save</button>
+      </div>
+    </footer>
+
+    <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+  </body>
+</html>
