@@ -129,10 +129,10 @@ export function StepDateTime({
       {draft.slot && (
         <div
           ref={planRef}
-          className="scroll-mb-24 rounded-box bg-base-200 p-4 sm:scroll-mb-4"
+          className="scroll-mb-24 rounded-box bg-base-200 p-5 sm:scroll-mb-4"
           aria-live="polite"
         >
-          <p className="mb-3 text-sm font-semibold text-base-content/70">{t("booking.time.plan")}</p>
+          <p className="mb-3 text-sm font-semibold text-base-content/65">{t("booking.time.plan")}</p>
           <VisitPlan
             rows={draft.slot.segments.map((segment) => ({
               key: `${segment.startAt}-${segment.professionalId}`,

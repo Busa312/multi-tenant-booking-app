@@ -67,7 +67,7 @@ export function tenantThemeVars(colors: Required<TenantColors>): TenantThemeVars
     "--tenant-primary-content": contentFor(colors.primary, colors),
     "--tenant-secondary": colors.secondary,
     "--tenant-secondary-content": contentFor(colors.secondary, colors),
-    // The heavy rules of the page (letterhead, price list, receipts) — the secondary's job.
+    // The secondary where it shows against the page, else the text color.
     "--tenant-accent":
       (getContrastRatio(colors.secondary, colors.background) ?? 0) >= VISIBLE_RULE ? colors.secondary : colors.text,
     "--tenant-background": colors.background,

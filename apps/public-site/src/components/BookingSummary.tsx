@@ -49,7 +49,7 @@ export function BookingSummary({ startAt, location, plan, total, totalFrom, time
 
       <div className={ROW}>
         <dt className={TERM}>{t("booking.summary.total")}</dt>
-        <dd className="text-xl font-extrabold tabular-nums">{priceText(t, total, totalFrom)}</dd>
+        <dd className="text-xl font-semibold tabular-nums">{priceText(t, total, totalFrom)}</dd>
       </div>
     </dl>
   );

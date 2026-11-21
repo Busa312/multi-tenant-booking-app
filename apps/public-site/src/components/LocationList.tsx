@@ -1,4 +1,5 @@
 import type { Location } from "@booking/shared-types";
+import { SECTION_HEADING } from "@/lib/pageClasses";
 import { LocationCard } from "./LocationCard";
 
 interface LocationListProps {
@@ -18,11 +19,11 @@ export function LocationList({ locations, heading, bookLabel, href, text }: Loca
 
   return (
     <section aria-labelledby="locations-heading">
-      <h2 className="mb-4 text-2xl font-extrabold tracking-tight" id="locations-heading">
+      <h2 className={`mb-6 ${SECTION_HEADING}`} id="locations-heading">
         {heading}
       </h2>
       {/* One branch takes the full width rather than sitting alone in a half column. */}
-      <ul className={locations.length === 1 ? "grid gap-8" : "grid gap-8 sm:grid-cols-2"}>
+      <ul className={locations.length === 1 ? "grid gap-3" : "grid gap-3 sm:grid-cols-2"}>
         {locations.map((location) => (
           <li key={location.id}>
             <LocationCard

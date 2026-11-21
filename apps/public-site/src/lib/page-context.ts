@@ -89,3 +89,18 @@ export function resolveCopy(context: PageContext): { title: string; description:
 
   return { title, description };
 }
+
+/**
+ * Whether the home page's title already names the salon, so its name needn't
+ * stand above it. Decided once for the salon, not per language: a translation
+ * names it in its own script and grammar ("დემო სალონში" for "Demo Salon"),
+ * which no text match catches, and the page must not change shape when the
+ * visitor switches language. The default title always names it.
+ */
+export function titleNamesSalon(context: PageContext): boolean {
+  const copy = context.tenant.configJson.copy ?? {};
+  if (!copy.title) return true;
+  const name = context.tenant.name.toLocaleLowerCase();
+  const titles = [copy.title, ...Object.values(copy.titleI18n ?? {})];
+  return titles.some((title) => typeof title === "string" && title.toLocaleLowerCase().includes(name));
+}

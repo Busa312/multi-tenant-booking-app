@@ -83,7 +83,7 @@ export function RescheduleDialog({ visit, token, timezone, lastDate, locale, onC
       }}
     >
       <div className="modal-box flex max-h-[90dvh] flex-col gap-4 sm:max-w-lg">
-        <h2 className="text-lg font-bold">{t("manage.rescheduleHeading")}</h2>
+        <h2 className="text-xl font-semibold tracking-tight">{t("manage.rescheduleHeading")}</h2>
         {/* R110: the link they followed to get here dies the moment this saves */}
         <p className="-mt-2 text-sm text-base-content/65">{t("manage.rescheduleNote")}</p>
 

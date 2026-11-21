@@ -8,8 +8,8 @@ interface NotFoundMessageProps {
 export function NotFoundMessage({ t }: NotFoundMessageProps) {
   return (
     <div className="flex flex-col items-start gap-3 py-16">
-      <p className="text-7xl leading-none font-extrabold tracking-tight tabular-nums">404</p>
-      <h1 className="text-2xl font-extrabold tracking-tight">{t("notFound.title")}</h1>
+      <p className="text-7xl leading-none font-semibold tracking-tight text-base-content/30 tabular-nums">404</p>
+      <h1 className="text-3xl font-semibold tracking-tight">{t("notFound.title")}</h1>
       <p className="text-base-content/65">{t("notFound.body")}</p>
     </div>
   );

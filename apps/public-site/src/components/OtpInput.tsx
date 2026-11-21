@@ -17,7 +17,8 @@ interface OtpInputProps {
 }
 
 const BOX =
-  "input input-lg w-12 px-0 text-center font-mono text-2xl tabular-nums sm:w-14 motion-reduce:transition-none";
+  // Rounded squares, not the pill every other field is: a digit box reads as a box.
+  "input input-lg w-12 px-0 text-center font-mono text-2xl tabular-nums [--radius-field:0.875rem] sm:w-14 motion-reduce:transition-none";
 
 /**
  * One box per digit. The value stays contiguous — a box past the first empty

@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { MORE_LINK } from "@/lib/pageClasses";
+import { ChevronRight } from "./ChevronRight";
 
 interface BookCtaProps {
   label: string;
@@ -6,25 +8,24 @@ interface BookCtaProps {
   href: (path: string) => string;
 
   locationId?: string;
+  /** "hero": the page's one large pill button. "inline": a text link with a chevron. */
   variant?: "hero" | "inline";
 }
 
 export function BookCta({ label, href: hrefFor, locationId, variant = "hero" }: BookCtaProps) {
   const href = hrefFor("/book") + (locationId ? `?locationId=${encodeURIComponent(locationId)}` : "");
 
+  if (variant === "inline") {
+    return (
+      <Link className={MORE_LINK} href={href}>
+        {label}
+        <ChevronRight />
+      </Link>
+    );
+  }
   return (
-    <Link
-      className={
-        variant === "hero"
-          ? // Inverted: it sits on the primary-colored hero. Set through daisyUI's
-            // button variables so hover and focus still derive from them.
-            "btn btn-lg w-full gap-2 [--btn-color:var(--color-primary-content)] [--btn-fg:var(--color-primary)] sm:w-auto"
-          : "btn btn-outline btn-primary btn-sm self-start"
-      }
-      href={href}
-    >
+    <Link className="btn btn-primary btn-lg px-8" href={href}>
       {label}
-      <span aria-hidden="true">→</span>
     </Link>
   );
 }

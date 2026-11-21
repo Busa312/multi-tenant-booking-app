@@ -7,7 +7,7 @@ interface StepProgressProps {
   onSelect: (index: number) => void;
 }
 
-const BAR = "h-1.5";
+const BAR = "h-1 rounded-full";
 const NAME = "sr-only truncate text-xs sm:not-sr-only";
 
 // One segment per step, filled up to the current one. The "Step 2 of 5" line
@@ -32,7 +32,7 @@ export function StepProgress({ steps, current, label, onSelect }: StepProgressPr
             ) : (
               <div className="flex flex-col gap-1.5">
                 <span className={`${BAR} ${index === current ? "bg-primary" : "bg-base-300"}`} aria-hidden="true" />
-                <span className={`${NAME} ${index === current ? "font-bold" : "text-base-content/65"}`}>{step}</span>
+                <span className={`${NAME} ${index === current ? "font-semibold" : "text-base-content/65"}`}>{step}</span>
               </div>
             )}
           </li>

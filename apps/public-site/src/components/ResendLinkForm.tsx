@@ -20,19 +20,19 @@ export function ResendLinkForm({ messages }: { messages: Messages }) {
 
   return (
     <section className="mx-auto flex w-full max-w-md flex-col gap-5">
-      <h1 className="text-3xl font-extrabold tracking-tight text-balance">{t("manage.resend.heading")}</h1>
+      <h1 className="text-4xl font-semibold tracking-tight text-balance">{t("manage.resend.heading")}</h1>
 
       {isDone ? (
         <p className="alert alert-soft alert-success" role="status">
           {t("manage.resend.done")}
         </p>
       ) : (
-        <form className="flex flex-col gap-4 border-t-2 border-accent pt-5" onSubmit={submit}>
-          <p className="text-base-content/70">{t("manage.resend.hint")}</p>
+        <form className="flex flex-col gap-4 rounded-box bg-base-200 p-6" onSubmit={submit}>
+          <p className="text-pretty text-base-content/65">{t("manage.resend.hint")}</p>
           <label className="flex flex-col gap-1.5">
             <span className="text-sm font-medium">{t("manage.resend.phone")}</span>
             <input
-              className="input w-full"
+              className="input input-lg w-full"
               type="tel"
               inputMode="tel"
               autoComplete="tel"

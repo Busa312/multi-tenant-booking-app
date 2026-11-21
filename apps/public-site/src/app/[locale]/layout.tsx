@@ -81,14 +81,15 @@ export default async function RootLayout({ children, params }: LayoutProps) {
         <PreviewColorListener />
         <BookingProgressReset />
         <div className="flex min-h-dvh flex-col">
-          <header className="border-b-2 border-accent">
-            <div className="mx-auto flex w-full max-w-3xl items-center justify-between gap-4 px-4 py-3.5">
+          {/* Translucent and sticky, like a product page's bar: the salon's name and the languages stay in reach. */}
+          <header className="sticky top-0 z-30 border-b border-base-300/60 bg-base-100/75 backdrop-blur-xl backdrop-saturate-150">
+            <div className="mx-auto flex h-14 w-full max-w-3xl items-center justify-between gap-4 px-4">
               <Link className="inline-flex min-w-0 items-center" href={context.href("/")}>
                 {logoUrl ? (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img className="h-9 w-auto object-contain" src={logoUrl} alt={context.tenant.name} />
+                  <img className="h-8 w-auto object-contain" src={logoUrl} alt={context.tenant.name} />
                 ) : (
-                  <span className="truncate text-xl font-extrabold tracking-tight">{context.tenant.name}</span>
+                  <span className="truncate text-lg font-semibold tracking-tight">{context.tenant.name}</span>
                 )}
               </Link>
               <LanguageSwitcher
@@ -100,20 +101,20 @@ export default async function RootLayout({ children, params }: LayoutProps) {
             </div>
           </header>
 
-          <main className="mx-auto w-full max-w-3xl flex-1 px-4 pt-6 pb-16 sm:pt-10">{children}</main>
+          <main className="mx-auto w-full max-w-3xl flex-1 px-4 pt-10 pb-24 sm:pt-16">{children}</main>
 
-          <footer className="border-t border-base-300">
-            <div className="mx-auto flex w-full max-w-3xl flex-wrap items-center justify-between gap-2 px-4 pt-5 pb-3 text-sm text-base-content/65">
-              <span className="truncate font-semibold text-base-content">{context.tenant.name}</span>
-              <nav className="flex flex-wrap items-center gap-x-4 gap-y-1" aria-label={context.t("legal.footerNav")}>
+          <footer className="bg-base-200 text-xs text-base-content/65">
+            <div className="mx-auto flex w-full max-w-3xl flex-wrap items-center justify-between gap-x-6 gap-y-2 px-4 pt-6 pb-4">
+              <span className="truncate font-semibold text-base-content/80">{context.tenant.name}</span>
+              <nav className="flex flex-wrap items-center gap-x-5 gap-y-1" aria-label={context.t("legal.footerNav")}>
                 {/* R340 */}
-                <Link className="link link-hover" href={context.href("/privacy")}>
+                <Link className="hover:text-base-content hover:underline" href={context.href("/privacy")}>
                   {context.t("legal.privacyTitle")}
                 </Link>
-                <Link className="link link-hover" href={context.href("/terms")}>
+                <Link className="hover:text-base-content hover:underline" href={context.href("/terms")}>
                   {context.t("legal.termsTitle")}
                 </Link>
-                <Link className="link link-hover" href={context.href("/manage/resend")}>
+                <Link className="hover:text-base-content hover:underline" href={context.href("/manage/resend")}>
                   {context.t("manage.findBooking")}
                 </Link>
               </nav>
