@@ -20,6 +20,7 @@ const chunks = {
   subscription: () => import("./pages/Subscription.js"),
   blockedNumbers: () => import("./pages/BlockedNumbers.js"),
   setup: () => import("./pages/Setup.js"),
+  install: () => import("./pages/Install.js"),
 };
 
 const SetPasswordPage = lazy(() => chunks.setPassword().then((m) => ({ default: m.SetPasswordPage })));
@@ -37,6 +38,7 @@ const PublicSiteSettingsPage = lazy(() =>
 const HoursPage = lazy(() => chunks.hours().then((m) => ({ default: m.HoursPage })));
 const SetupPage = lazy(() => chunks.setup().then((m) => ({ default: m.SetupPage })));
 const BlockedNumbersPage = lazy(() => chunks.blockedNumbers().then((m) => ({ default: m.BlockedNumbersPage })));
+const InstallPage = lazy(() => chunks.install().then((m) => ({ default: m.InstallPage })));
 const SubscriptionPage = lazy(() => chunks.subscription().then((m) => ({ default: m.SubscriptionPage })));
 
 const NAV_CHUNKS = [
@@ -93,6 +95,8 @@ export function App() {
           <Route path="/set-password/:tenantId/:token" element={<SetPasswordPage />} />
           <Route path="/forgot-password" element={<ForgotPasswordPage />} />
           <Route path="/reset-password/:tenantId/:token" element={<ResetPasswordPage />} />
+          {/* R620: "Get the app", from the marketing site — signed in or not */}
+          <Route path="/install" element={<InstallPage />} />
           <Route
             path="/"
             element={

@@ -292,24 +292,25 @@ export class VisitService {
    * only still-booked segments flip, so a segment staff already marked
    * completed or no-show keeps that record. The link dies with it.
    */
-  async cancel(token: string): Promise<PrismaVisit> {
+  async cancel(token: string): Promise<{ visit: PrismaVisit; cancelled: boolean }> {
     const { tenantId } = this.tenantContext.current;
 
     return this.prisma.forTenant(async (tx) => {
       const visit = await this.findByTokenIn(tx, token);
       if (!visit.appointments.some((appointment) => appointment.status === "booked")) {
-        return visit;
+        return { visit, cancelled: false };
       }
       this.assertChangeable(visit, (await this.tenantRules(tx)).changeCutoffHours);
       await tx.appointment.updateMany({
         where: { tenantId, visitId: visit.id, status: "booked" },
         data: { status: "cancelled" },
       });
-      return tx.visit.update({
+      const updated = await tx.visit.update({
         where: { id: visit.id, tenantId },
         data: { accessTokenHash: null, accessTokenExpiresAt: null },
         include: VISIT_INCLUDE,
       });
+      return { visit: updated, cancelled: true };
     });
   }
 

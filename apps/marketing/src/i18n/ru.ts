@@ -16,6 +16,7 @@ export const ru: Messages = {
     pricing: "Цены",
     faq: "Вопросы",
     signIn: "Войти",
+    getApp: "Приложение",
     cta: "Начать",
     menu: "Меню",
     language: "Язык",

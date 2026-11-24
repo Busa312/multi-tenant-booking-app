@@ -50,7 +50,10 @@ import type {
   CreateServiceCategoryRequest,
   UpdateServiceCategoryRequest,
   ReorderServiceCategoriesRequest,
-  ReorderServicesRequest
+  ReorderServicesRequest,
+  PushConfigResponse,
+  SavePushSubscriptionRequest,
+  DeletePushSubscriptionRequest
 } from "@booking/shared-types";
 import { HttpClient, type ApiClientOptions } from "./http";
 
@@ -270,6 +273,19 @@ export class CmsApiClient {
 
   unblockPhone(payload: UnblockPhoneRequest) {
     return this.http.post<void>("/cms/blocked-phones/unblock", payload);
+  }
+
+  // R620: push notifications on this device
+  getPushConfig() {
+    return this.http.get<PushConfigResponse>("/cms/push/config");
+  }
+
+  savePushSubscription(payload: SavePushSubscriptionRequest) {
+    return this.http.put<void>("/cms/push/subscriptions", payload);
+  }
+
+  removePushSubscription(payload: DeletePushSubscriptionRequest) {
+    return this.http.post<void>("/cms/push/subscriptions/remove", payload);
   }
 
   listAppointments(query: CmsAppointmentListQuery = {}) {

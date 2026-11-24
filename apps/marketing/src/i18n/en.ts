@@ -16,6 +16,7 @@ export const en: Messages = {
     pricing: "Pricing",
     faq: "FAQ",
     signIn: "Sign in",
+    getApp: "Get the app",
     cta: "Get started",
     menu: "Menu",
     language: "Language",

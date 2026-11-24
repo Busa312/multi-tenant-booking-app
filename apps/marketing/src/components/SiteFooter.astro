@@ -1,6 +1,6 @@
 ---
 import { contactPath, localeHome, type Locale, type Messages } from "../i18n";
-import { brandName, cmsUrl, contactEmail } from "../lib/site";
+import { appInstallUrl, brandName, cmsUrl, contactEmail } from "../lib/site";
 import LanguageLinks from "./LanguageLinks.astro";
 import Logo from "./Logo.astro";
 
@@ -27,6 +27,8 @@ const home = localeHome(locale);
       <li><a class="hover:text-base-content" href={`${home}#pricing`}>{t.nav.pricing}</a></li>
       <li><a class="hover:text-base-content" href={`${home}#faq`}>{t.nav.faq}</a></li>
       <li><a class="hover:text-base-content" href={cmsUrl}>{t.nav.signIn}</a></li>
+      <!-- R620 -->
+      <li><a class="hover:text-base-content" href={appInstallUrl(locale)}>{t.nav.getApp}</a></li>
       <li><a class="hover:text-base-content" href={contactPath(locale)}>{t.footer.contact}</a></li>
       <li><a class="hover:text-base-content" href={`mailto:${contactEmail}`}>{contactEmail}</a></li>
     </ul>

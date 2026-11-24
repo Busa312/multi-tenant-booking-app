@@ -698,5 +698,33 @@
     "resume": "Continue setup",
     "hide": "Hide",
     "errLoad": "Could not load the setup"
+  },
+  "push": {
+    "turnOn": "Turn on notifications",
+    "turnOff": "Turn off notifications",
+    "turnOnHint": "Get a notification when a customer books, moves or cancels online",
+    "blocked": "Notifications blocked",
+    "blockedHint": "Allow notifications for this site in your browser's settings.",
+    "failed": "Couldn't turn notifications on. Try again.",
+    "installTitle": "Notifications on iPhone and iPad",
+    "installIntro": "On iPhone and iPad, notifications work once the CMS is on your Home Screen.",
+    "installStep1": "In Safari, tap Share.",
+    "installStep2": "Choose “Add to Home Screen”, then tap Add.",
+    "installStep3": "Open the CMS from its Home Screen icon, sign in, and turn notifications on there.",
+    "installNote": "You'll be notified when a customer books, moves or cancels online."
+  },
+  "install": {
+    "artHeadline": "Your bookings, one tap away.",
+    "artSub": "Install the CMS on your phone or computer and hear about online bookings as they happen.",
+    "title": "Get the app",
+    "subtitle": "{brand} opens like an app and can notify you when a customer books, moves or cancels online.",
+    "installButton": "Install the app",
+    "installing": "Installing…",
+    "installed": "The app is installed on this device. Open it from your home screen or app list.",
+    "continue": "Continue",
+    "iosIntro": "On iPhone and iPad, add it from Safari:",
+    "manualIntro": "Open your browser's menu and choose “Install app” or “Add to Home screen”. In Safari on a Mac: File → Add to Dock.",
+    "manualOther": "Don't see it? Open this page in Chrome or Edge, or in Safari on an iPhone.",
+    "forBusinesses": "The app is for businesses that already use {brand}: sign in with your work email."
   }
 }

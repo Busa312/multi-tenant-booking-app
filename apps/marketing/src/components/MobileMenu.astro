@@ -1,6 +1,6 @@
 ---
 import type { Locale, Messages } from "../i18n";
-import { cmsUrl } from "../lib/site";
+import { appInstallUrl, cmsUrl } from "../lib/site";
 import Icon from "./Icon.astro";
 import LanguageLinks from "./LanguageLinks.astro";
 
@@ -34,6 +34,10 @@ const { locale, t, links, path = "" } = Astro.props;
       }
       <li>
         <a href={cmsUrl} class="block border-b border-base-300 py-4">{t.nav.signIn}</a>
+      </li>
+      <!-- R620 -->
+      <li>
+        <a href={appInstallUrl(locale)} class="block border-b border-base-300 py-4">{t.nav.getApp}</a>
       </li>
     </ul>
     <div class="mt-4 flex items-center gap-3">

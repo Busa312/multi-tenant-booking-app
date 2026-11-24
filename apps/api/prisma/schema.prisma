@@ -72,6 +72,7 @@ model Tenant {
   subscriptionPayments SubscriptionPayment[]
   smsMessages     SmsMessage[]
   serviceCategories ServiceCategory[]
+  pushSubscriptions PushSubscription[]
 
   @@map("tenant")
 }
@@ -170,6 +171,7 @@ model TenantUser {
   professional        Professional? @relation(fields: [professionalId], references: [id], onDelete: SetNull)
   createdAppointments Appointment[] @relation("AppointmentCreatedBy")
   blockedPhones       BlockedPhone[]
+  pushSubscriptions   PushSubscription[]
 
   @@unique([tenantId, email])
   @@index([tenantId])
@@ -498,6 +500,32 @@ model SmsMessage {
   @@index([tenantId])
   @@index([tenantId, sentAt])
   @@map("sms_message")
+}
+
+/// R620: one device a CMS user switched push notifications on for.
+model PushSubscription {
+  id             String    @id @default(uuid()) @db.Uuid
+  tenantId       String    @map("tenant_id") @db.Uuid
+  tenantUserId   String    @map("tenant_user_id") @db.Uuid
+  // The push service's URL for this device: what identifies a subscription.
+  endpoint       String    @unique
+  p256dh         String
+  auth           String
+  // en | ka | ru — the language its notifications are written in (R570)
+  locale         String
+  // The user's session_version when it was switched on: a bump since (R320)
+  // means it is skipped and deleted rather than pushed to.
+  sessionVersion Int       @map("session_version")
+  userAgent      String?   @map("user_agent")
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  lastSuccessAt  DateTime? @map("last_success_at") @db.Timestamptz
+
+  tenant     Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenantUser TenantUser @relation(fields: [tenantUserId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([tenantId, tenantUserId])
+  @@map("push_subscription")
 }
 
 /// R510: how a salon groups its price list, in its own order.

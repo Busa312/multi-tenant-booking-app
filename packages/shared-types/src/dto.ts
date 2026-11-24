@@ -739,3 +739,27 @@ export interface UpdateSubscriptionRequest {
   planId?: SubscriptionPlanId;
   cancelAtPeriodEnd?: boolean;
 }
+
+/** R620: the CMS languages a push notification can be written in. */
+export type PushLocale = "en" | "ka" | "ru";
+
+/** R620: the platform's VAPID public key; null = push isn't configured here, so the CMS hides it. */
+export interface PushConfigResponse {
+  publicKey: string | null;
+}
+
+/** R620: a device's Web Push subscription, as `PushSubscription.toJSON()` gives it, plus the CMS language. */
+export interface SavePushSubscriptionRequest {
+  endpoint: string;
+  keys: { p256dh: string; auth: string };
+  locale: PushLocale;
+}
+
+export interface DeletePushSubscriptionRequest {
+  endpoint: string;
+}
+
+/** R620: 409 from saving — this device's subscription belongs to another salon's login; make a fresh one. */
+export interface PushEndpointTakenResponse {
+  code: "push_endpoint_taken";
+}

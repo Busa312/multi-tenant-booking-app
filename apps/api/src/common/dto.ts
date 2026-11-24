@@ -776,3 +776,29 @@ export class UpdateSubscriptionRequestDto {
   @ApiPropertyOptional({ example: PLAN_ID_EXAMPLE, description: "Switch at the next renewal" }) planId?: string;
   @ApiPropertyOptional() cancelAtPeriodEnd?: boolean;
 }
+
+// R620: push notifications to CMS users
+export class PushConfigResponseDto {
+  @ApiProperty({ type: String, nullable: true, description: "VAPID public key; null = push isn't configured" })
+  publicKey!: string | null;
+}
+
+export class PushSubscriptionKeysDto {
+  @ApiProperty() p256dh!: string;
+  @ApiProperty() auth!: string;
+}
+
+export class SavePushSubscriptionRequestDto {
+  @ApiProperty({ description: "The push service URL for this device" }) endpoint!: string;
+  @ApiProperty({ type: PushSubscriptionKeysDto }) keys!: PushSubscriptionKeysDto;
+  @ApiProperty({ enum: ["en", "ka", "ru"], description: "The language notifications are written in" })
+  locale!: "en" | "ka" | "ru";
+}
+
+export class DeletePushSubscriptionRequestDto {
+  @ApiProperty() endpoint!: string;
+}
+
+export class PushEndpointTakenResponseDto {
+  @ApiProperty({ enum: ["push_endpoint_taken"] }) code!: "push_endpoint_taken";
+}

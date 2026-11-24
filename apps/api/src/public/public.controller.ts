@@ -67,6 +67,7 @@ import { HOLD_MAX_PER_VISITOR, HOLD_VISITOR_WINDOW_SECONDS, parseHoldId } from "
 // R330: per client address. Generous for a person, tight for a script.
 const LIMIT_READ = { max: 120, windowSeconds: 60 };
 import { NotificationService } from "../notifications/notification.service.js";
+import { BookingAlertsService } from "../notifications/booking-alerts.service.js";
 import { VerificationService } from "./verification.service.js";
 import { BlockedPhoneService } from "../booking/blocked-phone.service.js";
 import { phoneKey } from "../common/phone-key.js";
@@ -91,6 +92,7 @@ export class PublicController {
     private readonly verification: VerificationService,
     private readonly blockedPhones: BlockedPhoneService,
     private readonly billing: BillingService,
+    private readonly alerts: BookingAlertsService,
   ) {}
 
   @Get("tenant")
@@ -327,6 +329,9 @@ export class PublicController {
       holdId: parseHoldId(body.holdId),
     });
 
+    // R620: the salon's staff hear about it; never awaited
+    this.alerts.notifyInBackground("booked", visit);
+
     const url = this.buildManageUrl(magicLinkToken);
     const linkTexted = await this.sendLink(visit, url);
     return { visit: serializeVisit(visit), manageUrl: url, linkTexted };
@@ -366,7 +371,10 @@ export class PublicController {
   @ApiBody({ type: RescheduleAppointmentRequestDto })
   @ApiOkResponse({ type: VisitDto })
   async rescheduleAppointment(@Param("token") token: string, @Body() body: RescheduleAppointmentRequest): Promise<Visit> {
-    return serializeVisit(await this.visits.reschedule(token, body.date, body.time));
+    const visit = await this.visits.reschedule(token, body.date, body.time);
+    // R620
+    this.alerts.notifyInBackground("rescheduled", visit);
+    return serializeVisit(visit);
   }
 
   // R230: the customer cancels the whole visit; R90: rows stay as history
@@ -375,7 +383,10 @@ export class PublicController {
   @ApiParam({ name: "token" })
   @ApiOkResponse({ type: VisitDto })
   async cancelAppointment(@Param("token") token: string): Promise<Visit> {
-    return serializeVisit(await this.visits.cancel(token));
+    const { visit, cancelled } = await this.visits.cancel(token);
+    // R620: only when this call cancelled something, not on a repeated tap
+    if (cancelled) this.alerts.notifyInBackground("cancelled", visit);
+    return serializeVisit(visit);
   }
 
   @Post("manage/resend")

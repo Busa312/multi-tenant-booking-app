@@ -6,6 +6,8 @@ import { I18nProvider } from "./i18n/I18nContext.js";
 import { App } from "./App.js";
 import { applyStoredTheme } from "./lib/theme.js";
 import { initSentry } from "./lib/sentry.js";
+import { registerServiceWorker } from "./lib/pushNotifications.js";
+import { captureInstallPrompt } from "./lib/installPrompt.js";
 import "./index.css";
 
 const RELOAD_KEY = "booking_cms_chunk_reload";
@@ -40,6 +42,9 @@ window.addEventListener("vite:preloadError", (event) => {
 
 initSentry();
 applyStoredTheme();
+// R620: the installable app and its push notifications
+registerServiceWorker();
+captureInstallPrompt();
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>

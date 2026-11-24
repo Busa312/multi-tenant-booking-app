@@ -45,6 +45,8 @@ export interface Messages {
     pricing: string;
     faq: string;
     signIn: string;
+    /** R620: to the CMS's install page — for businesses already using the product. */
+    getApp: string;
     cta: string;
     menu: string;
     /** Names the language switcher (its aria-label). */

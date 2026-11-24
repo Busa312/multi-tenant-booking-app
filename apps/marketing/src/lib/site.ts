@@ -1,9 +1,13 @@
 import { PUBLIC_CMS_URL } from "astro:env/client";
+import type { Locale } from "../i18n";
 
 /** The product's name, wherever the site says it. */
 export const brandName = "Book-it";
 
 export const cmsUrl = PUBLIC_CMS_URL;
+
+/** R620: the CMS's "Get the app" page, opened in this page's language. */
+export const appInstallUrl = (locale: Locale): string => `${cmsUrl.replace(/\/$/, "")}/install?lang=${locale}`;
 
 /** R580: the platform's inbox, offered beside the contact form and in the footer. */
 export const contactEmail = "contact@book-it.ge";

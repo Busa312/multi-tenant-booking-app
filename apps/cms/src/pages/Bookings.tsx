@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import type { LocationSummary, AppointmentStatus, AppointmentSummary, ProfessionalSummary, ServiceSummary } from "@booking/shared-types";
 import { cachedApi } from "../lib/cache.js";
 import { useAuth } from "../auth/AuthContext.js";
@@ -31,6 +32,11 @@ const MONTH_ROW = "104px";
 
 const VIEWS = ["day", "week", "month"] as const;
 
+/** `?date=YYYY-MM-DD`, as a push notification links to (R620); anything else is ignored. */
+function linkedDate(value: string | null): string | null {
+  return value && /^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(Date.parse(`${value}T00:00:00Z`)) ? value : null;
+}
+
 interface PageContext {
   timezone: string;
   services: ServiceSummary[];
@@ -56,6 +62,9 @@ export function BookingsPage() {
   const lockedProfessionalId = role === "professional" ? professionalId : null;
 
   const [context, setContext] = useState<PageContext | null>(null);
+  // R620: a notification opens the day of its booking
+  const [searchParams] = useSearchParams();
+  const requestedDate = linkedDate(searchParams.get("date"));
 
   const [date, setDate] = useState<string | null>(null);
   const [view, setView] = useState<View>("day");
@@ -96,7 +105,7 @@ export function BookingsPage() {
           professionals,
           locations: locations.filter((location) => location.isActive),
         });
-        setDate(tenantDateString(tenant.timezone));
+        setDate(requestedDate ?? tenantDateString(tenant.timezone));
       })
       .catch(() => setError(t("bookings.errLoad")));
 
@@ -126,6 +135,13 @@ export function BookingsPage() {
     setError(null);
     setDate(day);
   }
+
+  // A notification tapped while this page is already open
+  useEffect(() => {
+    if (requestedDate && date) goTo(requestedDate);
+
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [requestedDate]);
 
   function showDay(day: string) {
     if (range && day >= range.from && day <= range.to) {

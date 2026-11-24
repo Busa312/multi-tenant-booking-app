@@ -26,6 +26,9 @@ function contentSecurityPolicy(env: Record<string, string>): Plugin {
     `connect-src 'self' ${api} https://nominatim.openstreetmap.org https://*.ingest.sentry.io https://*.ingest.us.sentry.io https://*.ingest.de.sentry.io`,
     // The branding page previews the tenant's public site in an iframe.
     `frame-src ${env.VITE_PUBLIC_SITE_PROTOCOL ?? "https"}://*.${env.VITE_PUBLIC_SITE_BASE_DOMAIN ?? ""}`,
+    // R620: the service worker (public/sw.js) and the app manifest, both same-origin.
+    "worker-src 'self'",
+    "manifest-src 'self'",
     "object-src 'none'",
     "base-uri 'self'",
     "form-action 'self'",

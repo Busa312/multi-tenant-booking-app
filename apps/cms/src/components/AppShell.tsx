@@ -7,6 +7,7 @@ import { Icon } from "./ui/Icon.js";
 import { LanguageSwitcher } from "./LanguageSwitcher.js";
 import { ThemeToggle } from "./ThemeToggle.js";
 import { SubscriptionBanner } from "./SubscriptionBanner.js";
+import { PushNotificationsMenuItem } from "./PushNotificationsMenuItem.js";
 import { cachedApi } from "../lib/cache.js";
 import { cx } from "../lib/cx.js";
 import { publicSiteUrl } from "../lib/publicSiteUrl.js";
@@ -228,6 +229,8 @@ export function AppShell({ title, subtitle, children }: AppShellProps) {
                   </a>
                 </li>
               )}
+              {/* R620: this device's push switch */}
+              <PushNotificationsMenuItem />
               <li>
                 <button
                   type="button"

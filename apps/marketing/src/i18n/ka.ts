@@ -15,6 +15,7 @@ export const ka: Messages = {
     pricing: "ფასები",
     faq: "კითხვები",
     signIn: "შესვლა",
+    getApp: "აპლიკაცია",
     cta: "დაწყება",
     menu: "მენიუ",
     language: "ენა",

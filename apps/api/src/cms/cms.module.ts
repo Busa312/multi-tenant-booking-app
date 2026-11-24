@@ -1,6 +1,7 @@
 import { Module } from "@nestjs/common";
 import { BillingModule } from "../billing/billing.module.js";
 import { BookingModule } from "../booking/booking.module.js";
+import { NotificationModule } from "../notifications/notification.module.js";
 import { TenantController } from "./tenant.controller.js";
 import { ServicesController } from "./services.controller.js";
 import { LocationsController } from "./locations.controller.js";
@@ -12,12 +13,13 @@ import { DashboardController } from "./dashboard.controller.js";
 import { BlockedPhonesController } from "./blocked-phones.controller.js";
 import { OnboardingController } from "./onboarding.controller.js";
 import { ServiceCategoriesController } from "./service-categories.controller.js";
+import { PushSubscriptionsController } from "./push-subscriptions.controller.js";
 import { OnboardingService } from "./onboarding.service.js";
 import { RevalidationService } from "./revalidation.service.js";
 import { DashboardService } from "./dashboard.service.js";
 
 @Module({
-  imports: [BookingModule, BillingModule],
+  imports: [BookingModule, BillingModule, NotificationModule],
   controllers: [
     TenantController,
     ServicesController,
@@ -30,6 +32,8 @@ import { DashboardService } from "./dashboard.service.js";
     BlockedPhonesController,
     OnboardingController,
     ServiceCategoriesController,
+    // R620
+    PushSubscriptionsController,
   ],
   providers: [RevalidationService, DashboardService, OnboardingService],
 })

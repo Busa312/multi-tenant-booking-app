@@ -207,7 +207,8 @@ describe("cancel", () => {
   it("cancels every still-booked segment and kills the link", async () => {
     const { service, tx } = setup();
 
-    await service.cancel(TOKEN);
+    // R620: says it cancelled something, so staff are told
+    await expect(service.cancel(TOKEN)).resolves.toMatchObject({ cancelled: true });
 
     expect(tx.appointment.updateMany).toHaveBeenCalledWith({
       where: { tenantId: TENANT_ID, visitId: "v1", status: "booked" },
@@ -231,7 +232,8 @@ describe("cancel", () => {
       visit: visitRow({ appointments: [segment({ status: "cancelled" }), segment({ id: "a2", status: "completed" })] }),
     });
 
-    await service.cancel(TOKEN);
+    // R620: and says so, so a repeated tap doesn't alert staff twice
+    await expect(service.cancel(TOKEN)).resolves.toMatchObject({ cancelled: false });
 
     expect(tx.appointment.updateMany).not.toHaveBeenCalled();
     expect(tx.visit.update).not.toHaveBeenCalled();

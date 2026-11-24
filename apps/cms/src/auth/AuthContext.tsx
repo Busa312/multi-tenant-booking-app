@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState, t
 import type { CmsSession, TenantUserRole } from "@booking/shared-types";
 import { SESSION_EXPIRED_EVENT, cmsApiClient } from "../lib/api.js";
 import { clearCmsCache } from "../lib/cache.js";
+import { switchOffPush } from "../lib/pushNotifications.js";
 
 // Where the token used to live before R320. Cleared on start-up so a token
 // left behind by an older build doesn't linger in storage.
@@ -81,6 +82,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const logout = useCallback(async () => {
+    // R620: signing out switches this device's notifications off — while the
+    // session still works, so the API can forget it. Never throws.
+    await switchOffPush();
     // R320: the API revokes the session and drops the cookie. Awaited: if the
     // cookie outlived a "signed out" screen, a reload would quietly sign back in.
     await cmsApiClient.logout().catch(() => undefined);

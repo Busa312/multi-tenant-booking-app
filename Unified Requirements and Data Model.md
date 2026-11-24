@@ -90,6 +90,7 @@ as those code comments — they are not written down here yet, and back-filling 
 | R570 | Russian is the platform's third language, next to English and Georgian. The CMS can be used in Russian (picked from its language menu like the others; a browser set to Russian starts in it), a password-reset email (R310) is written in Russian when the CMS was showing Russian, and Flitt's payment page (R470) opens in Russian. A business's booking site can publish in Russian (R160): it is off until the owner switches it on, so no existing site suddenly shows Russian beside untranslated service names, and its names and texts are translated like the other languages'. The marketing site (R560) has a Russian copy at `/ru/`. Russian text is set in a face that has Cyrillic (the CMS's and marketing site's own fonts have none), downloaded only by pages that show Cyrillic, and every screen is checked in Russian, whose words run longer, so nothing overflows or jumps when the language changes. The set-password email of R430 stays Georgian and English. |
 | R580 | A business that wants to start reaches the platform through the marketing site's **contact page** (`/contact/`, `/en/contact/`, `/ru/contact/`): every "Get started" button and the footer's contact link lead there. For those who'd rather write, the page also gives the platform's address, **contact@book-it.ge** (a `mailto:` link), as do the footer and the site's structured data. Its form asks for a name, the business's name and a phone number, and optionally an email and a message, and says the details are used only to reply. It is a plain HTML form (no script, R560) posting to the API (`POST /contact`, public, rate-limited per address, R330); a hidden field that people leave empty and bots fill makes a submission silently go nowhere. The API stores the request and sends the visitor to a thank-you page, or to a page saying it couldn't be sent and asking them to try again. Requests belong to the platform, not a salon (`contact_request`, no `tenant_id`), and are listed newest first on the admin page (R430), where staff mark each one handled or reopen it. When `CONTACT_NOTIFY_EMAIL` is set, each request is also emailed there (Resend, R310's sender). The thank-you and try-again pages aren't indexed. |
 | R590 | Every page of a business's booking site (R160) ends its footer with one small credit line linking to the platform's marketing site (R560): "Powered by book-it.ge" in English, "ჯავშნის სისტემა: book-it.ge" in Georgian, "Работает на book-it.ge" in Russian. The link goes to the marketing site's home in the language the visitor is reading, and its text is the platform's bare domain — never a keyword phrase, since the same link appears on every business's site. It is an ordinary link that search engines follow. The pages framed by a business's own website (R410) carry no credit: they bring no footer of their own. The owner cannot remove or change it. Each environment links to its own marketing site (`MARKETING_URL`, the same setting the API uses; production's root domain when unset). |
+| R620 | The CMS is an installable web app (PWA) that can show **push notifications** on a staff member's phone or computer, even while it's closed, when a customer acts online: a new booking from the booking site or widget, a cancellation, and a reschedule made through the customer's manage link (R230). Changes staff make in the CMS notify no one — whoever made them already knows. **Who:** the salon's owner hears about every visit; a professional with a CMS login hears only about visits with a segment of theirs. **Opt-in per device:** each person switches notifications on for the device they're using, from a tap (the browser then asks for permission), and can switch them off again; signing out switches that device off. A login that is turned off, or whose sessions were ended (R320: a password change or reset), stops receiving them until someone signs in on that device again. On iPhone and iPad they work from iOS 16.4, and only once the CMS is added to the Home Screen (Safari → Share → Add to Home Screen), which the CMS explains there instead of offering the switch; Android and desktop browsers work in a normal tab too. **Content:** a short title for what happened, then the customer's first name, the first service and the visit's day and time in the salon's time zone, in the language the CMS was showing when the device was switched on (R570) — never the phone number. Tapping it opens Bookings on that day. **Getting the app:** the CMS's `/install` page, which needs no sign-in, offers what the visitor's browser can do: its own install button (Chrome, Edge, Android browsers), the Add to Home Screen steps (iPhone, iPad), or where to find the install item in the browser's menu; it says the app is for businesses already using the platform. The marketing site (R560) links to it as **Get the app** in the header (wide screens), the mobile menu and the footer, in the page's language. **Delivery** is the browsers' standard Web Push (VAPID keys, no per-message cost); it is best effort: a failed or slow push never delays or fails the customer's booking, and a device the push service reports as gone is forgotten. |
 
 ## Booking Access — Magic Link
 
@@ -463,6 +464,22 @@ One row per text the SMS provider accepted (R500) — the usage count, nothing m
 | `parts` | integer | SMS parts billed |
 | `sent_at` | timestamptz | |
 
+### PushSubscription
+One device a CMS user switched notifications on for (R620): what the browser's push service needs to reach it. Deleted when the user switches it off or signs out there, or when the push service reports it gone.
+
+| column | type | notes |
+|---|---|---|
+| `id` | uuid, PK | |
+| `tenant_id` | uuid, FK | |
+| `tenant_user_id` | uuid, FK → TenantUser | cascade on delete |
+| `endpoint` | text, unique | the push service URL for this device |
+| `p256dh`, `auth` | text | the device's keys; payloads are encrypted to them |
+| `locale` | text | `en` / `ka` / `ru`: the language notifications are written in |
+| `session_version` | int | the user's `session_version` when it was switched on; a bump since (R320) means it is skipped and deleted |
+| `user_agent` | text, nullable | which device, for support |
+| `created_at` | timestamptz | |
+| `last_success_at` | timestamptz, nullable | last push the service accepted |
+
 ### SubscriptionPayment
 Every payment attempt (R470) — the invoices.
 
@@ -499,6 +516,7 @@ erDiagram
     TENANT ||--o{ VISIT : has
     VISIT ||--o{ APPOINTMENT : "segments (R200)"
     TENANT ||--o{ SLOT_HOLD : has
+    TENANT_USER ||--o{ PUSH_SUBSCRIPTION : "notified on (R620)"
 
     LOCATION ||--o{ PROFESSIONAL : "based at (optional)"
     LOCATION ||--o{ APPOINTMENT : "booked at (optional)"

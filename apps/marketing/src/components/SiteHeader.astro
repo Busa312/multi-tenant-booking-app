@@ -1,6 +1,6 @@
 ---
 import { contactPath, localeHome, type Locale, type Messages } from "../i18n";
-import { brandName, cmsUrl } from "../lib/site";
+import { appInstallUrl, brandName, cmsUrl } from "../lib/site";
 import LanguageLinks from "./LanguageLinks.astro";
 import Logo from "./Logo.astro";
 import MobileMenu from "./MobileMenu.astro";
@@ -44,6 +44,8 @@ const links = [
       <div class="me-1 hidden sm:block">
         <LanguageLinks locale={locale} path={path} label={t.nav.language} variant="codes" />
       </div>
+      <!-- R620: from xl only — beside the section links, Georgian and Russian would crowd lg. -->
+      <a href={appInstallUrl(locale)} class="btn btn-ghost btn-sm hidden font-normal xl:inline-flex">{t.nav.getApp}</a>
       <a href={cmsUrl} class="btn btn-ghost btn-sm hidden font-normal lg:inline-flex">{t.nav.signIn}</a>
       <a href={contactPath(locale)} class="btn btn-primary btn-sm ms-1 whitespace-nowrap">{t.nav.cta}</a>
       <MobileMenu locale={locale} t={t} links={links} path={path} />

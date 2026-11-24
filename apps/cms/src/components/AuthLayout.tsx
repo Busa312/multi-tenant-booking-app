@@ -11,9 +11,12 @@ interface AuthLayoutProps {
   /** Heading + subheading above the form fields. */
   title: string;
   subtitle: string;
-  onSubmit: (e: FormEvent) => void;
+  /** Without it the card is a plain section, for a screen with nothing to submit (the install page). */
+  onSubmit?: (e: FormEvent) => void;
   children: ReactNode;
 }
+
+const CARD = "w-full max-w-sm rounded-box border border-base-300 bg-base-100 p-6 sm:p-8";
 
 // The art panel's picture: a morning out of an appointment book — ruled hours,
 // a few booked blocks, one of them highlighted. Purely decorative.
@@ -26,8 +29,15 @@ const DAY_PAGE: readonly { time: string; block?: string }[] = [
 ];
 
 // Shared split-screen chrome for the unauthenticated screens (Login,
-// SetPassword) — art panel on the left from `lg` up, a centred form card.
+// SetPassword, the install page) — art panel on the left from `lg` up, a centred form card.
 export function AuthLayout({ headline, artSub, title, subtitle, onSubmit, children }: AuthLayoutProps) {
+  const heading = (
+    <>
+      <Brand className="mb-8 lg:hidden" />
+      <h1 className="font-display text-4xl leading-tight font-bold">{title}</h1>
+      <p className="mt-1.5 mb-7 text-base-content/60">{subtitle}</p>
+    </>
+  );
   return (
     <div className="grid min-h-dvh lg:grid-cols-[minmax(0,5fr)_minmax(0,6fr)]">
       <div className="hidden flex-col justify-between gap-12 bg-neutral p-12 text-neutral-content lg:flex">
@@ -55,12 +65,17 @@ export function AuthLayout({ headline, artSub, title, subtitle, onSubmit, childr
           <ThemeToggle />
         </div>
         <div className="flex flex-1 items-center justify-center py-8">
-          <form className="w-full max-w-sm rounded-box border border-base-300 bg-base-100 p-6 sm:p-8" onSubmit={onSubmit}>
-            <Brand className="mb-8 lg:hidden" />
-            <h1 className="font-display text-4xl leading-tight font-bold">{title}</h1>
-            <p className="mt-1.5 mb-7 text-base-content/60">{subtitle}</p>
-            {children}
-          </form>
+          {onSubmit ? (
+            <form className={CARD} onSubmit={onSubmit}>
+              {heading}
+              {children}
+            </form>
+          ) : (
+            <section className={CARD}>
+              {heading}
+              {children}
+            </section>
+          )}
         </div>
       </div>
     </div>

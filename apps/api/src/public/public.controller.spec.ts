@@ -16,6 +16,7 @@ import type { RateLimitService } from "../rate-limit/rate-limit.service.js";
 import type { VerificationService } from "./verification.service.js";
 import type { BillingService } from "../billing/billing.service.js";
 import type { BlockedPhoneService } from "../booking/blocked-phone.service.js";
+import type { BookingAlertsService } from "../notifications/booking-alerts.service.js";
 import type { TenantContextService } from "../tenant/tenant-context.service.js";
 
 // The visit rules themselves (token lookup, cancel, reschedule, create) are
@@ -86,7 +87,7 @@ const setup = (overrides: Overrides = {}) => {
     create: jest.fn().mockResolvedValue({ visit: visitRow(), magicLinkToken: "issued" }),
     getByToken: jest.fn().mockResolvedValue(visitRow()),
     reschedule: jest.fn().mockResolvedValue(visitRow()),
-    cancel: jest.fn().mockResolvedValue(visitRow({ status: "cancelled" })),
+    cancel: jest.fn().mockResolvedValue({ visit: visitRow({ status: "cancelled" }), cancelled: true }),
     findResendable: jest.fn().mockResolvedValue(overrides.resendable ?? []),
     reissue: jest.fn().mockResolvedValue(overrides.reissued === undefined ? "fresh" : overrides.reissued),
     hold: jest.fn().mockResolvedValue({ holdId: HOLD, expiresAt: FUTURE, slot: { startAt: "x", endAt: "y", segments: [] } }),
@@ -118,6 +119,8 @@ const setup = (overrides: Overrides = {}) => {
   const blockedPhones = { assertNotBlocked: jest.fn().mockResolvedValue(undefined) };
   // R490: the salon is paid up unless a test says otherwise
   const billing = { bookingPausedIn: jest.fn().mockResolvedValue(false) };
+  // R620: fire-and-forget; the tests only check what was asked for
+  const alerts = { notifyInBackground: jest.fn() };
 
   const controller = new PublicController(
     prisma,
@@ -129,9 +132,10 @@ const setup = (overrides: Overrides = {}) => {
     verification as unknown as VerificationService,
     blockedPhones as unknown as BlockedPhoneService,
     billing as unknown as BillingService,
+    alerts as unknown as BookingAlertsService,
   );
 
-  return { controller, availability, visits, notifications, limits, verification, blockedPhones };
+  return { controller, availability, visits, notifications, limits, verification, blockedPhones, alerts };
 };
 
 const bookingInput = (overrides: Record<string, unknown> = {}) => ({
@@ -508,5 +512,33 @@ describe("phone verification gate", () => {
     await expect(controller.startVerification({ phoneNumber: "+995555123456" })).rejects.toThrow(
       ServiceUnavailableException,
     );
+  });
+});
+
+// R620: staff hear about what customers do online
+describe("staff push alerts", () => {
+  it("alerts on a new booking, a reschedule and a cancellation, with the visit as it now stands", async () => {
+    const { controller, alerts, visits } = setup();
+    await controller.createAppointment(bookingInput());
+    await controller.rescheduleAppointment(TOKEN, { date: "2026-08-07", time: "10:00" });
+    await controller.cancelAppointment(TOKEN);
+
+    expect(alerts.notifyInBackground.mock.calls.map(([kind]) => kind)).toEqual(["booked", "rescheduled", "cancelled"]);
+    const created = (await visits.create.mock.results[0]?.value) as { visit: unknown };
+    expect(alerts.notifyInBackground.mock.calls[0]?.[1]).toBe(created.visit);
+  });
+
+  it("says nothing when the visit was already cancelled (a repeated tap)", async () => {
+    const { controller, alerts, visits } = setup();
+    visits.cancel.mockResolvedValueOnce({ visit: visitRow({ status: "cancelled" }), cancelled: false });
+    await controller.cancelAppointment(TOKEN);
+    expect(alerts.notifyInBackground).not.toHaveBeenCalled();
+  });
+
+  it("never alerts when the booking itself fails", async () => {
+    const { controller, alerts, visits } = setup();
+    visits.create.mockRejectedValueOnce(new ConflictException("slot taken"));
+    await expect(controller.createAppointment(bookingInput())).rejects.toThrow(ConflictException);
+    expect(alerts.notifyInBackground).not.toHaveBeenCalled();
   });
 });
