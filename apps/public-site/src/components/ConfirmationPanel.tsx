@@ -50,7 +50,12 @@ export function ConfirmationPanel({
 
       <BookingSummary
         startAt={visit.startAt}
-        location={visit.locationName && text(visit.locationName, visit.locationNameI18n)}
+        location={
+          // R630: where the professional comes to
+          visit.place === "customer"
+            ? [visit.customerAddress, visit.customerAddressDetails].filter(Boolean).join(", ")
+            : visit.locationName && text(visit.locationName, visit.locationNameI18n)
+        }
         plan={visit.segments.map((segment) => ({
           key: segment.appointmentId,
           startAt: segment.startAt,
@@ -63,6 +68,7 @@ export function ConfirmationPanel({
         }))}
         total={visit.price}
         totalFrom={visit.priceFrom}
+        homeVisitFee={visit.homeVisitFee}
         timezone={timezone}
         locale={locale}
         t={t}

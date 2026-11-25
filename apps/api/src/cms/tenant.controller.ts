@@ -32,6 +32,7 @@ import {
   BOOKING_NOTICE_OPTIONS,
   CHANGE_CUTOFF_OPTIONS,
   REMINDER_HOURS_OPTIONS,
+  TRAVEL_BUFFER_OPTIONS,
   VISIT_GAP_OPTIONS,
 } from "../booking/booking-rules.js";
 
@@ -180,6 +181,9 @@ export class TenantController {
       changeCutoffHours: pick("changeCutoffHours", CHANGE_CUTOFF_OPTIONS),
       // R610
       reminderHoursBefore: pick("reminderHoursBefore", REMINDER_HOURS_OPTIONS),
+      // R630
+      travelBufferMinutes: pick("travelBufferMinutes", TRAVEL_BUFFER_OPTIONS),
+      homeVisitFee: parseHomeVisitFee(body?.homeVisitFee),
       customersChooseProfessional: pickBoolean(body?.customersChooseProfessional, "customersChooseProfessional"),
     };
     if (Object.values(data).every((value) => value === undefined)) {
@@ -292,6 +296,20 @@ export class TenantController {
       throw new BadRequestException(invalid.map((field) => `${field} must be a valid hex or rgb color`));
     }
   }
+}
+
+/**
+ * R630: the salon's home-visit fee — undefined = unchanged, null/"" = no fee
+ * ("0"), else an amount of at most two decimals (stored as numeric(10,2)).
+ */
+export function parseHomeVisitFee(value: unknown): string | undefined {
+  if (value === undefined) return undefined;
+  if (value === null || value === "") return "0";
+  const text = typeof value === "number" ? String(value) : typeof value === "string" ? value.trim().replace(",", ".") : "";
+  if (!/^\d{1,8}(\.\d{1,2})?$/.test(text)) {
+    throw new BadRequestException("homeVisitFee must be an amount with at most two decimals, like 10 or 7.50 (0 = no fee)");
+  }
+  return text;
 }
 
 function pickBoolean(value: unknown, field: string): boolean | undefined {

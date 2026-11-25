@@ -84,6 +84,8 @@ export class BookingAlertsService {
         moreServices: Math.max(0, segments.reduce((count, segment) => count + segment.services.length, 0) - 1),
         startAt: first.startAt,
         timezone,
+        // R630
+        homeVisit: first.place === "customer",
       };
       const payloads = new Map<PushLocale, ReturnType<typeof bookingAlertPayload>>();
       const payloadFor = (locale: PushLocale) => {

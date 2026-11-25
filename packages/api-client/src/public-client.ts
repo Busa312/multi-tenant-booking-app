@@ -67,6 +67,8 @@ export class PublicApiClient {
       ...(query.locationId ? { locationId: query.locationId } : {}),
       // R250: so the time this visitor is holding stays on their own list
       ...(query.holdId ? { holdId: query.holdId } : {}),
+      // R630: a home visit keeps travel time free; at the business is the default
+      ...(query.place === "customer" ? { place: query.place } : {}),
     });
     return this.http.get<VisitSlot[]>(`/public/availability?${params.toString()}`);
   }

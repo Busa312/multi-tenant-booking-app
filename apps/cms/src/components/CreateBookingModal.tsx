@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from "react";
-import type { BookingConflict, NoShowHistory, LocationSummary, ProfessionalSummary, ServiceSummary } from "@booking/shared-types";
+import { offeredAt } from "@booking/shared-types";
+import type { BookingConflict, NoShowHistory, LocationSummary, ProfessionalSummary, ServiceSummary, VisitPlace } from "@booking/shared-types";
 import { cachedApi } from "../lib/cache.js";
 import { useI18n } from "../i18n/I18nContext.js";
 import { useLocalizedName } from "../lib/useLocalizedName.js";
@@ -8,6 +9,7 @@ import { Modal } from "./Modal.js";
 import { SlotPicker } from "./SlotPicker.js";
 import { BookingServiceRows } from "./BookingServiceRows.js";
 import { BookingConflictNotice } from "./BookingConflictNotice.js";
+import { HomeAddressFields, type HomeAddress } from "./HomeAddressFields.js";
 import { Alert, Button, FormHeading, Field, Icon, Select, TextInput, Textarea } from "./ui/index.js";
 
 interface CreateBookingModalProps {
@@ -48,6 +50,15 @@ export function CreateBookingModal({
   );
 
   const [serviceIds, setServiceIds] = useState<string[]>([""]);
+  // R630: where — asked only when both places have something to book; otherwise the one that does
+  const placesOffered = (["business", "customer"] as const).filter((p) =>
+    services.some((service) => service.isActive && offeredAt(service.place, p)),
+  );
+  const asksPlace = placesOffered.length > 1;
+  const [place, setPlace] = useState<VisitPlace>(placesOffered[0] ?? "business");
+  const [address, setAddress] = useState<HomeAddress>({ address: "", details: "", note: "" });
+  const placeServices = services.filter((service) => offeredAt(service.place, place));
+  const atBusiness = place === "business";
   const [date, setDate] = useState(defaultDate);
   const [time, setTime] = useState("");
   const [userName, setUserName] = useState("");
@@ -66,9 +77,9 @@ export function CreateBookingModal({
     (p) =>
       p.isActive &&
       chosenServiceIds.every((id) => p.serviceIds.includes(id)) &&
-      // R180: at the chosen branch
+      // R180: at the chosen branch (R630: a home visit has none)
 
-      (!locationId || p.locationId === null || p.locationId === locationId),
+      (!atBusiness || !locationId || p.locationId === null || p.locationId === locationId),
   );
   const lockedProfessional = professionals.find((p) => p.id === lockedProfessionalId);
 
@@ -94,6 +105,16 @@ export function CreateBookingModal({
     }
   }
 
+  // R630: one visit, one place — services not offered at the new place are dropped
+  function handlePlaceChange(next: VisitPlace) {
+    setConflicts(null);
+    setError(null);
+    setPlace(next);
+    const kept = serviceIds.filter((id) => !id || services.some((s) => s.id === id && offeredAt(s.place, next)));
+    setServiceIds(kept.length > 0 ? kept : [""]);
+    setTime("");
+  }
+
   function handleProfessionalChange(next: string) {
     setConflicts(null);
 
@@ -115,8 +136,12 @@ export function CreateBookingModal({
       return;
     }
 
-    if (locations.length > 0 && !locationId) {
+    if (atBusiness && locations.length > 0 && !locationId) {
       setError(t("bookings.errLocationRequired"));
+      return;
+    }
+    if (!atBusiness && !address.address.trim()) {
+      setError(t("bookings.addressRequired"));
       return;
     }
 
@@ -125,7 +150,16 @@ export function CreateBookingModal({
       await cachedApi.createAppointment({
         serviceIds: chosenServiceIds,
         professionalId,
-        locationId: locationId || undefined,
+        locationId: atBusiness ? locationId || undefined : undefined,
+        // R630
+        place,
+        ...(atBusiness
+          ? {}
+          : {
+              customerAddress: address.address.trim(),
+              customerAddressDetails: address.details.trim() || undefined,
+              customerAddressNote: address.note.trim() || undefined,
+            }),
         date,
         time,
         userName: userName.trim(),
@@ -165,16 +199,29 @@ export function CreateBookingModal({
       }
     >
       <form id="booking-form" onSubmit={handleSubmit} noValidate>
+        {asksPlace && (
+          <Field label={t("bookings.placeLabel")} htmlFor="booking-place">
+            <Select
+              id="booking-place"
+              value={place}
+              onChange={(next) => handlePlaceChange(next as VisitPlace)}
+              options={[
+                { value: "business", label: t("bookings.placeBusiness") },
+                { value: "customer", label: t("bookings.placeCustomer") },
+              ]}
+            />
+          </Field>
+        )}
         <BookingServiceRows
-          services={services}
+          services={placeServices}
           value={serviceIds}
           professionalId={professionalId}
           onChange={handleServicesChange}
         />
 
         {/* Where and who, side by side when both are asked. */}
-        <div className={locations.length > 1 ? "grid gap-x-3 sm:grid-cols-2" : undefined}>
-          {locations.length > 1 && (
+        <div className={atBusiness && locations.length > 1 ? "grid gap-x-3 sm:grid-cols-2" : undefined}>
+          {atBusiness && locations.length > 1 && (
             <Field label={t("bookings.locationLabel")} htmlFor="booking-location">
               <Select
                 id="booking-location"
@@ -227,6 +274,7 @@ export function CreateBookingModal({
           date={date}
           timezone={timezone}
           value={time}
+          place={place}
           onChange={reset(setTime)}
         />
 
@@ -253,6 +301,7 @@ export function CreateBookingModal({
             />
           </Field>
         </div>
+        {!atBusiness && <HomeAddressFields value={address} onChange={setAddress} idPrefix="booking" />}
         <Field label={t("bookings.notesLabel")} htmlFor="booking-notes">
           <Textarea
             id="booking-notes"

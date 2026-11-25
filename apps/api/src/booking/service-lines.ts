@@ -22,6 +22,10 @@ export interface ResolvedServiceLine {
   /** R520: `price` is a starting price — snapshotted with it. */
   priceFrom: boolean;
   position: number;
+  /** R630: where the service is offered now (business | customer | either). */
+  place: string;
+  /** R630: the salon's home-visit fee applies to it. */
+  homeVisitFeeApplies: boolean;
 }
 
 /** The snapshot fields carried by a line already stored on an appointment. */
@@ -90,7 +94,7 @@ export async function resolveServiceLines(
 
   const services = await tx.service.findMany({
     where: { tenantId, id: { in: [...serviceIds] } },
-    select: { id: true, name: true, durationMinutes: true, price: true, priceFrom: true, isActive: true },
+    select: { id: true, name: true, durationMinutes: true, price: true, priceFrom: true, isActive: true, place: true, homeVisitFeeApplies: true },
   });
   const byId = new Map(services.map((service) => [service.id, service]));
   const keptById = new Map(existing.map((line) => [line.serviceId, line]));
@@ -114,6 +118,8 @@ export async function resolveServiceLines(
       // R520: a kept line keeps what it was booked as, starting price or not
       priceFrom: kept ? (kept.priceFrom ?? false) : service.priceFrom,
       position,
+      place: service.place,
+      homeVisitFeeApplies: service.homeVisitFeeApplies,
     };
   });
 }

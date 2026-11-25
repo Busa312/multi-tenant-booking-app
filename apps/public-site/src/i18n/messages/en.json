@@ -26,7 +26,9 @@
     "bookAt": "Book at {name}",
     "hoursTitle": "Opening hours",
     "closed": "Closed",
-    "otherServices": "Other services"
+    "otherServices": "Other services",
+    "placeCustomer": "At your address",
+    "placeEither": "At ours or yours"
   },
   "booking": {
     "title": "Book an appointment",
@@ -37,7 +39,8 @@
       "professional": "Who with",
       "time": "Date & time",
       "details": "Your details",
-      "verify": "Confirm"
+      "verify": "Confirm",
+      "place": "Where"
     },
     "services": {
       "heading": "What would you like booked?",
@@ -88,7 +91,12 @@
       "phoneHint": "We'll text a code to confirm it, and send your booking link to it.",
       "consentBefore": "By booking you agree to the ",
       "consentAnd": " and the ",
-      "consentAfter": "."
+      "consentAfter": ".",
+      "address": "Your address",
+      "addressPlaceholder": "Street and number",
+      "addressDetails": "Flat, entrance, floor (optional)",
+      "addressNote": "Note for us (optional)",
+      "addressNotePlaceholder": "Gate code, parking, how to find you…"
     },
     "summary": {
       "heading": "Your booking",
@@ -97,7 +105,9 @@
       "professional": "With",
       "when": "When",
       "total": "Total",
-      "schedule": "Schedule"
+      "schedule": "Schedule",
+      "address": "Address",
+      "homeVisitFee": "Home-visit fee"
     },
     "confirmed": {
       "heading": "You're booked",
@@ -127,7 +137,17 @@
       "recentlySent": "We sent a code to this number less than a minute ago. Enter that one, or ask for a new one when the timer runs out.",
       "bookingFailed": "Your number is confirmed, but we couldn't complete the booking. Please ask for a new code and try again."
     },
-    "blocked": "Online booking isn't available for this number. Please call the salon to book."
+    "blocked": "Online booking isn't available for this number. Please call the salon to book.",
+    "place": {
+      "heading": "Where should it happen?",
+      "hint": "Some services can be done at your place.",
+      "business": "At {salon}",
+      "businessHint": "You come to us.",
+      "customer": "At your address",
+      "customerHint": "We come to you.",
+      "customerFeeHint": "We come to you. Home-visit fee: {fee}.",
+      "customerSomeFeeHint": "We come to you. A home-visit fee of {fee} applies to some services."
+    }
   },
   "manage": {
     "heading": "Your appointment",

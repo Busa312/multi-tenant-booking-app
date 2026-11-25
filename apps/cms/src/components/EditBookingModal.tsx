@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from "react";
+import { offeredAt } from "@booking/shared-types";
 import type {
   AppointmentSummary,
   BookingConflict,
@@ -16,6 +17,7 @@ import { BookingServiceRows } from "./BookingServiceRows.js";
 import { BookingConflictNotice } from "./BookingConflictNotice.js";
 import { NoShowBadge } from "./NoShowBadge.js";
 import { ConfirmedBadge } from "./ConfirmedBadge.js";
+import { HomeAddressFields, type HomeAddress } from "./HomeAddressFields.js";
 import { Alert, Button, Field, Select, TextInput } from "./ui/index.js";
 
 interface EditBookingModalProps {
@@ -46,6 +48,23 @@ export function EditBookingModal({
   const [time, setTime] = useState(tenantTimeString(appointment.startAt, timezone));
   const [professionalId, setProfessionalId] = useState(appointment.professionalId ?? "");
   const [serviceIds, setServiceIds] = useState<string[]>(bookedServiceIds);
+  // R630: the booking keeps its place; a home visit's address can be corrected here
+  const homeVisit = appointment.place === "customer";
+  const bookedAddress: HomeAddress = {
+    address: appointment.customerAddress ?? "",
+    details: appointment.customerAddressDetails ?? "",
+    note: appointment.customerAddressNote ?? "",
+  };
+  const [address, setAddress] = useState<HomeAddress>(bookedAddress);
+  const addressChanged =
+    homeVisit &&
+    (address.address !== bookedAddress.address ||
+      address.details !== bookedAddress.details ||
+      address.note !== bookedAddress.note);
+  // Services already on it stay, even if they've since moved place
+  const placeServices = services.filter(
+    (service) => offeredAt(service.place, appointment.place) || bookedServiceIds.includes(service.id),
+  );
   const [conflicts, setConflicts] = useState<BookingConflict[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -101,6 +120,10 @@ export function EditBookingModal({
       setError(t("bookings.errRequired"));
       return;
     }
+    if (homeVisit && !address.address.trim()) {
+      setError(t("bookings.addressRequired"));
+      return;
+    }
 
     setSaving(true);
     try {
@@ -109,6 +132,14 @@ export function EditBookingModal({
         time,
         professionalId,
         ...(servicesChanged ? { serviceIds: chosenServiceIds } : {}),
+        // R630: sent only when corrected; every segment of the visit follows
+        ...(addressChanged
+          ? {
+              customerAddress: address.address.trim(),
+              customerAddressDetails: address.details.trim() || null,
+              customerAddressNote: address.note.trim() || null,
+            }
+          : {}),
         override: conflicts !== null,
       });
       onSaved(date);
@@ -145,7 +176,7 @@ export function EditBookingModal({
         {/* R360 */}
         <NoShowBadge history={appointment.noShowHistory} className="mb-4" />
         <BookingServiceRows
-          services={services}
+          services={placeServices}
           value={serviceIds}
           professionalId={professionalId}
           keepSelectable={bookedServiceIds}
@@ -187,8 +218,11 @@ export function EditBookingModal({
           // R80: without this the appointment blocks its own slots
 
           appointmentId={appointment.id}
+          place={appointment.place}
           onChange={reset(setTime)}
         />
+
+        {homeVisit && <HomeAddressFields value={address} onChange={setAddress} idPrefix="edit-booking" />}
 
         {/* R110: this is the one visible consequence of changing a booking */}
         {appointment.hasMagicLink && <Alert variant="warning">{t("bookings.magicLinkWarning")}</Alert>}

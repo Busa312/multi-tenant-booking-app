@@ -8,6 +8,7 @@ import { BookingStatusPill } from "./BookingStatusPill.js";
 import { NoShowBadge } from "./NoShowBadge.js";
 import { BlockedBadge } from "./BlockedBadge.js";
 import { ConfirmedBadge } from "./ConfirmedBadge.js";
+import { HomeVisitAddress } from "./HomeVisitAddress.js";
 import { ActionMenu, type ActionMenuItem } from "./ui/index.js";
 
 interface BookingCardProps {
@@ -43,6 +44,8 @@ export function BookingCard({ appointment, timezone, actions }: BookingCardProps
       </div>
       <div className="mt-0.5 truncate text-[13px] font-semibold">{appointment.userName}</div>
       <div className="truncate text-xs text-base-content/60">{serviceLabel(appointment, nameOf)}</div>
+      {/* R630 */}
+      <HomeVisitAddress appointment={appointment} compact />
       {/* The professional is worth naming for an owner looking across the team;
           a professional login only ever sees their own rows, so it's redundant
           there but never wrong. */}

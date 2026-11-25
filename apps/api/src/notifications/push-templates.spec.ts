@@ -74,3 +74,15 @@ describe("helpers", () => {
     expect(toPushLocale(undefined)).toBe("ka");
   });
 });
+
+// R630
+describe("home visits", () => {
+  it("says it's a home visit, in every language, and never where", () => {
+    const home = { ...alert(), homeVisit: true };
+    expect(bookingAlertPayload(home, "en").title).toBe("New home visit");
+    expect(bookingAlertPayload({ ...home, kind: "cancelled" }, "ka").title).toBe("ვიზიტი მისამართზე გაუქმდა");
+    expect(bookingAlertPayload({ ...home, kind: "rescheduled" }, "ru").title).toBe("Выезд на дом перенесён");
+    // BookingAlert carries no address at all, so none can reach a lock screen
+    expect(Object.keys(home)).not.toContain("customerAddress");
+  });
+});

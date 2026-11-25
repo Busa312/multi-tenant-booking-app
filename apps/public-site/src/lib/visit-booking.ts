@@ -1,4 +1,5 @@
-import type { PublicProfessional, VisitSlot } from "@booking/shared-types";
+import { offeredAt } from "@booking/shared-types";
+import type { PublicProfessional, ServicePlace, VisitPlace, VisitSlot } from "@booking/shared-types";
 
 /**
  * R200/R240 eligibility rules for the booking flow, in one place so every step
@@ -50,7 +51,7 @@ export function professionalIdsFromSlot(slot: VisitSlot, serviceIds: readonly st
   );
 }
 
-export type BookingStepId = "services" | "location" | "professional" | "time" | "details" | "verify";
+export type BookingStepId = "place" | "services" | "location" | "professional" | "time" | "details" | "verify";
 
 /**
  * R440: the booking flow's steps, leaving out any with nothing to choose —
@@ -62,23 +63,31 @@ export type BookingStepId = "services" | "location" | "professional" | "time" | 
  * grow a step the moment one is ticked.
  */
 export function bookingSteps(input: {
-  services: readonly { id: string }[];
+  services: readonly { id: string; place: ServicePlace }[];
   professionals: readonly PublicProfessional[];
   serviceIds: readonly string[];
   locationId: string | null;
   /** More than one branch, and none preselected by a "Book at …" link. */
   chooseLocation: boolean;
   customersChooseProfessional: boolean;
+  /** R630: the salon does something at the customer's address, so "Where?" comes first. */
+  asksPlace: boolean;
+  /** R630: null until chosen. */
+  place: VisitPlace | null;
 }): BookingStepId[] {
-  const bookable = input.services.filter((service) => isBookable(input.professionals, service.id));
+  // R630: only what's offered where the visit will be
+  const offered = input.place ? input.services.filter((service) => offeredAt(service.place, input.place as VisitPlace)) : input.services;
+  const bookable = offered.filter((service) => isBookable(input.professionals, service.id));
   const considered = input.serviceIds.length > 0 ? input.serviceIds : bookable.map((service) => service.id);
   const realChoice =
     input.customersChooseProfessional &&
     considered.some((id) => qualifiedFor(input.professionals, id, input.locationId).length > 1);
 
   return [
+    ...(input.asksPlace ? (["place"] as const) : []),
     ...(bookable.length === 1 ? [] : (["services"] as const)),
-    ...(input.chooseLocation ? (["location"] as const) : []),
+    // R630: a home visit has no branch
+    ...(input.chooseLocation && input.place !== "customer" ? (["location"] as const) : []),
     ...(realChoice ? (["professional"] as const) : []),
     "time",
     "details",
@@ -93,4 +102,21 @@ export function onlyBookableService(
 ): string | null {
   const bookable = services.filter((service) => isBookable(professionals, service.id));
   return bookable.length === 1 ? (bookable[0]?.id ?? null) : null;
+}
+
+/**
+ * R630: the places a visit can still be booked at — those with something
+ * bookable there that also covers every service already chosen (say, from a
+ * service's own Book button). One place means "Where?" isn't asked.
+ */
+export function offeredPlaces(
+  services: readonly { id: string; place: ServicePlace }[],
+  professionals: readonly PublicProfessional[],
+  chosenIds: readonly string[],
+): VisitPlace[] {
+  const places: VisitPlace[] = ["business", "customer"];
+  return places.filter((place) => {
+    const bookableThere = services.filter((service) => offeredAt(service.place, place) && isBookable(professionals, service.id));
+    return bookableThere.length > 0 && chosenIds.every((id) => bookableThere.some((service) => service.id === id));
+  });
 }

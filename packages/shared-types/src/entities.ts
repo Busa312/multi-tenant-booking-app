@@ -25,6 +25,10 @@ export interface Tenant {
   customersChooseProfessional: boolean;
   // R610: hours before a visit its reminder text goes out; 0 = off
   reminderHoursBefore: number;
+  // R630: minutes kept free before and after each home visit
+  travelBufferMinutes: number;
+  // R630: charged once per home visit whose services it applies to; "0" = none
+  homeVisitFee: string;
   /**
    * R490: the salon's subscription has lapsed, so its booking site takes no new
    * online bookings. Only on `GET /public/tenant`.
@@ -117,6 +121,12 @@ export interface TenantUser {
   lastLoginAt: string | null;
 }
 
+/** R630: where a service takes place. */
+export type ServicePlace = "business" | "customer" | "either";
+
+/** R630: where one visit takes place. */
+export type VisitPlace = "business" | "customer";
+
 export interface Service {
   id: string;
   tenantId: string;
@@ -133,6 +143,10 @@ export interface Service {
   /** R510: order within its category. */
   position: number;
   isActive: boolean;
+  /** R630 */
+  place: ServicePlace;
+  /** R630: the salon's home-visit fee applies when this is booked at the customer's address. */
+  homeVisitFeeApplies: boolean;
   createdAt: string;
 }
 
@@ -205,7 +219,15 @@ export interface Appointment {
   status: AppointmentStatus;
   createdAt: string;
   updatedAt: string;
-
+  // R630: where it takes place; the address only at the customer's
+  place: VisitPlace;
+  customerAddress: string | null;
+  customerAddressDetails: string | null;
+  customerAddressNote: string | null;
+  /** Kept free before and after it. */
+  travelMinutes: number;
+  /** On a home visit's first segment; "0" elsewhere. Not part of `price`. */
+  homeVisitFee: string;
 }
 
 /** R390: one weekday the salon is open, for visitors. Closed days are simply absent. */
@@ -322,4 +344,10 @@ export interface Visit {
   segments: VisitSegment[];
   /** R610: when the customer confirmed they're coming; null = not (yet). Cleared by a move. */
   confirmedAt: string | null;
+  // R630: where it takes place. `price` includes the fee, shown on its own line too.
+  place: VisitPlace;
+  customerAddress: string | null;
+  customerAddressDetails: string | null;
+  customerAddressNote: string | null;
+  homeVisitFee: string;
 }

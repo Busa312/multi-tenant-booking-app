@@ -51,6 +51,10 @@ model Tenant {
   // R610: hours before a visit its reminder text goes out; 0 = off. One of
   // 0/2/12/24/48 (CHECK constraint in the migration).
   reminderHoursBefore   Int       @default(24) @map("reminder_hours_before") @db.SmallInt
+  // R630: kept free before and after each home visit (0/15/30/45/60/90, CHECK),
+  // and the fee charged once per home visit whose services it applies to (0 = none).
+  travelBufferMinutes   Int       @default(30) @map("travel_buffer_minutes") @db.SmallInt
+  homeVisitFee          Decimal   @default(0) @map("home_visit_fee") @db.Decimal(10, 2)
   // R420: the guided setup's own state. Whether a step is done is read from
   // the salon's data; only skips and finishing/dismissing are kept.
   onboardingSkipped     String[]  @default([]) @map("onboarding_skipped")
@@ -199,6 +203,11 @@ model Service {
   /// R510: order within its category.
   position        Int      @default(0)
   isActive        Boolean  @default(true) @map("is_active")
+  /// R630: business | customer (at the customer's address) | either (CHECK).
+  place           String   @default("business")
+  /// R630: the salon's home-visit fee is charged when this is booked at the
+  /// customer's address (once per visit, however many services it applies to).
+  homeVisitFeeApplies Boolean @default(true) @map("home_visit_fee_applies")
   createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz
 
   tenant               Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
@@ -310,6 +319,8 @@ model SlotHold {
   professionalId String   @map("professional_id") @db.Uuid
   startAt        DateTime @map("start_at") @db.Timestamptz
   endAt          DateTime @map("end_at") @db.Timestamptz
+  // R630: a held home visit keeps its travel time free too
+  travelMinutes  Int      @default(0) @map("travel_minutes") @db.SmallInt
   expiresAt      DateTime @map("expires_at") @db.Timestamptz
   createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz
 
@@ -353,6 +364,15 @@ model Appointment {
   // the customer confirmed through their link. Moving it clears both.
   reminderSentAt       DateTime?         @map("reminder_sent_at") @db.Timestamptz
   confirmedAt          DateTime?         @map("confirmed_at") @db.Timestamptz
+  // R630: business | customer. At the customer's address, the address is set
+  // (CHECK: exactly then), travel time is kept free around it, and the visit's
+  // first segment carries the home-visit fee. All snapshotted at booking.
+  place                  String          @default("business")
+  customerAddress        String?         @map("customer_address")
+  customerAddressDetails String?         @map("customer_address_details")
+  customerAddressNote    String?         @map("customer_address_note")
+  travelMinutes          Int             @default(0) @map("travel_minutes") @db.SmallInt
+  homeVisitFee           Decimal         @default(0) @map("home_visit_fee") @db.Decimal(10, 2)
   createdAt            DateTime          @default(now()) @map("created_at") @db.Timestamptz
   updatedAt            DateTime          @updatedAt @map("updated_at") @db.Timestamptz
 

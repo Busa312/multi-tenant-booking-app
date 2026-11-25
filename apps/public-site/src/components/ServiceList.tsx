@@ -17,6 +17,8 @@ interface ServiceListProps {
   priceLabel: (service: Service) => string;
   href: (path: string) => string;
   text: (plain: string, i18n: unknown) => string;
+  /** R630: "At your address" and the like; null for a service only at the salon. */
+  placeLabel?: (service: Service) => string | null;
 }
 
 // R510: the price list, under the salon's own headings when it has them.
@@ -31,6 +33,7 @@ export function ServiceList({
   priceLabel,
   href,
   text,
+  placeLabel,
 }: ServiceListProps) {
   const groups = groupServices(services, categories);
   const titled = groups.some((group) => group.category !== null);
@@ -61,6 +64,7 @@ export function ServiceList({
                       href={href}
                       text={text}
                       nameTag={titled ? "h4" : "h3"}
+                      placeLabel={placeLabel?.(service)}
                     />
                   </li>
                 ))}

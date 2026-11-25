@@ -119,7 +119,16 @@ export function ManageAppointment({
           <dt className={SUMMARY_TERM}>{t("booking.summary.when")}</dt>
           <dd className="min-w-0 font-medium">{formatInstant(current.startAt, timezone, locale)}</dd>
         </div>
-        {current.locationName && (
+        {/* R630: where the professional comes to */}
+        {current.place === "customer" && current.customerAddress && (
+          <div className={SUMMARY_ROW}>
+            <dt className={SUMMARY_TERM}>{t("booking.summary.address")}</dt>
+            <dd className="min-w-0 font-medium">
+              {[current.customerAddress, current.customerAddressDetails].filter(Boolean).join(", ")}
+            </dd>
+          </div>
+        )}
+        {current.place !== "customer" && current.locationName && (
           <div className={SUMMARY_ROW}>
             <dt className={SUMMARY_TERM}>{t("booking.summary.location")}</dt>
             <dd className="min-w-0 font-medium">{text(current.locationName, current.locationNameI18n)}</dd>
@@ -147,6 +156,12 @@ export function ManageAppointment({
             />
           </dd>
         </div>
+        {Number(current.homeVisitFee) > 0 && (
+          <div className={SUMMARY_ROW}>
+            <dt className={SUMMARY_TERM}>{t("booking.summary.homeVisitFee")}</dt>
+            <dd className="font-medium tabular-nums">{priceText(t, current.homeVisitFee, false)}</dd>
+          </div>
+        )}
         <div className={SUMMARY_ROW}>
           <dt className={SUMMARY_TERM}>{t("booking.summary.total")}</dt>
           {/* R520 */}

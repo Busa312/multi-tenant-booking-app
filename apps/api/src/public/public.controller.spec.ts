@@ -55,6 +55,7 @@ const segmentRow = (overrides: Record<string, unknown> = {}) => ({
   startAt: FUTURE,
   endAt: FUTURE,
   price: new Prisma.Decimal("45.00"),
+  homeVisitFee: new Prisma.Decimal(0),
   status: "booked",
   createdAt: NOW,
   updatedAt: NOW,

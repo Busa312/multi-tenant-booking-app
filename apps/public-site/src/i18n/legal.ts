@@ -32,6 +32,7 @@ export const LEGAL: Record<Locale, { privacy: LegalText; terms: LegalText }> = {
           heading: "What we collect",
           paragraphs: [
             "Your name and phone number. Your phone number is confirmed with a one-time code, so that only you can book and manage bookings in your name.",
+            "For a visit at your address (where the business offers one), that address and any note you add for the professional — used only to get there.",
             "The details of your booking: the services, the specialist, the branch, the date and time, and the price.",
             "What's needed to run the site safely: your IP address, used to stop abuse such as automated booking attempts, and small amounts of data kept in your browser — your language choice, and your progress through a booking so it isn't lost if you switch language.",
             "We don't ask for your email address, and we don't use advertising or tracking cookies.",
@@ -129,6 +130,7 @@ export const LEGAL: Record<Locale, { privacy: LegalText; terms: LegalText }> = {
           heading: "რას ვაგროვებთ",
           paragraphs: [
             "თქვენს სახელსა და ტელეფონის ნომერს. ნომერი დასტურდება ერთჯერადი კოდით, რათა თქვენი სახელით დაჯავშნა და ჯავშნის მართვა მხოლოდ თქვენ შეგეძლოთ.",
+            "თქვენს მისამართზე ვიზიტისას (თუ ბიზნესი ასეთს სთავაზობს) — ამ მისამართს და სპეციალისტისთვის დატოვებულ შენიშვნას, მხოლოდ თქვენამდე მისასვლელად.",
             "ჯავშნის დეტალებს: სერვისებს, სპეციალისტს, ფილიალს, თარიღს, დროსა და ფასს.",
             "საიტის უსაფრთხოდ მუშაობისთვის საჭირო მონაცემებს: თქვენს IP მისამართს — ბოროტად გამოყენების, მაგალითად ავტომატური ჯავშნის მცდელობების, შესაჩერებლად — და მცირე მონაცემებს თქვენს ბრაუზერში: არჩეულ ენას და ჯავშნის პროცესს, რომ ენის შეცვლისას არ დაიკარგოს.",
             "ელფოსტის მისამართს არ ვითხოვთ და სარეკლამო ან თვალთვალის ქუქი-ფაილებს არ ვიყენებთ.",
@@ -228,6 +230,7 @@ export const LEGAL: Record<Locale, { privacy: LegalText; terms: LegalText }> = {
           heading: "Что мы собираем",
           paragraphs: [
             "Ваше имя и номер телефона. Номер подтверждается одноразовым кодом, чтобы записываться и управлять записями от вашего имени могли только вы.",
+            "Для визита по вашему адресу (если бизнес его предлагает) — этот адрес и заметку для специалиста, только чтобы до вас добраться.",
             "Данные записи: услуги, специалиста, филиал, дату и время, цену.",
             "То, что нужно для безопасной работы сайта: ваш IP-адрес — чтобы пресекать злоупотребления, например автоматические попытки записи, — и немного данных в вашем браузере: выбранный язык и ход записи, чтобы он не терялся при смене языка.",
             "Мы не спрашиваем адрес электронной почты и не используем рекламные и отслеживающие cookie.",

@@ -238,7 +238,20 @@
     "noShowSome": "Missed {missed} of last {of} visits",
     "noShowOnly": "Missed their only visit so far",
     "confirmed": "Confirmed",
-    "confirmedTitle": "The customer confirmed through their reminder link"
+    "confirmedTitle": "The customer confirmed through their reminder link",
+    "placeLabel": "Where",
+    "placeBusiness": "At your place",
+    "placeCustomer": "At the customer's address",
+    "addressLabel": "Address",
+    "addressPlaceholder": "Street and number",
+    "addressDetailsLabel": "Flat, entrance, floor",
+    "addressNoteLabel": "Note for the visit",
+    "addressNotePlaceholder": "Gate code, parking, landmarks…",
+    "addressRequired": "Enter the customer's address.",
+    "homeVisit": "Home visit",
+    "openInMaps": "Open in Maps",
+    "travelTime": "{count} min travel each way",
+    "homeVisitFee": "Home-visit fee: {amount}"
   },
   "professionals": {
     "title": "Professionals",
@@ -357,7 +370,14 @@
     "priceFromLabel": "Starting price",
     "priceFromHint": "Shown as “from {price} ₾”; the final price is settled at the salon.",
     "errCategorySave": "Could not save the category",
-    "errReorder": "Could not change the order. Reload and try again."
+    "errReorder": "Could not change the order. Reload and try again.",
+    "placeLabel": "Where it takes place",
+    "placeBusiness": "At your place",
+    "placeCustomer": "At the customer's address",
+    "placeEither": "Either — the customer chooses",
+    "placeHint": "Bookings already made keep their place.",
+    "feeAppliesLabel": "Home-visit fee applies",
+    "feeAppliesHint": "The salon's fee from the booking rules, charged once per visit at the customer's address."
   },
   "hours": {
     "title": "Hours & time off",
@@ -437,7 +457,15 @@
     "discardChanges": "Discard changes",
     "reminderLabel": "Reminder text to customers",
     "reminderOff": "Off",
-    "reminderHint": "One SMS before each visit, with a link to confirm or cancel. Never sent between 21:00 and 09:00."
+    "reminderHint": "One SMS before each visit, with a link to confirm or cancel. Never sent between 21:00 and 09:00.",
+    "travelLabel": "Travel time around home visits",
+    "travelNone": "None",
+    "travelMinutes": "{count} min before and after",
+    "travelHint": "Kept free before and after every visit at a customer's address.",
+    "feeLabel": "Home-visit fee",
+    "feeHint": "Charged once per visit at a customer's address, for services where it applies. Leave empty or 0 for no fee.",
+    "feeNone": "No fee",
+    "feeInvalid": "Enter the fee as an amount, like 10 or 7.50, or leave it empty."
   },
   "branding": {
     "title": "Booking site colors",

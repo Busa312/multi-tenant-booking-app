@@ -58,6 +58,9 @@ export default async function EmbedFullPage({
         timezone={context.tenant.timezone}
         maxAdvanceDays={context.tenant.maxBookingAdvanceDays}
         customersChooseProfessional={context.tenant.customersChooseProfessional}
+        // R630
+        salonName={context.tenant.name}
+        homeVisitFee={context.tenant.homeVisitFee}
         locale={context.locale}
         defaultLocale={context.defaultLocale}
         messages={getMessages(context.locale)}

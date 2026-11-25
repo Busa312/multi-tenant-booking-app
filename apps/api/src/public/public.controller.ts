@@ -63,6 +63,7 @@ import { AvailabilityService } from "../booking/availability.service.js";
 import { hashToken } from "../booking/magic-link.js";
 import { ANY_PROFESSIONAL, HoldLimitError, VisitService } from "../booking/visit.service.js";
 import { HOLD_MAX_PER_VISITOR, HOLD_VISITOR_WINDOW_SECONDS, parseHoldId } from "../booking/slot-hold.js";
+import { parseVisitPlace } from "../booking/service-place.js";
 
 // R330: per client address. Generous for a person, tight for a script.
 const LIMIT_READ = { max: 120, windowSeconds: 60 };
@@ -222,6 +223,8 @@ export class PublicController {
       locationId: query.locationId ?? null,
       date: query.date,
       holdId: parseHoldId(query.holdId),
+      // R630
+      place: parseVisitPlace(query.place),
     });
   }
 
@@ -244,6 +247,8 @@ export class PublicController {
         date: body.date,
         time: body.time,
         replaceHoldId: parseHoldId(body.replaceHoldId),
+        // R630
+        place: parseVisitPlace(body.place),
       });
       return { holdId, expiresAt: expiresAt.toISOString(), slot };
     } catch (error) {
@@ -327,6 +332,11 @@ export class PublicController {
       userName: body.userName,
       phoneNumber: body.phoneNumber,
       holdId: parseHoldId(body.holdId),
+      // R630: where, and the address for a visit at the customer's
+      place: parseVisitPlace(body.place),
+      customerAddress: body.customerAddress,
+      customerAddressDetails: body.customerAddressDetails,
+      customerAddressNote: body.customerAddressNote,
     });
 
     // R620: the salon's staff hear about it; never awaited

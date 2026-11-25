@@ -9,6 +9,7 @@ import { BookingStatusPill } from "./BookingStatusPill.js";
 import { NoShowBadge } from "./NoShowBadge.js";
 import { BlockedBadge } from "./BlockedBadge.js";
 import { ConfirmedBadge } from "./ConfirmedBadge.js";
+import { HomeVisitAddress } from "./HomeVisitAddress.js";
 import { ActionMenu, type ActionMenuItem, Table, TableEmpty, TableHead, TableRow, Pagination } from "./ui/index.js";
 import { formatPhone } from "../lib/formatPhone.js";
 
@@ -63,6 +64,8 @@ export function BookingsDayTable({ appointments, listKey, timezone, actionsFor }
                 <BlockedBadge blocked={appointment.phoneBlocked} />
                 <NoShowBadge history={appointment.noShowHistory} />
               </div>
+              {/* R630 */}
+              <HomeVisitAddress appointment={appointment} className="mt-1" />
               {appointment.notes && <div className="mt-1 line-clamp-2 text-xs text-base-content/60 italic">{appointment.notes}</div>}
             </div>
             <div>

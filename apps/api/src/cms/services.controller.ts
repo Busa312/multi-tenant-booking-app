@@ -28,6 +28,7 @@ import {
   LOCALIZED_TEXT_MAX,
 } from "../common/i18n-validation.js";
 import { RevalidationService } from "./revalidation.service.js";
+import { parseServicePlace } from "../booking/service-place.js";
 
 const SERVICE_SUMMARY_INCLUDE = {
   serviceProfessionals: true,
@@ -62,6 +63,13 @@ function validateDuration(durationMinutes: number): number {
     throw new BadRequestException("durationMinutes must be a positive whole number of minutes");
   }
   return durationMinutes;
+}
+
+// R630
+function validateFeeApplies(value: unknown): boolean | undefined {
+  if (value === undefined) return undefined;
+  if (typeof value !== "boolean") throw new BadRequestException("homeVisitFeeApplies must be true or false");
+  return value;
 }
 
 function validatePriceFrom(value: unknown): boolean | undefined {
@@ -114,6 +122,9 @@ export class ServicesController {
     const price = parsePrice(body.price);
     const durationMinutes = validateDuration(body.durationMinutes);
     const priceFrom = validatePriceFrom(body.priceFrom) ?? false;
+    // R630: where it takes place (omitted = at the business), and whether the salon's fee applies
+    const place = body.place === undefined ? "business" : parseServicePlace(body.place);
+    const homeVisitFeeApplies = validateFeeApplies(body.homeVisitFeeApplies) ?? true;
 
     const service = await this.prisma.forTenant(async (tx) => {
       const locales = await this.enabledLocales(tx, tenantId);
@@ -125,6 +136,8 @@ export class ServicesController {
           categoryId,
           position: await nextServicePosition(tx, tenantId, categoryId),
           priceFrom,
+          place,
+          homeVisitFeeApplies,
           name,
           // R160: the plain columns above hold the default locale
 
@@ -157,9 +170,18 @@ export class ServicesController {
   @ApiOkResponse({ type: ServiceSummaryDto })
   async update(@Param("id") id: string, @Body() body: UpdateServiceRequest): Promise<ServiceSummary> {
     const { tenantId } = this.tenantContext.current;
-    const { professionalIds, name, price, durationMinutes, nameI18n, descriptionI18n, categoryId, priceFrom, ...rest } = body;
+    const { professionalIds, name, price, durationMinutes, nameI18n, descriptionI18n, categoryId, priceFrom, place, homeVisitFeeApplies, ...rest } =
+      body;
 
     const data: Prisma.ServiceUncheckedUpdateInput = { ...rest };
+    // R630: existing bookings keep the place they were booked at
+    if (place !== undefined) {
+      data.place = parseServicePlace(place);
+    }
+    const applies = validateFeeApplies(homeVisitFeeApplies);
+    if (applies !== undefined) {
+      data.homeVisitFeeApplies = applies;
+    }
     const from = validatePriceFrom(priceFrom);
     if (from !== undefined) {
       data.priceFrom = from;

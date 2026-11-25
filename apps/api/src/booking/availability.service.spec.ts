@@ -14,14 +14,14 @@ const timeOfDay = (hhmm: string) => new Date(`1970-01-01T${hhmm}:00.000Z`);
 
 interface Overrides {
   timezone?: string;
-  services?: { id: string; durationMinutes: number; isActive?: boolean }[];
+  services?: { id: string; durationMinutes: number; isActive?: boolean; place?: string }[];
 
   existingLines?: { serviceId: string; durationMinutes: number; price: Prisma.Decimal }[];
   assignments?: { professionalId: string; serviceId: string }[];
   professionals?: { id: string; name: string }[];
   businessHours?: { professionalId: string | null; dayOfWeek: number; startTime: Date; endTime: Date }[];
   timeOff?: { professionalId: string | null; startAt: Date; endAt: Date; reason: string | null }[];
-  appointments?: { professionalId: string | null; startAt: Date; endAt: Date; userName?: string }[];
+  appointments?: { professionalId: string | null; startAt: Date; endAt: Date; userName?: string; travelMinutes?: number }[];
   /** R250: live holds (the stub doesn't filter — pass only the ones the query would return) */
   holds?: { professionalId: string; startAt: Date; endAt: Date }[];
   /** R280/R290 */
@@ -29,6 +29,8 @@ interface Overrides {
   advanceDays?: number;
   /** What the availability cache answers (null = miss). */
   cached?: unknown[] | null;
+  /** R630 */
+  travelBufferMinutes?: number;
 }
 
 const setup = (overrides: Overrides = {}) => {
@@ -39,6 +41,7 @@ const setup = (overrides: Overrides = {}) => {
         maxVisitGapMinutes: 0,
         minBookingNoticeMinutes: overrides.noticeMinutes ?? 0,
         maxBookingAdvanceDays: overrides.advanceDays ?? 365,
+        travelBufferMinutes: overrides.travelBufferMinutes ?? 30,
       }),
     },
     service: {
@@ -636,14 +639,15 @@ describe("AvailabilityService.computeSlots", () => {
       expect(slots).toHaveLength(11);
     });
 
-    it("queries only the requested local day's window", async () => {
+    // R630: widened by the longest travel time, so a home visit's padding across midnight is seen
+    it("queries the requested local day's window, reaching out by the longest travel time", async () => {
       const { service, tx } = setup();
       await service.computeSlots({ serviceIds: ["s1"], date: WEDNESDAY });
 
       const where = tx.appointment.findMany.mock.calls[0]?.[0]?.where;
 
-      expect(where.startAt.lt.toISOString()).toBe("2026-08-05T20:00:00.000Z");
-      expect(where.endAt.gt.toISOString()).toBe("2026-08-04T20:00:00.000Z");
+      expect(where.startAt.lt.toISOString()).toBe("2026-08-05T21:30:00.000Z");
+      expect(where.endAt.gt.toISOString()).toBe("2026-08-04T18:30:00.000Z");
     });
   });
 
@@ -1120,5 +1124,85 @@ describe("AvailabilityService.findConflictsIn — holds", () => {
     });
 
     expect(tx.slotHold.findMany).not.toHaveBeenCalled();
+  });
+});
+
+// R630: travel time around home visits
+describe("home visits", () => {
+  beforeEach(() => {
+    jest.useFakeTimers().setSystemTime(new Date("2026-08-05T00:00:00.000Z"));
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
+  const appointment = (start: string, end: string, travelMinutes = 0) => ({
+    professionalId: "p1",
+    startAt: new Date(start),
+    endAt: new Date(end),
+    userName: "Nino",
+    travelMinutes,
+  });
+
+  it("keeps an existing home visit's travel time free for everyone", async () => {
+    // 09:00–12:00 Tbilisi; a home visit 10:00–10:30 with 30 min travel blocks 09:30–11:00
+    const { service } = setup({ appointments: [appointment("2026-08-05T06:00:00.000Z", "2026-08-05T06:30:00.000Z", 30)] });
+    const starts = startTimes(await service.computeSlots({ serviceIds: ["s1"], date: WEDNESDAY }));
+    expect(starts).toContain("2026-08-05T05:00:00.000Z");
+    expect(starts).not.toContain("2026-08-05T05:30:00.000Z");
+    expect(starts).not.toContain("2026-08-05T06:30:00.000Z");
+    expect(starts).toContain("2026-08-05T07:00:00.000Z");
+  });
+
+  it("offers a home visit only where its own travel time is free, letting it start when work does", async () => {
+    const { service } = setup({
+      services: [{ id: "s1", durationMinutes: 30, place: "either" }],
+      appointments: [appointment("2026-08-05T06:00:00.000Z", "2026-08-05T06:30:00.000Z")],
+    });
+    const starts = startTimes(await service.computeSlots({ serviceIds: ["s1"], date: WEDNESDAY, place: "customer" }));
+    // 09:00: travel before work starts is fine
+    expect(starts).toContain("2026-08-05T05:00:00.000Z");
+    expect(starts).not.toContain("2026-08-05T05:30:00.000Z");
+    expect(starts).not.toContain("2026-08-05T06:30:00.000Z");
+    expect(starts).toContain("2026-08-05T07:00:00.000Z");
+  });
+
+  it("drops the branch filter for a home visit", async () => {
+    const { service, tx } = setup({ services: [{ id: "s1", durationMinutes: 30, place: "customer" }] });
+    await service.computeSlots({ serviceIds: ["s1"], date: WEDNESDAY, place: "customer", locationId: "loc-a" });
+    expect(tx.professional.findMany.mock.calls[0]?.[0]?.where).not.toHaveProperty("OR");
+  });
+
+  it("refuses a service that isn't offered at the place asked for", async () => {
+    const { service } = setup();
+    await expect(service.computeSlots({ serviceIds: ["s1"], date: WEDNESDAY, place: "customer" })).rejects.toThrow(
+      `"s1" isn't offered at the customer's address`,
+    );
+  });
+
+  describe("conflicts", () => {
+    const conflictTx = (overrides: Overrides) => {
+      const { service, tx } = setup({
+        businessHours: [{ professionalId: null, dayOfWeek: 3, startTime: timeOfDay("09:00"), endTime: timeOfDay("18:00") }],
+        ...overrides,
+      });
+      return { service, tx: tx as unknown as Prisma.TransactionClient };
+    };
+    const startAt = new Date("2026-08-05T06:00:00.000Z");
+    const endAt = new Date("2026-08-05T07:00:00.000Z");
+
+    it("counts a booking inside the travel time of the one being checked", async () => {
+      const { service, tx } = conflictTx({ appointments: [appointment("2026-08-05T07:15:00.000Z", "2026-08-05T07:45:00.000Z")] });
+      expect(await service.findConflictsIn(tx, { professionalId: "p1", startAt, endAt })).toEqual([]);
+      const conflicts = await service.findConflictsIn(tx, { professionalId: "p1", startAt, endAt, travelMinutes: 30 });
+      expect(conflicts.map((conflict) => conflict.type)).toEqual(["appointment"]);
+    });
+
+    it("counts the travel time of an existing home visit", async () => {
+      const { service, tx } = conflictTx({ appointments: [appointment("2026-08-05T07:15:00.000Z", "2026-08-05T07:45:00.000Z", 30)] });
+      const conflicts = await service.findConflictsIn(tx, { professionalId: "p1", startAt, endAt });
+      expect(conflicts.map((conflict) => conflict.detail)).toEqual(["Nino"]);
+    });
   });
 });

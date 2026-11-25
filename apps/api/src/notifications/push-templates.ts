@@ -32,6 +32,8 @@ export interface BookingAlert {
   moreServices: number;
   startAt: Date;
   timezone: string;
+  /** R630: at the customer's address — said in the title; the address itself never travels in a push. */
+  homeVisit?: boolean;
 }
 
 /** A language from a request; anything else is Georgian, the CMS's main audience. */
@@ -43,6 +45,13 @@ const TITLES: Record<PushLocale, Record<BookingAlertKind, string>> = {
   en: { booked: "New booking", cancelled: "Booking cancelled", rescheduled: "Booking moved" },
   ka: { booked: "ახალი ჯავშანი", cancelled: "ჯავშანი გაუქმდა", rescheduled: "ჯავშანი გადაიტანეს" },
   ru: { booked: "Новая запись", cancelled: "Запись отменена", rescheduled: "Запись перенесена" },
+};
+
+// R630: the same, for a visit at the customer's address
+const HOME_TITLES: Record<PushLocale, Record<BookingAlertKind, string>> = {
+  en: { booked: "New home visit", cancelled: "Home visit cancelled", rescheduled: "Home visit moved" },
+  ka: { booked: "ახალი ვიზიტი მისამართზე", cancelled: "ვიზიტი მისამართზე გაუქმდა", rescheduled: "ვიზიტი მისამართზე გადაიტანეს" },
+  ru: { booked: "Новый выезд на дом", cancelled: "Выезд на дом отменён", rescheduled: "Выезд на дом перенесён" },
 };
 
 interface DateNames {
@@ -98,7 +107,7 @@ export function bookingAlertPayload(alert: BookingAlert, locale: PushLocale): Pu
     .filter((part) => part.length > 0)
     .join(" · ");
   return {
-    title: TITLES[locale][alert.kind],
+    title: (alert.homeVisit ? HOME_TITLES : TITLES)[locale][alert.kind],
     body,
     tag: `visit-${alert.visitId}`,
     url: `/bookings?date=${visitDate(alert.startAt, alert.timezone)}`,

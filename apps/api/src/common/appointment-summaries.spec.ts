@@ -19,6 +19,7 @@ const appointment = (id: string, phoneNumber: string): PrismaAppointmentSummary 
     startAt: NOW,
     endAt: NOW,
     price: new Prisma.Decimal("50"),
+    homeVisitFee: new Prisma.Decimal(0),
     status: "booked",
     visitId: null,
     createdByUserId: null,

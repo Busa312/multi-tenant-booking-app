@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import type { AvailabilitySlot } from "@booking/shared-types";
+import type { AvailabilitySlot, VisitPlace } from "@booking/shared-types";
 import { cachedApi } from "../lib/cache.js";
 import { useI18n } from "../i18n/I18nContext.js";
 import { cx } from "../lib/cx.js";
@@ -20,6 +20,8 @@ interface SlotPickerProps {
    * occupying its own slot (R80) and measures it by its booked duration.
    */
   appointmentId?: string;
+  /** R630: a home visit's times keep travel free around them. */
+  place?: VisitPlace;
   onChange: (time: string) => void;
 }
 
@@ -39,6 +41,7 @@ export function SlotPicker({
   timezone,
   value,
   appointmentId,
+  place = "business",
   onChange,
 }: SlotPickerProps) {
   const { t, lang } = useI18n();
@@ -59,7 +62,7 @@ export function SlotPicker({
       return undefined;
     }
     cachedApi
-      .listAppointmentAvailability({ serviceIds: key.split(","), professionalId, date, appointmentId })
+      .listAppointmentAvailability({ serviceIds: key.split(","), professionalId, date, appointmentId, place })
       .then((result) => {
         // A stale response from an earlier service/date must not overwrite the
         // list for the selection the user is now looking at.
@@ -72,7 +75,7 @@ export function SlotPicker({
       current = false;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [key, professionalId, date, appointmentId, incomplete]);
+  }, [key, professionalId, date, appointmentId, place, incomplete]);
 
   return (
     <div className="mb-1">

@@ -75,6 +75,8 @@ export function StepDateTime({
       professionalIds: draft.professionalIds,
       locationId: draft.locationId ?? undefined,
       date: draft.date,
+      // R630: a home visit's times keep travel free around them
+      place: draft.place ?? undefined,
       // R250: so the time this customer is holding stays on their own list
       holdId: holdId.current,
     }).then((result) => {
@@ -85,7 +87,7 @@ export function StepDateTime({
     return () => {
       cancelled = true;
     };
-  }, [draft.serviceIds, draft.professionalIds, draft.locationId, draft.date, slotsVersion]);
+  }, [draft.serviceIds, draft.professionalIds, draft.locationId, draft.place, draft.date, slotsVersion]);
 
   return (
     <section className={STEP}>

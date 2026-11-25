@@ -27,6 +27,8 @@ const prismaTenant = (overrides: Partial<Parameters<typeof serializeTenant>[0]> 
   changeCutoffHours: 0,
   customersChooseProfessional: true,
   reminderHoursBefore: 24,
+  travelBufferMinutes: 30,
+  homeVisitFee: new Prisma.Decimal(0),
   onboardingSkipped: [],
   onboardingDismissedAt: null,
   onboardingFinishedAt: null,
@@ -66,6 +68,12 @@ const prismaAppointment = (overrides: Partial<Parameters<typeof serializeAppoint
   notes: null,
   reminderSentAt: null,
   confirmedAt: null,
+  place: "business",
+  customerAddress: null,
+  customerAddressDetails: null,
+  customerAddressNote: null,
+  travelMinutes: 0,
+  homeVisitFee: new Prisma.Decimal(0),
   createdAt: new Date("2026-08-01T10:00:00Z"),
   updatedAt: new Date("2026-08-02T11:00:00Z"),
   ...overrides,
@@ -133,6 +141,8 @@ describe("serializeService", () => {
     durationMinutes: 30,
     price,
     priceFrom: false,
+    place: "business",
+    homeVisitFeeApplies: true,
     categoryId: null,
     position: 0,
     isActive: true,
@@ -350,6 +360,15 @@ describe("serializeVisit", () => {
     startAt: new Date("2026-08-05T06:30:00Z"),
     endAt: new Date("2026-08-05T07:15:00Z"),
     price: new Prisma.Decimal("40.10"),
+  });
+
+  // R630
+  it("adds the home-visit fee to the total and says where", () => {
+    const home = { place: "customer", customerAddress: "Rustaveli 1", customerAddressDetails: null, customerAddressNote: "gate 42", travelMinutes: 30 };
+    const result = serializeVisit(visit([{ ...colour, ...home, homeVisitFee: new Prisma.Decimal("10.00") }, { ...cut, ...home }]));
+    expect(result.price).toBe("170.1");
+    expect(result.homeVisitFee).toBe("10");
+    expect(result).toMatchObject({ place: "customer", customerAddress: "Rustaveli 1", customerAddressNote: "gate 42" });
   });
 
   // R610

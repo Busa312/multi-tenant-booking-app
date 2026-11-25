@@ -1,4 +1,4 @@
-import { groupServices } from "./services";
+import { groupServices, homeVisitFeeOf, offeredAt, offersHomeVisits } from "./services";
 
 const category = (id: string, position: number) => ({ id, name: id, nameI18n: null, position });
 const nails = category("nails", 0);
@@ -37,5 +37,28 @@ describe("groupServices", () => {
 
   it("files a service whose category is gone under the uncategorized ones", () => {
     expect(groupServices([service("orphan", "deleted")], [nails]).map((g) => [g.category?.id ?? null, g.services.length])).toEqual([[null, 1]]);
+  });
+});
+
+// R630
+describe("offeredAt", () => {
+  it("offers a service where it's set up, and 'either' at both", () => {
+    expect(offeredAt("business", "business")).toBe(true);
+    expect(offeredAt("business", "customer")).toBe(false);
+    expect(offeredAt("customer", "business")).toBe(false);
+    expect(offeredAt("either", "customer")).toBe(true);
+  });
+
+  it("asks where only when something can be done at the customer's address", () => {
+    expect(offersHomeVisits([{ place: "business" }])).toBe(false);
+    expect(offersHomeVisits([{ place: "business" }, { place: "either" }])).toBe(true);
+  });
+});
+
+describe("homeVisitFeeOf", () => {
+  it("charges the salon's fee once, when it applies to any service of the visit", () => {
+    expect(homeVisitFeeOf([{ homeVisitFeeApplies: false }, { homeVisitFeeApplies: true }], "10.00")).toBe("10.00");
+    expect(homeVisitFeeOf([{ homeVisitFeeApplies: false }], "10.00")).toBe("0");
+    expect(homeVisitFeeOf([{ homeVisitFeeApplies: true }], "0")).toBe("0");
   });
 });

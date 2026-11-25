@@ -15,6 +15,8 @@ type ServiceRow = {
   price: Prisma.Decimal;
   isActive: boolean;
   priceFrom?: boolean;
+  /** R630 */
+  place?: string;
 };
 type ProfessionalRow = { id: string; name: string; isActive: boolean; locationId?: string | null };
 type LocationRow = { id: string; name: string; isActive: boolean };
@@ -31,6 +33,13 @@ type AppointmentRow = {
   status: string;
   visitId: string | null;
   services: LineRow[];
+  // R630
+  place?: string;
+  customerAddress?: string | null;
+  customerAddressDetails?: string | null;
+  customerAddressNote?: string | null;
+  travelMinutes?: number;
+  homeVisitFee?: Prisma.Decimal;
 };
 
 // R230: the customer's link lives on the visit
@@ -64,6 +73,9 @@ interface Overrides {
   appointment?: Partial<AppointmentRow>;
   visit?: VisitRow | null;
   conflicts?: unknown[];
+  /** R630: the salon's fee, and how many live segments the appointment's visit has */
+  homeVisitFee?: Prisma.Decimal;
+  visitSegments?: number;
 }
 
 const defaultService: ServiceRow = {
@@ -106,7 +118,13 @@ const setup = (overrides: Overrides = {}) => {
   const tx = {
     // R260: lockBookingDay
     $executeRaw: jest.fn().mockResolvedValue(1),
-    tenant: { findUniqueOrThrow: jest.fn().mockResolvedValue({ timezone: TZ }) },
+    tenant: {
+      findUniqueOrThrow: jest.fn().mockResolvedValue({
+        timezone: TZ,
+        travelBufferMinutes: 30,
+        homeVisitFee: overrides.homeVisitFee ?? new Prisma.Decimal(0),
+      }),
+    },
     service: {
       findMany: jest.fn(({ where }: { where: { id: { in: string[] } } }) =>
         Promise.resolve(services.filter((row) => where.id.in.includes(row.id))),
@@ -135,6 +153,9 @@ const setup = (overrides: Overrides = {}) => {
       findMany: jest.fn().mockResolvedValue([]),
       create: jest.fn(({ data }: WriteArgs) => Promise.resolve({ id: "new", ...data })),
       update: jest.fn(({ data }: WriteArgs) => Promise.resolve({ id: "a1", ...data })),
+      // R630
+      count: jest.fn().mockResolvedValue(overrides.visitSegments ?? 1),
+      updateMany: jest.fn().mockResolvedValue({ count: 1 }),
     },
     appointmentService: {
       deleteMany: jest.fn().mockResolvedValue({ count: 1 }),
@@ -519,6 +540,8 @@ describe("BookingService.create", () => {
         professionalId: "p1",
         startAt: new Date("2026-08-05T06:00:00.000Z"),
         endAt: new Date("2026-08-05T06:30:00.000Z"),
+        // R630: a booking at the business keeps no travel time
+        travelMinutes: 0,
         excludeAppointmentId: undefined,
       });
     });
@@ -654,7 +677,7 @@ describe("BookingService.update", () => {
       const { service } = setup();
 
       await expect(service.update(updateInput())).rejects.toThrow(
-        "an update must change the time, the professional, the location, the services, or some of them",
+        "an update must change the time, the professional, the location, the services, the place or the address",
       );
     });
 
@@ -1127,5 +1150,62 @@ describe("BookingService.update", () => {
 
       await expect(service.update(updateInput({ locationId: "loc-b" }))).rejects.toThrow(BadRequestException);
     });
+  });
+});
+
+// R630: staff book and edit visits at the customer's address
+describe("home visits (CMS)", () => {
+  const either: ServiceRow = { ...defaultService, place: "either" };
+
+  it("books one with the address, the salon's travel time and fee, and no branch", async () => {
+    const { service, tx, availability } = setup({ services: [either], homeVisitFee: new Prisma.Decimal("10.00") });
+
+    await service.create(createInput({ place: "customer", customerAddress: "Rustaveli 1", customerAddressDetails: "apt 4" }));
+
+    expect(createdData(tx)).toMatchObject({
+      place: "customer",
+      customerAddress: "Rustaveli 1",
+      customerAddressDetails: "apt 4",
+      travelMinutes: 30,
+      locationId: null,
+    });
+    expect(String((createdData(tx) as unknown as { homeVisitFee: unknown }).homeVisitFee)).toBe("10");
+    expect(availability.findConflictsIn.mock.calls[0]?.[1]).toMatchObject({ travelMinutes: 30 });
+  });
+
+  it("refuses a home visit for a service offered only at the business", async () => {
+    const { service } = setup();
+    await expect(service.create(createInput({ place: "customer", customerAddress: "Rustaveli 1" }))).rejects.toThrow(
+      `"Haircut" isn't offered at the customer's address`,
+    );
+  });
+
+  it("corrects the address on every segment of the visit", async () => {
+    const { service, tx } = setup({
+      services: [either],
+      appointment: { place: "customer", customerAddress: "Old 1", travelMinutes: 30, visitId: "v1", homeVisitFee: new Prisma.Decimal(0) },
+      visit: { accessTokenHash: "hash", appointments: [{ endAt: new Date("2026-08-05T06:30:00.000Z") }] },
+    });
+
+    await service.update({ appointmentId: "a1", professionalScope: null, customerAddress: "New 2" });
+
+    expect(tx.appointment.update.mock.calls[0]?.[0]?.data).toMatchObject({ customerAddress: "New 2", travelMinutes: 30 });
+    expect(tx.appointment.updateMany).toHaveBeenCalledWith({
+      where: { tenantId: TENANT_ID, visitId: "v1", id: { not: "a1" } },
+      data: { customerAddress: "New 2", customerAddressDetails: null, customerAddressNote: null },
+    });
+  });
+
+  it("moves a one-segment booking to the customer's address with the salon's travel time", async () => {
+    const { service, tx } = setup({ services: [either] });
+    await service.update({ appointmentId: "a1", professionalScope: null, place: "customer", customerAddress: "Rustaveli 1" });
+    expect(tx.appointment.update.mock.calls[0]?.[0]?.data).toMatchObject({ place: "customer", travelMinutes: 30, locationId: null });
+  });
+
+  it("won't change the place of one segment of a longer visit", async () => {
+    const { service } = setup({ services: [either], appointment: { visitId: "v1" }, visitSegments: 2 });
+    await expect(
+      service.update({ appointmentId: "a1", professionalScope: null, place: "customer", customerAddress: "Rustaveli 1" }),
+    ).rejects.toThrow("a visit of several segments can't change place");
   });
 });

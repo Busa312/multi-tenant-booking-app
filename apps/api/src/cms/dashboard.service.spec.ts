@@ -97,6 +97,7 @@ describe("DashboardService", () => {
       startAt: new Date("2026-11-13T08:00:00Z"),
       endAt: new Date("2026-11-13T09:00:00Z"),
       price: new Prisma.Decimal("50"),
+      homeVisitFee: new Prisma.Decimal(0),
       status: "booked",
       visitId: null,
       createdByUserId: null,

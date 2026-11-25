@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
-import type { BookingConflictResponse, VisitSlot } from "@booking/shared-types";
+import type { BookingConflictResponse, VisitPlace, VisitSlot } from "@booking/shared-types";
 import type { Prisma } from "../../generated/prisma/index.js";
 import { BillingService } from "../billing/billing.service.js";
 import { PrismaService } from "../prisma/prisma.service.js";
@@ -14,6 +14,14 @@ import { hashToken, issueToken, linkExpiresAt } from "./magic-link.js";
 import { HOLD_MAX_LIVE_PER_TENANT, HOLD_MINUTES } from "./slot-hold.js";
 import { resolveServiceLines, totalPrice, type ResolvedServiceLine } from "./service-lines.js";
 import { groupPlannedUnits, type PlannedVisit } from "./visit-planner.js";
+import {
+  assertOfferedAt,
+  homeVisitFeeFor,
+  parseCustomerAddress,
+  parseVisitPlace,
+  placeColumns,
+  type CustomerAddressInput,
+} from "./service-place.js";
 
 export const ANY_PROFESSIONAL = "any";
 
@@ -22,13 +30,15 @@ export interface VisitChoice {
   serviceIds: string[];
   /** R200: aligned with serviceIds — a professional id, or "any". */
   professionalIds: string[];
-  // R150: required when the tenant has locations
+  // R150: required when the tenant has locations (at the business)
   locationId?: string | null;
   date: string;
   time: string;
+  // R630: omitted = at the business
+  place?: VisitPlace;
 }
 
-export interface CreateVisitInput extends VisitChoice {
+export interface CreateVisitInput extends VisitChoice, CustomerAddressInput {
   userName: string;
   phoneNumber: string;
   /** R250: the customer's own hold — it doesn't block them, and is used up by the booking. */
@@ -56,6 +66,10 @@ interface PreparedVisit {
   units: VisitUnitSpec[];
   locationId: string | null;
   plan: PlannedVisit | null;
+  // R630
+  place: VisitPlace;
+  travelMinutes: number;
+  homeVisitFee: Prisma.Decimal | 0;
 }
 
 export interface VisitResult {
@@ -86,12 +100,14 @@ export class VisitService {
     const userName = requireText(input.userName, "userName");
     const phoneNumber = requireText(input.phoneNumber, "phoneNumber");
     const holdId = input.holdId ?? null;
+    // R630: checked before anything else, so a missing address isn't "slot gone"
+    const address = parseCustomerAddress(parseVisitPlace(input.place), input);
 
     return this.prisma.forTenant(async (tx) => {
       // Re-planned inside the write's transaction, behind the day's lock (R260):
       // the slot the customer picked may have gone since they saw it — even
       // with a hold, which may have expired while they verified their phone.
-      const { lines, locationId, plan } = await this.prepare(tx, input, holdId);
+      const { lines, locationId, plan, place, travelMinutes, homeVisitFee } = await this.prepare(tx, input, holdId);
       if (!plan) {
         throw this.slotGone();
       }
@@ -102,7 +118,7 @@ export class VisitService {
       });
 
       // R200: one appointment per professional segment
-      for (const group of groupPlannedUnits(plan.units)) {
+      for (const [groupIndex, group] of groupPlannedUnits(plan.units).entries()) {
         const groupLines = group.unitIndexes
           .map((index) => lines[index])
           .filter((line): line is ResolvedServiceLine => line !== undefined);
@@ -122,6 +138,9 @@ export class VisitService {
             endAt: new Date(group.end),
             // R40: snapshots — a later price change must not rewrite history
             price: totalPrice(groupLines),
+            // R630: where, and the travel kept free around it; the fee once, on the first segment
+            ...placeColumns(place, address, travelMinutes),
+            homeVisitFee: groupIndex === 0 ? homeVisitFee : 0,
             createdByUserId: null,
             services: {
               create: groupLines.map((line, position) => ({
@@ -168,7 +187,7 @@ export class VisitService {
         await tx.slotHold.deleteMany({ where: { tenantId, holdId: replaceHoldId } });
       }
 
-      const { units, plan } = await this.prepare(tx, input, null);
+      const { units, plan, travelMinutes } = await this.prepare(tx, input, null);
       const slot = plan ? AvailabilityService.toVisitSlots([plan], units)[0] : undefined;
       if (!plan || !slot) {
         return null;
@@ -191,6 +210,8 @@ export class VisitService {
           professionalId: group.professionalId,
           startAt: new Date(group.start),
           endAt: new Date(group.end),
+          // R630: a held home visit keeps its travel time free too
+          travelMinutes,
           expiresAt,
         })),
       });
@@ -222,7 +243,7 @@ export class VisitService {
     return this.prisma.forTenant(async (tx) => {
       const visit = await this.findByTokenIn(tx, token);
       this.assertChangeable(visit, (await this.tenantRules(tx)).changeCutoffHours);
-      const { units, locationId } = this.existingUnits(visit);
+      const { units, locationId, place, travelMinutes } = this.existingUnits(visit);
       if (units.length === 0) {
         return [];
       }
@@ -232,6 +253,9 @@ export class VisitService {
         date,
         excludeVisitId: visit.id,
         keepExistingPairings: true,
+        // R630: a home visit keeps the travel time it was booked with
+        place,
+        travelMinutes,
       });
       return AvailabilityService.toVisitSlots(plans, units);
     });
@@ -249,7 +273,7 @@ export class VisitService {
       // One read for both the cutoff and the clock.
       const { timezone, changeCutoffHours } = await this.tenantRules(tx);
       this.assertChangeable(visit, changeCutoffHours);
-      const { units, appointments, locationId } = this.existingUnits(visit);
+      const { units, appointments, locationId, place, travelMinutes } = this.existingUnits(visit);
       if (units.length === 0) {
         throw new BadRequestException("a cancelled booking can't be rescheduled");
       }
@@ -259,7 +283,7 @@ export class VisitService {
       await lockBookingDay(tx, tenantId, date);
       const plan: PlannedVisit | null = await this.availability.visitPlanAtIn(
         tx,
-        { units, locationId, date, excludeVisitId: visit.id, keepExistingPairings: true },
+        { units, locationId, date, excludeVisitId: visit.id, keepExistingPairings: true, place, travelMinutes },
         startAt,
       );
       if (!plan) {
@@ -401,15 +425,18 @@ export class VisitService {
     excludeHoldId: string | null,
   ): Promise<PreparedVisit> {
     const { tenantId } = this.tenantContext.current;
-    const { timezone, customersChooseProfessional } = await tx.tenant.findUniqueOrThrow({
+    const { timezone, customersChooseProfessional, travelBufferMinutes, homeVisitFee } = await tx.tenant.findUniqueOrThrow({
       where: { id: tenantId },
-      select: { timezone: true, customersChooseProfessional: true },
+      select: { timezone: true, customersChooseProfessional: true, travelBufferMinutes: true, homeVisitFee: true },
     });
+    // R630: one visit, one place
+    const place = parseVisitPlace(input.place);
     // R490: a lapsed salon's booking site takes no new holds or bookings
     await this.billing.assertBookableIn(tx, tenantId);
 
     // R120 + R210: active services only, one to five, no duplicates
     const lines = await resolveServiceLines(tx, tenantId, input.serviceIds);
+    assertOfferedAt(lines, place);
     if (!Array.isArray(input.professionalIds) || input.professionalIds.length !== lines.length) {
       throw new BadRequestException("professionalIds must have one entry per service");
     }
@@ -419,7 +446,12 @@ export class VisitService {
       !customersChooseProfessional || id === ANY_PROFESSIONAL || id === "" ? null : id,
     );
 
-    const locationId = await this.booking.resolveLocation(tx, tenantId, input.locationId, null);
+    // R630: a visit at the customer's address has no branch
+    if (place === "customer" && input.locationId) {
+      throw new BadRequestException("a visit at the customer's address has no location");
+    }
+    const locationId = place === "customer" ? null : await this.booking.resolveLocation(tx, tenantId, input.locationId, null);
+    const travelMinutes = place === "customer" ? travelBufferMinutes : 0;
     await this.assertChoices(tx, tenantId, lines, chosen, locationId);
     const startAt = this.booking.resolveStartAt(input.date, input.time, timezone);
 
@@ -432,10 +464,18 @@ export class VisitService {
     await lockBookingDay(tx, tenantId, input.date);
     const plan = await this.availability.visitPlanAtIn(
       tx,
-      { units, locationId, date: input.date, excludeHoldId },
+      { units, locationId, date: input.date, excludeHoldId, place, travelMinutes },
       startAt,
     );
-    return { lines, units, locationId, plan };
+    return {
+      lines,
+      units,
+      locationId,
+      plan,
+      place,
+      travelMinutes,
+      homeVisitFee: homeVisitFeeFor(place, lines, homeVisitFee),
+    };
   }
 
   /** Each live segment as one planner unit with its professional fixed (R230: who stays the same). */
@@ -446,7 +486,15 @@ export class VisitService {
       serviceIds: appointment.services.map((line) => line.serviceId),
       professionalId: appointment.professionalId,
     }));
-    return { units, appointments, locationId: appointments[0]?.locationId ?? null };
+    // R630: a move keeps the place and the travel time it was booked with
+    const first = appointments[0];
+    return {
+      units,
+      appointments,
+      locationId: first?.locationId ?? null,
+      place: (first?.place === "customer" ? "customer" : "business") as VisitPlace,
+      travelMinutes: first?.travelMinutes ?? 0,
+    };
   }
 
   /**

@@ -1,5 +1,5 @@
 import { BadRequestException, Injectable } from "@nestjs/common";
-import type { AvailabilitySlot, BookingConflict, VisitSlot } from "@booking/shared-types";
+import type { AvailabilitySlot, BookingConflict, VisitPlace, VisitSlot } from "@booking/shared-types";
 import type { Prisma } from "../../generated/prisma/index.js";
 import { PrismaService } from "../prisma/prisma.service.js";
 import { serializeLocalizedText } from "../common/serializers.js";
@@ -12,7 +12,8 @@ import {
   zonedTimeToUtc,
 } from "../common/timezone.js";
 import { resolveServiceLines, totalDurationMinutes, validateServiceIds } from "./service-lines.js";
-import { VISIT_GAP_STEP_MINUTES } from "./booking-rules.js";
+import { MAX_TRAVEL_MINUTES, VISIT_GAP_STEP_MINUTES } from "./booking-rules.js";
+import { assertOfferedAt, padded } from "./service-place.js";
 import { dayWorkload, fairOrder, type DayWorkload } from "./fair-assignment.js";
 import { AvailabilityCacheService } from "./availability-cache.service.js";
 import { workingWindows } from "./working-hours.js";
@@ -47,6 +48,8 @@ export interface AvailabilityInput {
   date: string;
 
   excludeAppointmentId?: string;
+  // R630: a home visit keeps the salon's travel time free around it
+  place?: VisitPlace;
 }
 
 export interface ConflictCheckInput {
@@ -55,6 +58,8 @@ export interface ConflictCheckInput {
   endAt: Date;
 
   excludeAppointmentId?: string;
+  // R630: travel minutes the booking being checked keeps free around itself
+  travelMinutes?: number;
 }
 
 /** R200: one link in a visit chain, before a professional is chosen for it. */
@@ -73,6 +78,10 @@ export interface VisitPlanInput {
   date: string;
   // R80: a visit being moved doesn't block itself
   excludeVisitId?: string;
+  // R630: at the customer's address: no branch, and travel time kept free.
+  // `travelMinutes` overrides the salon's setting (a move keeps its snapshot).
+  place?: VisitPlace;
+  travelMinutes?: number;
   // R250: the customer's own hold doesn't block their own booking
   excludeHoldId?: string | null;
   /**
@@ -92,11 +101,22 @@ export interface VisitSlotQuery {
   date: string;
   /** R250: the asker's own hold, so the time they're holding stays on their list. */
   holdId?: string | null;
+  /** R630: omitted = at the business. Part of the cache key, like everything here. */
+  place?: VisitPlace;
 }
 
 const unique = <T>(values: Iterable<T>): T[] => [...new Set(values)];
 
 const overlaps = (a: Instant, b: Instant): boolean => a.start < b.end && b.start < a.end;
+
+/** R630: a booking or hold as the time it keeps from others — itself plus its travel. */
+const paddedInstant = (row: { startAt: Date; endAt: Date; travelMinutes: number }): Instant => {
+  const { start, end } = padded(row.startAt, row.endAt, row.travelMinutes);
+  return { start: new Date(start), end: new Date(end) };
+};
+
+/** R630: day queries reach this far past the day, so padding across midnight is seen. */
+const TRAVEL_REACH_MS = MAX_TRAVEL_MINUTES * 60_000;
 
 function isCovered(start: Date, end: Date, windows: Instant[]): boolean {
   let reach = start.getTime();
@@ -122,10 +142,13 @@ export class AvailabilityService {
     validateServiceIds(input.serviceIds);
 
     return this.prisma.forTenant(async (tx) => {
-      const { timezone } = await tx.tenant.findUniqueOrThrow({
+      const { timezone, travelBufferMinutes } = await tx.tenant.findUniqueOrThrow({
         where: { id: tenantId },
-        select: { timezone: true },
+        select: { timezone: true, travelBufferMinutes: true },
       });
+      // R630: a home visit has no branch, and keeps travel time free around it
+      const place = input.place ?? "business";
+      const pad = place === "customer" ? travelBufferMinutes * 60_000 : 0;
 
       // R120: a deactivated (or unknown) service yields no availability at all
 
@@ -135,16 +158,16 @@ export class AvailabilityService {
             select: { serviceId: true, durationMinutes: true, price: true },
           })
         : [];
-      const durationMinutes = totalDurationMinutes(
-        await resolveServiceLines(tx, tenantId, input.serviceIds, existing),
-      );
+      const lines = await resolveServiceLines(tx, tenantId, input.serviceIds, existing);
+      assertOfferedAt(lines, place, new Set(existing.map((line) => line.serviceId)));
+      const durationMinutes = totalDurationMinutes(lines);
 
       const candidates = await this.resolveCandidates(
         tx,
         tenantId,
         input.serviceIds,
         input.professionalId ?? null,
-        input.locationId ?? null,
+        place === "customer" ? null : (input.locationId ?? null),
       );
       if (candidates.length === 0) {
         return [];
@@ -157,10 +180,13 @@ export class AvailabilityService {
 
       const scoped = { OR: [...(ids.length > 0 ? [{ professionalId: { in: ids } }] : []), { professionalId: null }] };
 
+      // R630: reach past the day by the longest travel time, so padding across midnight counts
+      const reachStart = new Date(dayStart.getTime() - TRAVEL_REACH_MS - pad);
+      const reachEnd = new Date(dayEnd.getTime() + TRAVEL_REACH_MS + pad);
       const [businessHours, timeOff, holds, appointments] = await Promise.all([
         tx.businessHours.findMany({ where: { tenantId, dayOfWeek: dayOfWeekForDateString(date), ...scoped } }),
-        tx.timeOff.findMany({ where: { tenantId, ...scoped, startAt: { lt: dayEnd }, endAt: { gt: dayStart } } }),
-        this.liveHolds(tx, tenantId, ids, dayStart, dayEnd),
+        tx.timeOff.findMany({ where: { tenantId, ...scoped, startAt: { lt: reachEnd }, endAt: { gt: reachStart } } }),
+        this.liveHolds(tx, tenantId, ids, reachStart, reachEnd),
         tx.appointment.findMany({
           where: {
             tenantId,
@@ -169,13 +195,13 @@ export class AvailabilityService {
               ...(includeUnassigned ? [{ professionalId: null }] : []),
             ],
             status: { not: "cancelled" },
-            startAt: { lt: dayEnd },
-            endAt: { gt: dayStart },
+            startAt: { lt: reachEnd },
+            endAt: { gt: reachStart },
             // R80: an appointment being moved doesn't block itself
 
             ...(input.excludeAppointmentId ? { id: { not: input.excludeAppointmentId } } : {}),
           },
-          select: { professionalId: true, startAt: true, endAt: true },
+          select: { professionalId: true, startAt: true, endAt: true, travelMinutes: true },
         }),
       ]);
 
@@ -188,13 +214,10 @@ export class AvailabilityService {
           ...timeOff
             .filter((block) => block.professionalId === null || block.professionalId === candidate.id)
             .map((block) => ({ start: block.startAt, end: block.endAt })),
-          ...appointments
-            .filter((appointment) => appointment.professionalId === candidate.id)
-            .map((appointment) => ({ start: appointment.startAt, end: appointment.endAt })),
+          // R630: each with its own travel time
+          ...appointments.filter((appointment) => appointment.professionalId === candidate.id).map(paddedInstant),
           // R250: a customer is finishing a booking here
-          ...holds
-            .filter((hold) => hold.professionalId === candidate.id)
-            .map((hold) => ({ start: hold.startAt, end: hold.endAt })),
+          ...holds.filter((hold) => hold.professionalId === candidate.id).map(paddedInstant),
         ];
 
         for (const window of windows) {
@@ -203,7 +226,9 @@ export class AvailabilityService {
             const start = zonedTimeToUtc(date, minute, timezone);
             const end = new Date(start.getTime() + durationMinutes * 60_000);
             if (start < now) continue;
-            if (busy.some((interval) => overlaps({ start, end }, interval))) continue;
+            // R630: a home visit's own travel must be free too (only the visit sits in the window)
+            const kept = { start: new Date(start.getTime() - pad), end: new Date(end.getTime() + pad) };
+            if (busy.some((interval) => overlaps(kept, interval))) continue;
             slots.push({ startAt: start.toISOString(), endAt: end.toISOString(), professionalId: candidate.id });
           }
         }
@@ -216,6 +241,11 @@ export class AvailabilityService {
   async findConflictsIn(tx: Prisma.TransactionClient, input: ConflictCheckInput): Promise<BookingConflict[]> {
     const { tenantId } = this.tenantContext.current;
     const { professionalId, startAt, endAt } = input;
+    // R630: what this booking keeps free (itself plus its travel), and how far
+    // to look for others whose own travel could reach it
+    const kept = paddedInstant({ startAt, endAt, travelMinutes: input.travelMinutes ?? 0 });
+    const reachStart = new Date(kept.start.getTime() - TRAVEL_REACH_MS);
+    const reachEnd = new Date(kept.end.getTime() + TRAVEL_REACH_MS);
 
     const { timezone } = await tx.tenant.findUniqueOrThrow({
       where: { id: tenantId },
@@ -232,21 +262,24 @@ export class AvailabilityService {
       OR: [...(professionalId ? [{ professionalId }] : []), { professionalId: null }],
     };
 
-    const [timeOff, holds, appointments] = await Promise.all([
-      tx.timeOff.findMany({ where: { tenantId, ...scoped, startAt: { lt: endAt }, endAt: { gt: startAt } } }),
-      professionalId ? this.liveHolds(tx, tenantId, [professionalId], startAt, endAt) : Promise.resolve([]),
+    const [timeOff, holdRows, appointmentRows] = await Promise.all([
+      tx.timeOff.findMany({ where: { tenantId, ...scoped, startAt: { lt: kept.end }, endAt: { gt: kept.start } } }),
+      professionalId ? this.liveHolds(tx, tenantId, [professionalId], reachStart, reachEnd) : Promise.resolve([]),
       tx.appointment.findMany({
         where: {
           tenantId,
           professionalId,
           status: { not: "cancelled" },
-          startAt: { lt: endAt },
-          endAt: { gt: startAt },
+          startAt: { lt: reachEnd },
+          endAt: { gt: reachStart },
           ...(input.excludeAppointmentId ? { id: { not: input.excludeAppointmentId } } : {}),
         },
-        select: { userName: true, startAt: true, endAt: true },
+        select: { userName: true, startAt: true, endAt: true, travelMinutes: true },
       }),
     ]);
+    // R630: a clash counts when either side's travel reaches the other
+    const appointments = appointmentRows.filter((row) => overlaps(kept, paddedInstant(row)));
+    const holds = holdRows.filter((row) => overlaps(kept, paddedInstant(row)));
 
     const conflicts: BookingConflict[] = appointments.map((appointment) => ({
       type: "appointment",
@@ -334,6 +367,9 @@ export class AvailabilityService {
     return this.prisma.forTenant(async (tx) => {
       // R120: a deactivated (or unknown) service is refused here
       const lines = await resolveServiceLines(tx, tenantId, query.serviceIds);
+      // R630: one visit, one place
+      const place = query.place ?? "business";
+      assertOfferedAt(lines, place);
       const units: VisitUnitSpec[] = lines.map((line, index) => ({
         durationMinutes: line.durationMinutes,
         serviceIds: [line.serviceId],
@@ -342,9 +378,10 @@ export class AvailabilityService {
       // The planner's load already read the tenant's notice; reused for the cache.
       const { planner, starts, noticeMs } = await this.loadVisitPlanner(tx, {
         units,
-        locationId: query.locationId,
+        locationId: place === "customer" ? null : query.locationId,
         date: query.date,
         excludeHoldId: query.holdId ?? null,
+        place,
       });
       const slots = AvailabilityService.toVisitSlots(planVisits(planner, starts), units);
       await this.cache.store(cached.key, { noticeMs, slots });
@@ -393,11 +430,20 @@ export class AvailabilityService {
     const { tenantId } = this.tenantContext.current;
     const date = this.validateDate(input.date);
 
-    const { timezone, maxVisitGapMinutes, minBookingNoticeMinutes, maxBookingAdvanceDays } =
+    const { timezone, maxVisitGapMinutes, minBookingNoticeMinutes, maxBookingAdvanceDays, travelBufferMinutes } =
       await tx.tenant.findUniqueOrThrow({
         where: { id: tenantId },
-        select: { timezone: true, maxVisitGapMinutes: true, minBookingNoticeMinutes: true, maxBookingAdvanceDays: true },
+        select: {
+          timezone: true,
+          maxVisitGapMinutes: true,
+          minBookingNoticeMinutes: true,
+          maxBookingAdvanceDays: true,
+          travelBufferMinutes: true,
+        },
       });
+    // R630: a home visit keeps travel free around it — the salon's setting, or
+    // the snapshot of a booking being moved
+    const padMinutes = input.place === "customer" ? (input.travelMinutes ?? travelBufferMinutes) : 0;
 
     const noticeMs = minBookingNoticeMinutes * 60_000;
     const emptyPlanner: PlannerInput = {
@@ -407,6 +453,7 @@ export class AvailabilityService {
       gapStepMinutes: VISIT_GAP_STEP_MINUTES,
       // R280: nothing starts sooner than the salon's notice
       notBefore: Date.now() + noticeMs,
+      padMinutes,
     };
     // R290: nothing on a day past the salon's horizon (counted from today on its clock)
     const lastBookableDate = addDaysToDateString(zonedDateString(new Date(), timezone), maxBookingAdvanceDays);
@@ -425,23 +472,26 @@ export class AvailabilityService {
     const dayEnd = zonedTimeToUtc(addDaysToDateString(date, 1), 0, timezone);
     const scoped = { OR: [{ professionalId: { in: ids } }, { professionalId: null }] };
 
+    // R630: reach past the day by the longest travel time, so padding across midnight counts
+    const reachStart = new Date(dayStart.getTime() - TRAVEL_REACH_MS - padMinutes * 60_000);
+    const reachEnd = new Date(dayEnd.getTime() + TRAVEL_REACH_MS + padMinutes * 60_000);
     const [businessHours, timeOff, holds, appointments] = await Promise.all([
       tx.businessHours.findMany({ where: { tenantId, dayOfWeek: dayOfWeekForDateString(date), ...scoped } }),
-      tx.timeOff.findMany({ where: { tenantId, ...scoped, startAt: { lt: dayEnd }, endAt: { gt: dayStart } } }),
-      this.liveHolds(tx, tenantId, ids, dayStart, dayEnd, input.excludeHoldId ?? null),
+      tx.timeOff.findMany({ where: { tenantId, ...scoped, startAt: { lt: reachEnd }, endAt: { gt: reachStart } } }),
+      this.liveHolds(tx, tenantId, ids, reachStart, reachEnd, input.excludeHoldId ?? null),
       tx.appointment.findMany({
         where: {
           tenantId,
           professionalId: { in: ids },
           status: { not: "cancelled" },
-          startAt: { lt: dayEnd },
-          endAt: { gt: dayStart },
+          startAt: { lt: reachEnd },
+          endAt: { gt: reachStart },
           // An explicit OR: `visitId: { not: X }` alone would also drop every
           // row whose visit_id is NULL (SQL's <> never matches NULL), i.e.
           // every staff booking — which must still block the slot.
           ...(input.excludeVisitId ? { OR: [{ visitId: null }, { visitId: { not: input.excludeVisitId } }] } : {}),
         },
-        select: { professionalId: true, startAt: true, endAt: true },
+        select: { professionalId: true, startAt: true, endAt: true, travelMinutes: true },
       }),
     ]);
 
@@ -455,14 +505,13 @@ export class AvailabilityService {
       const away = timeOff
         .filter((block) => block.professionalId === null || block.professionalId === id)
         .map((block) => ({ start: block.startAt.getTime(), end: block.endAt.getTime() }));
+      // R630: each with its own travel time — also what R450 counts as a busy day
       const booked = [
         ...appointments
           .filter((appointment) => appointment.professionalId === id)
-          .map((appointment) => ({ start: appointment.startAt.getTime(), end: appointment.endAt.getTime() })),
+          .map((appointment) => padded(appointment.startAt, appointment.endAt, appointment.travelMinutes)),
         // R250: another customer is finishing a booking here
-        ...holds
-          .filter((hold) => hold.professionalId === id)
-          .map((hold) => ({ start: hold.startAt.getTime(), end: hold.endAt.getTime() })),
+        ...holds.filter((hold) => hold.professionalId === id).map((hold) => padded(hold.startAt, hold.endAt, hold.travelMinutes)),
       ];
       schedules.set(id, { windows, busy: [...away, ...booked] });
       // R450: how full their day already is, for the fair order below
@@ -548,7 +597,7 @@ export class AvailabilityService {
     from: Date,
     to: Date,
     excludeHoldId: string | null = null,
-  ): Promise<{ professionalId: string; startAt: Date; endAt: Date }[]> {
+  ): Promise<{ professionalId: string; startAt: Date; endAt: Date; travelMinutes: number }[]> {
     if (professionalIds.length === 0) {
       return Promise.resolve([]);
     }
@@ -561,7 +610,7 @@ export class AvailabilityService {
         endAt: { gt: from },
         ...(excludeHoldId ? { holdId: { not: excludeHoldId } } : {}),
       },
-      select: { professionalId: true, startAt: true, endAt: true },
+      select: { professionalId: true, startAt: true, endAt: true, travelMinutes: true },
     });
   }
 

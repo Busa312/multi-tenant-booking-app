@@ -13,6 +13,8 @@
  *   smallest gap first.
  * - A unit needs a candidate who has one open window containing the whole unit
  *   and nothing busy overlapping it, and the unit can't start before `notBefore`.
+ * - R630: a home visit keeps `padMinutes` of travel free on both sides of each
+ *   unit; only the unit itself has to fit the open window.
  * - The previous unit's professional is tried first, so a booking one person
  *   can do stays with one person (and becomes one appointment).
  *
@@ -47,6 +49,8 @@ export interface PlannerInput {
   gapStepMinutes: number;
   /** Nothing may start before this instant (i.e. "now"). */
   notBefore: number;
+  /** R630: travel minutes kept free before and after each unit (a home visit). */
+  padMinutes?: number;
 }
 
 export interface PlannedUnit {
@@ -64,10 +68,11 @@ export interface PlannedVisit {
 
 const MINUTE = 60_000;
 
-function fits(schedule: ProfessionalSchedule | undefined, start: number, end: number): boolean {
+function fits(schedule: ProfessionalSchedule | undefined, start: number, end: number, pad = 0): boolean {
   if (!schedule) return false;
   const inWindow = schedule.windows.some((window) => window.start <= start && end <= window.end);
-  return inWindow && !schedule.busy.some((busy) => start < busy.end && busy.start < end);
+  // R630: travel needs only to be free, not inside working hours
+  return inWindow && !schedule.busy.some((busy) => start - pad < busy.end && busy.start < end + pad);
 }
 
 /**
@@ -78,6 +83,7 @@ function fits(schedule: ProfessionalSchedule | undefined, start: number, end: nu
 export function planVisitAt(input: PlannerInput, start: number, memo = new Set<string>()): PlannedVisit | null {
   if (input.units.length === 0 || start < input.notBefore) return null;
   const gapSteps = Math.floor(Math.max(0, input.maxGapMinutes) / Math.max(1, input.gapStepMinutes));
+  const pad = Math.max(0, input.padMinutes ?? 0) * MINUTE;
 
   const search = (index: number, earliest: number, previous: string | null, allowGap: boolean): PlannedUnit[] | null => {
     const unit = input.units[index];
@@ -97,7 +103,7 @@ export function planVisitAt(input: PlannerInput, start: number, memo = new Set<s
       if (unitStart < input.notBefore) continue;
 
       for (const professionalId of ordered) {
-        if (!fits(input.schedules.get(professionalId), unitStart, unitEnd)) continue;
+        if (!fits(input.schedules.get(professionalId), unitStart, unitEnd, pad)) continue;
         const rest = search(index + 1, unitEnd, professionalId, true);
         if (rest) return [{ unitIndex: index, professionalId, start: unitStart, end: unitEnd }, ...rest];
       }

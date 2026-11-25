@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from "react";
-import type { LocalizedText, ProfessionalSummary, ServiceCategory, ServiceSummary } from "@booking/shared-types";
+import type { LocalizedText, ProfessionalSummary, ServiceCategory, ServicePlace, ServiceSummary } from "@booking/shared-types";
 import { cachedApi } from "../lib/cache.js";
 import { useI18n } from "../i18n/I18nContext.js";
 import { useLocalizedName } from "../lib/useLocalizedName.js";
@@ -67,6 +67,9 @@ export function EditServiceModal({
   // R510: "" = no category
   const [categoryId, setCategoryId] = useState(isNew ? (defaultCategoryId ?? "") : (target.categoryId ?? ""));
   const [professionalIds, setProfessionalIds] = useState<string[]>(isNew ? [] : target.professionalIds);
+  // R630
+  const [place, setPlace] = useState<ServicePlace>(isNew ? "business" : target.place);
+  const [homeVisitFeeApplies, setHomeVisitFeeApplies] = useState(isNew ? true : target.homeVisitFeeApplies);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -97,6 +100,8 @@ export function EditServiceModal({
         priceFrom,
         ...(categories.length > 0 ? { categoryId: categoryId || null } : {}),
         professionalIds,
+        place,
+        homeVisitFeeApplies,
       };
 
       const saved = isNew
@@ -206,6 +211,29 @@ export function EditServiceModal({
             {t("services.priceFromHint", { price: price.trim() || "15" })}
           </p>
         </div>
+
+        {/* R630 */}
+        <Field label={t("services.placeLabel")} htmlFor="service-place" hint={isNew ? undefined : t("services.placeHint")}>
+          <Select
+            id="service-place"
+            value={place}
+            onChange={(next) => setPlace(next as ServicePlace)}
+            options={[
+              { value: "business", label: t("services.placeBusiness") },
+              { value: "customer", label: t("services.placeCustomer") },
+              { value: "either", label: t("services.placeEither") },
+            ]}
+          />
+        </Field>
+        {/* R630: the salon's one fee (set under Hours → booking rules), on or off per service */}
+        {place !== "business" && (
+          <div className="-mt-1 mb-4">
+            <Checkbox checked={homeVisitFeeApplies} onChange={setHomeVisitFeeApplies}>
+              {t("services.feeAppliesLabel")}
+            </Checkbox>
+            <p className="ml-7.5 text-[13px] text-base-content/60">{t("services.feeAppliesHint")}</p>
+          </div>
+        )}
 
         <GroupLabel>{t("services.performedBy")}</GroupLabel>
         {assignable.length === 0 && <p className="mb-3 text-[13px] text-base-content/60">{t("services.noProfessionalsCreated")}</p>}

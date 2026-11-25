@@ -66,6 +66,12 @@ interface Overrides {
   customersChooseProfessional?: boolean;
   /** R490 */
   bookingPaused?: boolean;
+  /** R630: where the services are offered, and the salon's travel time and fee */
+  servicePlace?: string;
+  travelBufferMinutes?: number;
+  homeVisitFee?: Prisma.Decimal;
+  /** R630: whether the salon's fee applies to the services */
+  feeApplies?: boolean;
 }
 
 const setup = (overrides: Overrides = {}) => {
@@ -77,11 +83,21 @@ const setup = (overrides: Overrides = {}) => {
         timezone: "Asia/Tbilisi",
         changeCutoffHours: overrides.cutoffHours ?? 0,
         customersChooseProfessional: overrides.customersChooseProfessional ?? true,
+        travelBufferMinutes: overrides.travelBufferMinutes ?? 30,
+        homeVisitFee: overrides.homeVisitFee ?? new Prisma.Decimal(0),
       }),
     },
     service: {
       findMany: jest.fn(({ where }: { where: { id: { in: string[] } } }) =>
-        Promise.resolve([colour, cut].filter((service) => where.id.in.includes(service.id))),
+        Promise.resolve(
+          [colour, cut]
+            .filter((service) => where.id.in.includes(service.id))
+            .map((service) => ({
+              ...service,
+              place: overrides.servicePlace ?? "business",
+              homeVisitFeeApplies: overrides.feeApplies ?? true,
+            })),
+        ),
       ),
     },
     professional: {
@@ -658,5 +674,78 @@ describe("confirm", () => {
   it("refuses a visit that has already started", async () => {
     const { service } = setup({ visit: visitRow({ appointments: [segment({ startAt: PAST })] }) });
     await expect(service.confirm(TOKEN)).rejects.toThrow(BadRequestException);
+  });
+});
+
+// R630: visits at the customer's address
+describe("home visits", () => {
+  const home = (overrides: Record<string, unknown> = {}) =>
+    createInput({ place: "customer", locationId: undefined, customerAddress: "Vazha-Pshavela 12", customerAddressNote: "gate 42", ...overrides });
+
+  it("stores the address and the travel time on every segment, and the fee once, on the first", async () => {
+    const { service, tx } = setup({ servicePlace: "either", homeVisitFee: new Prisma.Decimal("10.00") });
+
+    await service.create(home());
+
+    const written = tx.appointment.create.mock.calls.map((call) => call[0].data as Record<string, unknown>);
+    expect(written).toHaveLength(2);
+    for (const data of written) {
+      expect(data).toMatchObject({
+        place: "customer",
+        customerAddress: "Vazha-Pshavela 12",
+        customerAddressNote: "gate 42",
+        travelMinutes: 30,
+        locationId: null,
+      });
+    }
+    expect(String(written[0]?.homeVisitFee)).toBe("10");
+    expect(written[1]?.homeVisitFee).toBe(0);
+  });
+
+  it("plans with the salon's travel time and no branch", async () => {
+    const { service, availability } = setup({ servicePlace: "customer", travelBufferMinutes: 45 });
+    await service.create(home());
+    expect(availability.visitPlanAtIn.mock.calls[0]?.[1]).toMatchObject({ place: "customer", travelMinutes: 45, locationId: null });
+  });
+
+  it("charges nothing when the fee applies to none of the visit's services", async () => {
+    const { service, tx } = setup({ servicePlace: "either", homeVisitFee: new Prisma.Decimal("10.00"), feeApplies: false });
+    await service.create(home());
+    expect(tx.appointment.create.mock.calls[0]?.[0]?.data?.homeVisitFee).toBe(0);
+  });
+
+  it("charges nothing when the salon has no fee", async () => {
+    const { service, tx } = setup({ servicePlace: "either" });
+    await service.create(home());
+    expect(tx.appointment.create.mock.calls[0]?.[0]?.data?.homeVisitFee).toBe(0);
+  });
+
+  it("needs the address, and is refused before anything is planned", async () => {
+    const { service, availability } = setup({ servicePlace: "either" });
+    await expect(service.create(home({ customerAddress: undefined }))).rejects.toThrow("customerAddress is required");
+    expect(availability.visitPlanAtIn).not.toHaveBeenCalled();
+  });
+
+  it("refuses a branch, and a service only offered at the business", async () => {
+    await expect(setup({ servicePlace: "either" }).service.create(home({ locationId: "loc-a" }))).rejects.toThrow(
+      "a visit at the customer's address has no location",
+    );
+    await expect(setup().service.create(home())).rejects.toThrow(`"Colour" isn't offered at the customer's address`);
+  });
+
+  it("holds the travel time too", async () => {
+    const { service, tx } = setup({ servicePlace: "either" });
+    await service.hold({ ...home(), replaceHoldId: null });
+    const rows = tx.slotHold.createMany.mock.calls[0]?.[0]?.data as Record<string, unknown>[];
+    expect(rows.every((row) => row.travelMinutes === 30)).toBe(true);
+  });
+
+  it("moves a home visit with the place and travel time it was booked with", async () => {
+    const homeSegments = visitRow().appointments.map((appointment) => ({ ...appointment, place: "customer", travelMinutes: 45 }));
+    const { service, availability } = setup({ visit: visitRow({ appointments: homeSegments }), travelBufferMinutes: 15 });
+
+    await service.reschedule(TOKEN, "2026-08-07", "10:00");
+
+    expect(availability.visitPlanAtIn.mock.calls[0]?.[1]).toMatchObject({ place: "customer", travelMinutes: 45 });
   });
 });

@@ -7,6 +7,7 @@ import { BookingStatusPill } from "./BookingStatusPill.js";
 import { NoShowBadge } from "./NoShowBadge.js";
 import { BlockedBadge } from "./BlockedBadge.js";
 import { ConfirmedBadge } from "./ConfirmedBadge.js";
+import { HomeVisitAddress } from "./HomeVisitAddress.js";
 import { Icon } from "./ui/index.js";
 
 interface AgendaNextUpProps {
@@ -50,6 +51,9 @@ export function AgendaNextUp({ appointment, timezone }: AgendaNextUpProps) {
           {appointment.professionalName ? nameOf(appointment.professionalName, appointment.professionalNameI18n) : t("bookings.anyProfessional")}
         </span>
       </div>
+
+      {/* R630: where to go, in full — this is the visit about to start */}
+      <HomeVisitAddress appointment={appointment} className="mt-3" />
 
       {/* What the desk was told when the booking was taken — in full here, since
           this is the appointment about to walk in. */}

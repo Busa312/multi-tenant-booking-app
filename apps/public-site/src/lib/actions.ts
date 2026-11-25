@@ -1,7 +1,7 @@
 "use server";
 
 import { ApiError } from "@booking/api-client";
-import type { OtpCooldownResponse, PublicProfessional, Visit, VisitSlot } from "@booking/shared-types";
+import type { OtpCooldownResponse, PublicProfessional, Visit, VisitPlace, VisitSlot } from "@booking/shared-types";
 import { getPublicApiClient } from "./api";
 
 export type ActionResult<T> = ({ ok: true } & T) | { ok: false; reason: FailureReason };
@@ -38,6 +38,8 @@ export interface AvailabilityRequest {
   date: string;
   // R250: the visitor's own hold, so the time they're holding stays listed
   holdId?: string;
+  // R630: a home visit's times keep travel free around them
+  place?: VisitPlace;
 }
 
 export async function fetchAvailability(
@@ -115,6 +117,11 @@ export interface BookingRequest {
   verificationToken: string;
   // R250: the hold taken when the time was picked, used up by the booking
   holdId?: string;
+  // R630: where, and the address for a visit at the customer's
+  place?: VisitPlace;
+  customerAddress?: string;
+  customerAddressDetails?: string;
+  customerAddressNote?: string;
 }
 
 export interface HoldRequest {
@@ -124,6 +131,8 @@ export interface HoldRequest {
   date: string;
   time: string;
   replaceHoldId?: string;
+  // R630
+  place?: VisitPlace;
 }
 
 /**

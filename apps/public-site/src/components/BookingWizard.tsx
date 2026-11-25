@@ -1,8 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { MAX_SERVICES_PER_BOOKING, localized } from "@booking/shared-types";
-import type { Location, PublicProfessional, Service, ServiceCategory, Visit, VisitSlot } from "@booking/shared-types";
+import { MAX_SERVICES_PER_BOOKING, localized, offeredAt } from "@booking/shared-types";
+import type { Location, PublicProfessional, Service, ServiceCategory, Visit, VisitPlace, VisitSlot } from "@booking/shared-types";
 import { translator, type Locale, type Messages } from "@/i18n/locales";
 import { fetchProfessionals, holdSlot, releaseHold, submitBooking, type FailureReason } from "@/lib/actions";
 import { addDays, formatInstant, todayInTimezone, wallClock } from "@/lib/tenant-time";
@@ -11,6 +11,7 @@ import { useLocaleHref } from "@/lib/useLocaleHref";
 import {
   bookingSteps,
   isBookable,
+  offeredPlaces,
   onlyBookableService,
   professionalIdsFromSlot,
   type BookingStepId,
@@ -19,6 +20,7 @@ import { clearWizard, loadWizard, saveWizard, type CodeSent, type WizardState } 
 import { StepProgress } from "./StepProgress";
 import { WizardRecap } from "./WizardRecap";
 import { UnavailableNotice } from "./UnavailableNotice";
+import { StepPlace } from "./StepPlace";
 import { StepServices } from "./StepServices";
 import { StepLocation } from "./StepLocation";
 import { StepProfessional } from "./StepProfessional";
@@ -47,9 +49,14 @@ interface BookingWizardProps {
   messages: Messages;
   /** R410: framed by a salon's own website (the /embed pages). */
   embedded?: boolean;
+  /** R630: the salon's name for "At {salon}", and its home-visit fee ("0" = none). */
+  salonName: string;
+  homeVisitFee: string;
 }
 
 export interface BookingDraft {
+  /** R630: where the visit takes place; null until chosen on a salon that asks. */
+  place: VisitPlace | null;
   // R210: one to five, in the order they'll be performed
   serviceIds: string[];
   locationId: string | null;
@@ -74,11 +81,21 @@ export interface Confirmation {
 export interface CustomerDetails {
   userName: string;
   phoneNumber: string;
+  // R630: only for a visit at the customer's address
+  customerAddress?: string;
+  customerAddressDetails?: string;
+  customerAddressNote?: string;
 }
 
 // Restoring runs before the first paint, so a language switch doesn't flash
 // step 1 before jumping back. (A layout effect is a no-op on the server.)
 const useBeforePaint = typeof window === "undefined" ? useEffect : useLayoutEffect;
+
+/** R630: how many of these services the home-visit fee applies to. */
+const feeCoverage = (services: readonly Service[]): "all" | "some" | "none" => {
+  const applying = services.filter((service) => service.homeVisitFeeApplies).length;
+  return applying === 0 ? "none" : applying === services.length ? "all" : "some";
+};
 
 export function BookingWizard({
   services,
@@ -94,6 +111,8 @@ export function BookingWizard({
   defaultLocale,
   messages,
   embedded = false,
+  salonName,
+  homeVisitFee,
 }: BookingWizardProps) {
   const t = useMemo(() => translator(messages), [messages]);
   const text = useCallback(
@@ -101,9 +120,23 @@ export function BookingWizard({
     [locale, defaultLocale],
   );
 
+  // R630: "Where?" only when both places are possible for what's already chosen;
+  // otherwise the one possible place is taken (a home-only service never offers the salon)
+  const [places] = useState(() =>
+    offeredPlaces(
+      services,
+      allProfessionals,
+      preselectedServiceIds.filter((id) => isBookable(allProfessionals, id)),
+    ),
+  );
+  const asksPlace = places.length > 1;
+  const fixedPlace: VisitPlace | null = asksPlace ? null : (places[0] ?? "business");
+  // The branch a visit at the business starts with (R150), and goes back to
+  const defaultLocationId = preselectedLocationId ?? (locations.length === 1 ? (locations[0]?.id ?? null) : null);
+
   // R440: only the steps with something to choose, for what's been picked so far
   const stepsFor = useCallback(
-    (picked: Pick<BookingDraft, "serviceIds" | "locationId">): BookingStepId[] =>
+    (picked: Pick<BookingDraft, "serviceIds" | "locationId" | "place">): BookingStepId[] =>
       bookingSteps({
         services,
         professionals: allProfessionals,
@@ -111,8 +144,10 @@ export function BookingWizard({
         locationId: picked.locationId,
         chooseLocation: locations.length > 1 && !preselectedLocationId,
         customersChooseProfessional,
+        asksPlace,
+        place: picked.place,
       }),
-    [services, allProfessionals, locations.length, preselectedLocationId, customersChooseProfessional],
+    [services, allProfessionals, locations.length, preselectedLocationId, customersChooseProfessional, asksPlace],
   );
 
   // R160: "book another" starts over in the language being read
@@ -124,14 +159,18 @@ export function BookingWizard({
   const [restoreCount, setRestoreCount] = useState(0);
   const [draft, setDraft] = useState<BookingDraft>(() => {
     // A deep link can't preselect something that can't be booked (R240/R210).
-    // R440: with only one service to book, it's chosen already.
-    const only = onlyBookableService(services, allProfessionals);
+    // R440: with only one service to book (where the visit will be), it's chosen already.
+    const only = onlyBookableService(
+      fixedPlace ? services.filter((service) => offeredAt(service.place, fixedPlace)) : services,
+      allProfessionals,
+    );
     const serviceIds = only
       ? [only]
       : preselectedServiceIds.filter((id) => isBookable(allProfessionals, id)).slice(0, MAX_SERVICES_PER_BOOKING);
     return {
+      place: fixedPlace,
       serviceIds,
-      locationId: preselectedLocationId ?? (locations.length === 1 ? (locations[0]?.id ?? null) : null),
+      locationId: fixedPlace === "customer" ? null : defaultLocationId,
       professionalIds: serviceIds.map(() => null),
       date: todayInTimezone(timezone),
       slot: null,
@@ -163,8 +202,13 @@ export function BookingWizard({
   const holdRequest = useRef(0);
 
   const steps = useMemo(
-    () => stepsFor({ serviceIds: draft.serviceIds, locationId: draft.locationId }),
-    [stepsFor, draft.serviceIds, draft.locationId],
+    () => stepsFor({ serviceIds: draft.serviceIds, locationId: draft.locationId, place: draft.place }),
+    [stepsFor, draft.serviceIds, draft.locationId, draft.place],
+  );
+  // R630: the services offered where the visit will be
+  const placeServices = useMemo(
+    () => (draft.place ? services.filter((service) => offeredAt(service.place, draft.place as VisitPlace)) : services),
+    [services, draft.place],
   );
   const step = steps[stepIndex] ?? steps[0] ?? "time";
 
@@ -203,17 +247,24 @@ export function BookingWizard({
   function restorable(saved: WizardState): WizardState | null {
     const shaped = Array.isArray(saved.draft.serviceIds) && Array.isArray(saved.draft.professionalIds);
     if (!shaped) return null;
-    let d = saved.draft;
+    // R630: a draft from before "Where?" existed, or one that no longer fits this salon
+    let d: BookingDraft = { ...saved.draft, place: saved.draft.place ?? fixedPlace };
+    if (!asksPlace && d.place !== fixedPlace) return null;
     // R440: a choice the business has since turned off is dropped — "any" instead;
     // and with one service left to book, it's the one booked.
     if (!customersChooseProfessional) d = { ...d, professionalIds: d.professionalIds.map(() => null) };
-    const only = onlyBookableService(services, allProfessionals);
+    const offeredThere = d.place ? services.filter((service) => offeredAt(service.place, d.place as VisitPlace)) : services;
+    const only = onlyBookableService(offeredThere, allProfessionals);
     if (only && d.serviceIds.length === 0) d = { ...d, serviceIds: [only], professionalIds: [null] };
     // The restored draft's steps, which can differ from this render's.
     const steps = stepsFor(d);
     const fits =
       d.serviceIds.length <= MAX_SERVICES_PER_BOOKING &&
-      d.serviceIds.every((id) => services.some((service) => service.id === id) && isBookable(allProfessionals, id)) &&
+      d.serviceIds.every(
+        (id) =>
+          services.some((service) => service.id === id && (d.place === null || offeredAt(service.place, d.place))) &&
+          isBookable(allProfessionals, id),
+      ) &&
       d.professionalIds.length === d.serviceIds.length &&
       d.professionalIds.every((id) => id === null || allProfessionals.some((p) => p.id === id)) &&
       (d.locationId === null || locations.some((location) => location.id === d.locationId)) &&
@@ -306,6 +357,7 @@ export function BookingWizard({
       date: draft.date,
       time: timeOf(slot),
       replaceHoldId: previous?.id,
+      place: draft.place ?? undefined,
     });
 
     if (request !== holdRequest.current) {
@@ -349,6 +401,7 @@ export function BookingWizard({
       ...collected,
       verificationToken,
       holdId: draft.hold?.id,
+      place: draft.place ?? undefined,
     });
     setIsSubmitting(false);
 
@@ -423,8 +476,12 @@ export function BookingWizard({
         <WizardRecap
           label={t("booking.summary.heading")}
           items={[
+            // R630
+            draft.place === "customer" ? t("booking.place.customer") : "",
             selectedServices.map((service) => text(service.name, service.nameI18n)).join(", "),
-            locations.length > 1 && selectedLocation ? text(selectedLocation.name, selectedLocation.nameI18n) : "",
+            locations.length > 1 && selectedLocation && draft.place !== "customer"
+              ? text(selectedLocation.name, selectedLocation.nameI18n)
+              : "",
             draft.slot && stepIndex > steps.indexOf("time") ? formatInstant(draft.slot.startAt, timezone, locale) : "",
           ].filter((item) => item !== "")}
         />
@@ -436,10 +493,38 @@ export function BookingWizard({
         </div>
       )}
 
+      {step === "place" && (
+        <StepPlace
+          selected={draft.place}
+          salonName={salonName}
+          homeVisitFee={homeVisitFee}
+          // R630: whether the fee applies to all, some or none of what's offered at the customer's address
+          feeApplies={feeCoverage(services.filter((s) => offeredAt(s.place, "customer")))}
+          onSelect={(place) => {
+            // One visit, one place: services not offered there are let go; a home visit has no branch.
+            // R440: with one service offered there, it's chosen (its step is left out).
+            const offeredThere = services.filter((s) => offeredAt(s.place, place));
+            const only = onlyBookableService(offeredThere, allProfessionals);
+            const kept = only
+              ? [only]
+              : draft.serviceIds.filter((id) => offeredThere.some((s) => s.id === id));
+            update({
+              place,
+              serviceIds: kept,
+              professionalIds: kept.map(() => null),
+              locationId: place === "customer" ? null : defaultLocationId,
+              slot: null,
+            });
+          }}
+          onNext={goNext}
+          t={t}
+        />
+      )}
+
       {step === "services" && (
         <StepServices
           key={restoreCount}
-          services={services}
+          services={placeServices}
           categories={serviceCategories}
           professionals={allProfessionals}
           selectedIds={draft.serviceIds}
@@ -448,6 +533,7 @@ export function BookingWizard({
             update({ serviceIds, professionalIds: serviceIds.map(() => null), slot: null })
           }
           onNext={goNext}
+          onBack={stepIndex > 0 ? goBack : undefined}
           t={t}
           text={text}
         />
@@ -508,7 +594,9 @@ export function BookingWizard({
       {step === "details" && (
         <StepDetails
           services={selectedServices}
-          location={selectedLocation}
+          location={draft.place === "customer" ? null : selectedLocation}
+          place={draft.place ?? "business"}
+          homeVisitFee={homeVisitFee}
           slot={draft.slot}
           serviceName={serviceName}
           professionalName={professionalName}

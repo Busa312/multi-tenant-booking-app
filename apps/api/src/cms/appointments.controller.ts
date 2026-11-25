@@ -50,6 +50,7 @@ import {
 } from "../common/dto.js";
 import { AvailabilityService } from "../booking/availability.service.js";
 import { BookingService } from "../booking/booking.service.js";
+import { parseVisitPlace } from "../booking/service-place.js";
 
 @ApiTags("cms-appointments")
 @ApiBearerAuth()
@@ -118,6 +119,8 @@ export class AppointmentsController {
       locationId: query.locationId ?? null,
       date: query.date,
       excludeAppointmentId: query.appointmentId,
+      // R630
+      place: parseVisitPlace(query.place),
     });
   }
 
@@ -151,6 +154,11 @@ export class AppointmentsController {
       notes: body.notes,
       createdByUserId: user.sub,
       override: body.override,
+      // R630
+      place: parseVisitPlace(body.place),
+      customerAddress: body.customerAddress,
+      customerAddressDetails: body.customerAddressDetails,
+      customerAddressNote: body.customerAddressNote,
     });
     return this.summarize(appointment);
   }
@@ -175,6 +183,11 @@ export class AppointmentsController {
       serviceIds: body.serviceIds,
       override: body.override,
       professionalScope,
+      // R630
+      place: body.place === undefined ? undefined : parseVisitPlace(body.place),
+      customerAddress: body.customerAddress,
+      customerAddressDetails: body.customerAddressDetails,
+      customerAddressNote: body.customerAddressNote,
     });
     return this.summarize(appointment);
   }

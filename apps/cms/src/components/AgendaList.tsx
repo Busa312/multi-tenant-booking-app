@@ -9,6 +9,7 @@ import { BookingStatusPill } from "./BookingStatusPill.js";
 import { Pagination } from "./ui/index.js";
 import { NoShowBadge } from "./NoShowBadge.js";
 import { ConfirmedBadge } from "./ConfirmedBadge.js";
+import { HomeVisitAddress } from "./HomeVisitAddress.js";
 
 // The dashboard is a glance: the rest of a long day is a page away.
 const PAGE_SIZE = 8;
@@ -49,6 +50,8 @@ export function AgendaList({ appointments, timezone }: AgendaListProps) {
           <div className="min-w-0">
             <div className="truncate text-[13.5px] font-semibold">{appointment.userName}</div>
             <div className="truncate text-xs text-base-content/60">{serviceLabel(appointment, nameOf)}</div>
+            {/* R630 */}
+            <HomeVisitAddress appointment={appointment} compact />
             {appointment.notes && (
               <div className="mt-0.5 line-clamp-2 text-xs text-base-content/60 italic">{appointment.notes}</div>
             )}

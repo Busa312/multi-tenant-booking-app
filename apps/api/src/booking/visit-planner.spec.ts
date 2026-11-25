@@ -214,3 +214,31 @@ describe("groupPlannedUnits", () => {
     ]);
   });
 });
+
+// R630: a home visit keeps travel time free around itself
+describe("travel time", () => {
+  const busyAt = (from: number, to: number): ProfessionalSchedule => ({ windows: [span(0, 600)], busy: [span(from, to)] });
+  const homeVisit = (overrides: Partial<PlannerInput> = {}) =>
+    input({ units: [{ durationMinutes: 60, candidates: ["dato"] }], padMinutes: 30, ...overrides });
+
+  it("refuses a start whose travel would run into another booking", () => {
+    // busy 120–180; a 60-min visit at 190 needs 160–280 free
+    const schedules = new Map([["dato", busyAt(120, 180)]]);
+    expect(planVisitAt(homeVisit({ schedules }), at(190))).toBeNull();
+    expect(planVisitAt(homeVisit({ schedules }), at(210))?.units[0]?.start).toBe(at(210));
+    // ...and before it: a visit ending at 100 needs free until 130
+    expect(planVisitAt(homeVisit({ schedules }), at(40))).toBeNull();
+    expect(planVisitAt(homeVisit({ schedules }), at(30))?.units[0]?.start).toBe(at(30));
+  });
+
+  it("lets the travel run past the working hours — only the visit has to fit", () => {
+    const schedules = new Map([["dato", open(0, 600)]]);
+    expect(planVisitAt(homeVisit({ schedules }), at(0))?.units[0]?.start).toBe(at(0));
+    expect(planVisitAt(homeVisit({ schedules }), at(540))?.units[0]?.end).toBe(at(600));
+  });
+
+  it("changes nothing at the business", () => {
+    const schedules = new Map([["dato", busyAt(120, 180)]]);
+    expect(planVisitAt(homeVisit({ schedules, padMinutes: 0 }), at(180))?.units[0]?.start).toBe(at(180));
+  });
+});

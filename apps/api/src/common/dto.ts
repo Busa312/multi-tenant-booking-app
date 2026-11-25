@@ -53,6 +53,9 @@ export class TenantDto {
   @ApiProperty({ description: "R440: false = the booking site never offers or names a professional" })
   customersChooseProfessional!: boolean;
   @ApiProperty() createdAt!: string;
+  @ApiProperty({ description: "R630: minutes kept free before and after each home visit" }) travelBufferMinutes!: number;
+  @ApiProperty({ description: "R630: charged once per home visit whose services it applies to; \"0\" = none" })
+  homeVisitFee!: string;
 }
 
 export class LocationDto {
@@ -187,6 +190,9 @@ export class ServiceDto {
   @ApiProperty({ description: "R510: order within its category" }) position!: number;
   @ApiProperty() isActive!: boolean;
   @ApiProperty() createdAt!: string;
+  @ApiProperty({ enum: ["business", "customer", "either"], description: "R630: where it takes place" })
+  place!: "business" | "customer" | "either";
+  @ApiProperty({ description: "R630: the salon's home-visit fee applies to it" }) homeVisitFeeApplies!: boolean;
 }
 
 export class ServiceCategoryDto {
@@ -229,6 +235,10 @@ export class CreateServiceRequestDto {
   @ApiPropertyOptional({ description: "R520: price is a starting price" }) priceFrom?: boolean;
   @ApiPropertyOptional({ nullable: true, type: String, description: "R510: null = uncategorized" }) categoryId?: string | null;
   @ApiProperty({ type: [String] }) professionalIds!: string[];
+  @ApiPropertyOptional({ enum: ["business", "customer", "either"], description: "R630: omitted = at the business" })
+  place?: "business" | "customer" | "either";
+  @ApiPropertyOptional({ description: "R630: whether the salon's home-visit fee applies; omitted = yes" })
+  homeVisitFeeApplies?: boolean;
 }
 
 export class UpdateServiceRequestDto extends PartialType(CreateServiceRequestDto) {
@@ -307,6 +317,12 @@ export class AppointmentDto {
   status!: "booked" | "cancelled" | "completed" | "no_show";
   @ApiProperty() createdAt!: string;
   @ApiProperty() updatedAt!: string;
+  @ApiProperty({ enum: ["business", "customer"], description: "R630: where it takes place" }) place!: "business" | "customer";
+  @ApiProperty({ nullable: true, type: String, description: "R630: only at the customer's" }) customerAddress!: string | null;
+  @ApiProperty({ nullable: true, type: String }) customerAddressDetails!: string | null;
+  @ApiProperty({ nullable: true, type: String }) customerAddressNote!: string | null;
+  @ApiProperty({ description: "R630: minutes kept free before and after it" }) travelMinutes!: number;
+  @ApiProperty({ description: "R630: on a home visit's first segment; not part of price" }) homeVisitFee!: string;
 }
 
 export class OnboardingStepDto {
@@ -419,6 +435,11 @@ export class VisitDto {
   segments!: VisitSegmentDto[];
   @ApiProperty({ nullable: true, type: String, description: "R610: when every live segment was confirmed; null = not (yet)" })
   confirmedAt!: string | null;
+  @ApiProperty({ enum: ["business", "customer"], description: "R630: where it takes place" }) place!: "business" | "customer";
+  @ApiProperty({ nullable: true, type: String, description: "R630: only at the customer's" }) customerAddress!: string | null;
+  @ApiProperty({ nullable: true, type: String }) customerAddressDetails!: string | null;
+  @ApiProperty({ nullable: true, type: String }) customerAddressNote!: string | null;
+  @ApiProperty({ description: "R630: the home-visit fee, already included in price" }) homeVisitFee!: string;
 }
 
 export class CreateCmsAppointmentRequestDto {
@@ -433,6 +454,10 @@ export class CreateCmsAppointmentRequestDto {
   @ApiProperty() phoneNumber!: string;
   @ApiPropertyOptional() notes?: string;
   @ApiPropertyOptional({ description: "R60: book despite the conflicts the 409 named" }) override?: boolean;
+  @ApiPropertyOptional({ enum: ["business", "customer"], description: "R630: omitted = at the business" }) place?: "business" | "customer";
+  @ApiPropertyOptional({ description: "R630: required at the customer's address" }) customerAddress?: string;
+  @ApiPropertyOptional() customerAddressDetails?: string;
+  @ApiPropertyOptional() customerAddressNote?: string;
 }
 
 export class UpdateCmsAppointmentRequestDto {
@@ -446,6 +471,10 @@ export class UpdateCmsAppointmentRequestDto {
   })
   serviceIds?: string[];
   @ApiPropertyOptional() override?: boolean;
+  @ApiPropertyOptional({ enum: ["business", "customer"], description: "R630: omitted = at the business" }) place?: "business" | "customer";
+  @ApiPropertyOptional({ description: "R630: required at the customer's address" }) customerAddress?: string;
+  @ApiPropertyOptional() customerAddressDetails?: string;
+  @ApiPropertyOptional() customerAddressNote?: string;
 }
 
 export class UpdateAppointmentStatusRequestDto {
@@ -519,6 +548,10 @@ export class CreateAppointmentRequestDto {
   @ApiProperty({ description: "From POST /public/verification/verify" }) verificationToken!: string;
   @ApiPropertyOptional({ description: "R250: the hold from POST /public/holds — optional, used up by the booking" })
   holdId?: string;
+  @ApiPropertyOptional({ enum: ["business", "customer"], description: "R630: omitted = at the business" }) place?: "business" | "customer";
+  @ApiPropertyOptional({ description: "R630: required at the customer's address" }) customerAddress?: string;
+  @ApiPropertyOptional() customerAddressDetails?: string;
+  @ApiPropertyOptional() customerAddressNote?: string;
 }
 
 export class CreateAppointmentResponseDto {
@@ -568,6 +601,7 @@ export class HoldSlotRequestDto {
   @ApiProperty({ example: "14:00", description: "HH:mm, tenant timezone" }) time!: string;
   @ApiPropertyOptional({ description: "R250: the customer's previous hold, released by this one" })
   replaceHoldId?: string;
+  @ApiPropertyOptional({ enum: ["business", "customer"], description: "R630" }) place?: "business" | "customer";
 }
 
 export class HoldSlotResponseDto {
@@ -586,6 +620,9 @@ export class UpdateTenantBookingRulesRequestDto {
   @ApiPropertyOptional({ description: "R610: hours; one of REMINDER_HOURS_OPTIONS (0 = off)" }) reminderHoursBefore?: number;
   @ApiPropertyOptional({ description: "R440: whether customers pick who serves them online" })
   customersChooseProfessional?: boolean;
+  @ApiPropertyOptional({ description: "R630: one of TRAVEL_BUFFER_OPTIONS" }) travelBufferMinutes?: number;
+  @ApiPropertyOptional({ nullable: true, type: String, description: "R630: an amount; 0, empty or null = no fee" })
+  homeVisitFee?: string | null;
 }
 
 export class LoginRequestDto {

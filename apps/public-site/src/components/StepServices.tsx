@@ -5,7 +5,7 @@ import { MAX_SERVICES_PER_BOOKING, groupServices } from "@booking/shared-types";
 import type { PublicProfessional, Service, ServiceCategory } from "@booking/shared-types";
 import { priceText } from "@/lib/price";
 import type { Translate } from "@/i18n/locales";
-import { BTN_NEXT, FOOTER, OPTION_LIST, STATUS_TEXT, STEP, STEP_HEADING, STEP_HINT } from "@/lib/wizardClasses";
+import { BTN_BACK, BTN_NEXT, FOOTER, OPTION_LIST, STATUS_TEXT, STEP, STEP_HEADING, STEP_HINT } from "@/lib/wizardClasses";
 import { isBookable } from "@/lib/visit-booking";
 import { DisclosureChevron } from "./DisclosureChevron";
 
@@ -18,11 +18,13 @@ interface StepServicesProps {
   selectedIds: string[];
   onChange: (serviceIds: string[]) => void;
   onNext: () => void;
+  /** R630: back to "Where?", when it came first. */
+  onBack?: () => void;
   t: Translate;
   text: (plain: string, i18n: unknown) => string;
 }
 
-export function StepServices({ services, categories, professionals, selectedIds, onChange, onNext, t, text }: StepServicesProps) {
+export function StepServices({ services, categories, professionals, selectedIds, onChange, onNext, onBack, t, text }: StepServicesProps) {
   const atLimit = selectedIds.length >= MAX_SERVICES_PER_BOOKING;
 
   // Kept in the order picked: that's the order they'll be performed (R200).
@@ -148,6 +150,11 @@ export function StepServices({ services, categories, professionals, selectedIds,
       )}
 
       <div className={FOOTER}>
+        {onBack && (
+          <button type="button" className={BTN_BACK} onClick={onBack}>
+            {t("common.back")}
+          </button>
+        )}
         {selected.length > 0 && (
           <p className="text-sm font-semibold tabular-nums">
             {t("booking.services.totalDuration", { count: totalMinutes })} ·{" "}

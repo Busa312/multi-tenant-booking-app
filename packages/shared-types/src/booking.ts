@@ -20,6 +20,9 @@ export const CHANGE_CUTOFF_OPTIONS: readonly number[] = [0, 1, 2, 3, 6, 12, 24, 
 // R610: how many hours before a visit its reminder text goes out. 0 = off.
 export const REMINDER_HOURS_OPTIONS: readonly number[] = [0, 2, 12, 24, 48];
 
+// R630: minutes kept free before and after each home visit. 0 = none.
+export const TRAVEL_BUFFER_OPTIONS: readonly number[] = [0, 15, 30, 45, 60, 90];
+
 // R310: CMS password rules. bcrypt only reads the first 72 bytes, so longer
 // passwords are refused rather than silently truncated.
 export const MIN_PASSWORD_LENGTH = 10;

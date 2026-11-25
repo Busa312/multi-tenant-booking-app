@@ -60,6 +60,14 @@ export default async function HomePage({ params }: { params: { locale: string } 
         priceLabel={(service) => priceText(context.t, service.price, service.priceFrom)}
         href={context.href}
         text={context.text}
+        // R630
+        placeLabel={(service) =>
+          service.place === "customer"
+            ? context.t("home.placeCustomer")
+            : service.place === "either"
+              ? context.t("home.placeEither")
+              : null
+        }
       />
 
       <OpeningHoursList

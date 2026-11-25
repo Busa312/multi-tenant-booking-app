@@ -4,15 +4,20 @@ import {
   BOOKING_NOTICE_OPTIONS,
   CHANGE_CUTOFF_OPTIONS,
   REMINDER_HOURS_OPTIONS,
+  TRAVEL_BUFFER_OPTIONS,
   VISIT_GAP_OPTIONS,
+  offersHomeVisits,
 } from "@booking/shared-types";
 import type { Tenant, UpdateTenantBookingRulesRequest } from "@booking/shared-types";
 import { cachedApi } from "../lib/cache.js";
 import { useI18n } from "../i18n/I18nContext.js";
-import { Alert, Button, Card, Checkbox, Eyebrow, Field, Select } from "./ui/index.js";
+import { Alert, Button, Card, Checkbox, Eyebrow, Field, InputGroup, Select } from "./ui/index.js";
 
 type Rules = Required<UpdateTenantBookingRulesRequest>;
-type NumericRule = Exclude<keyof Rules, "customersChooseProfessional">;
+type NumericRule = Exclude<keyof Rules, "customersChooseProfessional" | "homeVisitFee">;
+
+/** R630: an empty field (or 0) is no fee; otherwise an amount with up to two decimals. */
+const validFee = (fee: string | null) => fee === null || /^\d{1,8}([.,]\d{1,2})?$/.test(fee);
 
 const rulesOf = (tenant: Tenant): Rules => ({
   maxVisitGapMinutes: tenant.maxVisitGapMinutes,
@@ -21,13 +26,17 @@ const rulesOf = (tenant: Tenant): Rules => ({
   changeCutoffHours: tenant.changeCutoffHours,
   customersChooseProfessional: tenant.customersChooseProfessional,
   reminderHoursBefore: tenant.reminderHoursBefore,
+  travelBufferMinutes: tenant.travelBufferMinutes,
+  // R630: "0" shows as an empty field — no fee
+  homeVisitFee: Number(tenant.homeVisitFee) > 0 ? tenant.homeVisitFee : null,
 });
 
 /**
  * What customers may do on the booking site: R220 (gap between specialists),
  * R280 (minimum notice), R290 (how far ahead), R300 (until when they can change
  * or cancel), R440 (whether they pick who serves them), R610 (when the reminder
- * text goes out). Owner only. Staff in the CMS are bound by none of these.
+ * text goes out), R630 (travel time and fee for visits at the customer's
+ * address). Owner only. Staff in the CMS are bound by none of these.
  * Self-contained — loads and saves the tenant's rules itself.
  */
 export function BookingPoliciesCard() {
@@ -35,7 +44,16 @@ export function BookingPoliciesCard() {
   const [saved, setSaved] = useState<Rules | null>(null);
   const [draft, setDraft] = useState<Rules | null>(null);
   const [saving, setSaving] = useState(false);
-  const [status, setStatus] = useState<"saved" | "error" | null>(null);
+  const [status, setStatus] = useState<"saved" | "error" | "invalidFee" | null>(null);
+  // R630: travel time and the fee matter once some service is done at the customer's address
+  const [homeVisits, setHomeVisits] = useState(false);
+
+  useEffect(() => {
+    cachedApi
+      .listServices()
+      .then((services) => setHomeVisits(offersHomeVisits(services)))
+      .catch(() => undefined);
+  }, []);
 
   useEffect(() => {
     cachedApi
@@ -52,6 +70,10 @@ export function BookingPoliciesCard() {
 
   async function save() {
     if (!draft) return;
+    if (!validFee(draft.homeVisitFee)) {
+      setStatus("invalidFee");
+      return;
+    }
     setSaving(true);
     setStatus(null);
     try {
@@ -92,6 +114,21 @@ export function BookingPoliciesCard() {
         label: h === 0 ? t("hours.cutoffNone") : t("hours.cutoffHours", { count: h }),
       })),
     },
+    // R630: only once some service is done at the customer's address
+    ...(homeVisits
+      ? [
+          {
+            key: "travelBufferMinutes" as const,
+            id: "policy-travel",
+            label: t("hours.travelLabel"),
+            hint: t("hours.travelHint"),
+            options: TRAVEL_BUFFER_OPTIONS.map((m) => ({
+              value: String(m),
+              label: m === 0 ? t("hours.travelNone") : t("hours.travelMinutes", { count: m }),
+            })),
+          },
+        ]
+      : []),
     // R610
     {
       key: "reminderHoursBefore",
@@ -137,6 +174,26 @@ export function BookingPoliciesCard() {
         ))}
       </div>
 
+      {/* R630: optional — empty means no fee */}
+      {(homeVisits || saved?.homeVisitFee) && (
+        <Field label={t("hours.feeLabel")} htmlFor="policy-fee" hint={t("hours.feeHint")} className="max-w-xs">
+          <InputGroup
+            id="policy-fee"
+            inputMode="decimal"
+            suffix="₾"
+            value={draft?.homeVisitFee ?? ""}
+            disabled={draft === null || saving}
+            placeholder={t("hours.feeNone")}
+            onChange={(e) => {
+              if (!draft) return;
+              const next = e.target.value.trim();
+              setDraft({ ...draft, homeVisitFee: next === "" ? null : next });
+              setStatus(null);
+            }}
+          />
+        </Field>
+      )}
+
       {/* R440: off for a business that books services, not people (a car wash) */}
       <div className="mb-4">
         <Checkbox
@@ -166,6 +223,11 @@ export function BookingPoliciesCard() {
       {status === "error" && (
         <Alert flush className="mt-3">
           {t("hours.gapErr")}
+        </Alert>
+      )}
+      {status === "invalidFee" && (
+        <Alert flush className="mt-3">
+          {t("hours.feeInvalid")}
         </Alert>
       )}
     </Card>

@@ -1,6 +1,15 @@
 
 
-import type { AppointmentStatus, AppointmentSummary, TenantUserRole, Visit, VisitSlot, NoShowHistory } from "./entities";
+import type {
+  AppointmentStatus,
+  AppointmentSummary,
+  TenantUserRole,
+  Visit,
+  VisitSlot,
+  NoShowHistory,
+  ServicePlace,
+  VisitPlace,
+} from "./entities";
 import type { TenantColors } from "./colors";
 import type { LocalizedText } from "./i18n";
 import type { PlanName } from "./plans";
@@ -31,6 +40,10 @@ export interface UpdateTenantBookingRulesRequest {
   customersChooseProfessional?: boolean;
   // R610: one of REMINDER_HOURS_OPTIONS
   reminderHoursBefore?: number;
+  // R630: one of TRAVEL_BUFFER_OPTIONS
+  travelBufferMinutes?: number;
+  // R630: an amount like "10" or "7.50"; "0" or empty = no fee
+  homeVisitFee?: string | null;
 }
 
 export interface UpdateTenantCopyRequest {
@@ -95,6 +108,11 @@ export interface CreateAppointmentRequest {
   // R250: the hold taken when the time was picked. Optional — a booking without
   // one (or with an expired one) still goes through while the time is free.
   holdId?: string;
+  // R630: where; at the customer's address, the address is required
+  place?: VisitPlace;
+  customerAddress?: string;
+  customerAddressDetails?: string;
+  customerAddressNote?: string;
   /** From VerifyPhoneResponse — proves this phone number was verified. */
   verificationToken: string;
 }
@@ -122,6 +140,8 @@ export interface AvailabilityQuery {
   date: string;
   // R250: the asker's own hold, so the time they're holding stays on their list
   holdId?: string;
+  // R630: omitted = at the business
+  place?: VisitPlace;
 }
 
 /** R250: hold the time just picked while the customer finishes booking. */
@@ -134,6 +154,8 @@ export interface HoldSlotRequest {
   time: string;
   /** The customer's previous hold, released by this one. */
   replaceHoldId?: string;
+  // R630
+  place?: VisitPlace;
 }
 
 export interface HoldSlotResponse {
@@ -152,6 +174,8 @@ export interface CmsAvailabilityQuery {
   date: string;
 
   appointmentId?: string;
+  // R630: a home visit's slots keep travel time free
+  place?: VisitPlace;
 }
 
 export interface CmsAppointmentListQuery {
@@ -229,6 +253,11 @@ export interface CreateCmsAppointmentRequest {
   notes?: string;
   // R60: acknowledge the conflicts a 409 named and book anyway
   override?: boolean;
+  // R630: where; at the customer's address, the address is required
+  place?: VisitPlace;
+  customerAddress?: string;
+  customerAddressDetails?: string;
+  customerAddressNote?: string;
 }
 
 export interface UpdateCmsAppointmentRequest {
@@ -240,6 +269,11 @@ export interface UpdateCmsAppointmentRequest {
 
   serviceIds?: string[];
   override?: boolean;
+  // R630: a different place or address (place changes only for a one-segment booking)
+  place?: VisitPlace;
+  customerAddress?: string;
+  customerAddressDetails?: string | null;
+  customerAddressNote?: string | null;
 }
 
 // R100: no automatic transition ever happens
@@ -311,6 +345,10 @@ export interface CreateServiceRequest {
   /** R510: null/omitted = uncategorized. A new service goes last in its category. */
   categoryId?: string | null;
   professionalIds: string[];
+  /** R630: omitted = at the business */
+  place?: ServicePlace;
+  /** R630: whether the salon's home-visit fee applies; omitted = yes */
+  homeVisitFeeApplies?: boolean;
 }
 
 export interface UpdateServiceRequest {
@@ -328,6 +366,9 @@ export interface UpdateServiceRequest {
   professionalIds?: string[];
   // R60: deactivation (and reactivation)
   isActive?: boolean;
+  /** R630: existing bookings keep their place and fee */
+  place?: ServicePlace;
+  homeVisitFeeApplies?: boolean;
 }
 
 /** R510 */

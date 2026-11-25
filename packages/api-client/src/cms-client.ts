@@ -310,6 +310,8 @@ export class CmsApiClient {
     if (query.professionalId) params.set("professionalId", query.professionalId);
     if (query.locationId) params.set("locationId", query.locationId);
     if (query.appointmentId) params.set("appointmentId", query.appointmentId);
+    // R630
+    if (query.place === "customer") params.set("place", query.place);
     return this.http.get<AvailabilitySlot[]>(`/cms/appointments/availability?${params.toString()}`);
   }
 

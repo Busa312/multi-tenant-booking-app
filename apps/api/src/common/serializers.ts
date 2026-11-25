@@ -71,6 +71,9 @@ export const serializeTenant = (t: PrismaTenant): Tenant => ({
   changeCutoffHours: t.changeCutoffHours,
   customersChooseProfessional: t.customersChooseProfessional,
   reminderHoursBefore: t.reminderHoursBefore,
+  // R630
+  travelBufferMinutes: t.travelBufferMinutes,
+  homeVisitFee: t.homeVisitFee.toString(),
   createdAt: t.createdAt.toISOString(),
 });
 
@@ -120,6 +123,9 @@ export const serializeService = (s: PrismaService): Service => ({
   categoryId: s.categoryId,
   position: s.position,
   isActive: s.isActive,
+  // R630
+  place: s.place as Service["place"],
+  homeVisitFeeApplies: s.homeVisitFeeApplies,
   createdAt: s.createdAt.toISOString(),
 });
 
@@ -182,6 +188,13 @@ export const serializeAppointment = (a: PrismaAppointment): Appointment => ({
   status: a.status,
   createdAt: a.createdAt.toISOString(),
   updatedAt: a.updatedAt.toISOString(),
+  // R630
+  place: a.place === "customer" ? "customer" : "business",
+  customerAddress: a.customerAddress,
+  customerAddressDetails: a.customerAddressDetails,
+  customerAddressNote: a.customerAddressNote,
+  travelMinutes: a.travelMinutes,
+  homeVisitFee: a.homeVisitFee.toString(),
 });
 
 export const APPOINTMENT_SUMMARY_INCLUDE = {
@@ -255,13 +268,16 @@ export const serializeVisit = (v: PrismaVisit): Visit => {
   }
   const status =
     live.length === 0 ? "cancelled" : live.some((appointment) => appointment.status === "booked") ? "booked" : first.status;
+  // R630: on the first segment; counted while any of the visit still happens
+  const fee = rest.reduce((sum, appointment) => sum.plus(appointment.homeVisitFee), first.homeVisitFee);
 
   return {
     id: v.id,
     status,
     startAt: first.startAt.toISOString(),
     endAt: new Date(Math.max(...shown.map((appointment) => appointment.endAt.getTime()))).toISOString(),
-    price: rest.reduce((sum, appointment) => sum.plus(appointment.price), first.price).toString(),
+    // R630: the home-visit fee is part of what the customer pays
+    price: rest.reduce((sum, appointment) => sum.plus(appointment.price), first.price).plus(fee).toString(),
     // R520: the total is "from" if any of what it adds up was
     priceFrom: shown.some((appointment) => appointment.services.some((line) => line.priceFrom)),
     locationId: first.locationId,
@@ -279,6 +295,12 @@ export const serializeVisit = (v: PrismaVisit): Visit => {
     })),
     // R610: confirmed once every segment still happening is
     confirmedAt: visitConfirmedAt(live),
+    // R630: every segment shares the place and the address
+    place: first.place === "customer" ? "customer" : "business",
+    customerAddress: first.customerAddress,
+    customerAddressDetails: first.customerAddressDetails,
+    customerAddressNote: first.customerAddressNote,
+    homeVisitFee: fee.toString(),
   };
 };
 

@@ -1,4 +1,4 @@
-import type { ServiceCategory } from "./entities";
+import type { ServiceCategory, ServicePlace, VisitPlace } from "./entities";
 
 /**
  * R510: one heading of a salon's price list and what's under it. `category`
@@ -29,4 +29,25 @@ export function groupServices<T extends { categoryId: string | null }>(
   const rest = services.filter((service) => !service.categoryId || !known.has(service.categoryId));
   if (rest.length > 0 || groups.length === 0) groups.push({ category: null, services: rest });
   return groups;
+}
+
+/**
+ * R630: whether a service set up for `servicePlace` can be booked at `place`
+ * ("either" fits both). The API keeps a twin in booking/service-place.ts.
+ */
+export function offeredAt(servicePlace: ServicePlace, place: VisitPlace): boolean {
+  return servicePlace === "either" || servicePlace === place;
+}
+
+/** R630: whether a salon offers anything at the customer's address — and so asks "Where?". */
+export function offersHomeVisits(services: readonly { place: ServicePlace }[]): boolean {
+  return services.some((service) => service.place !== "business");
+}
+
+/**
+ * R630: what a home visit with these services pays for travel — the salon's
+ * fee, once, if it applies to any of them. "0" = none. The API decides the same way.
+ */
+export function homeVisitFeeOf(services: readonly { homeVisitFeeApplies: boolean }[], salonFee: string): string {
+  return services.some((service) => service.homeVisitFeeApplies) && Number(salonFee) > 0 ? salonFee : "0";
 }
