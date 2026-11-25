@@ -52,7 +52,8 @@ interface UbillSendResponse {
  * so the link message would be billed as two or three.
  *
  * Credentials — links, codes — are never written to logs: for as long as they
- * live, a log line holding one is as good as the credential.
+ * live, a log line holding one is as good as the credential. The one
+ * exception is a development-only reminder stub (sendReminder).
  */
 @Injectable()
 export class NotificationService {
@@ -93,6 +94,30 @@ export class NotificationService {
       otp: false,
       kind: "manage_link",
     });
+  }
+
+  /**
+   * R610: whether reminders can be sent here. A reminder replaces the
+   * customer's link, so with no provider in production none must be sent;
+   * development logs them instead (sendReminder).
+   */
+  canSendReminders(): boolean {
+    return this.ubill !== null || this.config.get<string>("NODE_ENV") !== "production";
+  }
+
+  /**
+   * R610: the reminder text, already written to fit one part. Without a
+   * provider, development logs it — link included, as MailService does with
+   * its links there — and reports it sent, so the flow can be followed end to
+   * end; production never gets this far (canSendReminders).
+   */
+  async sendReminder(phoneNumber: string, text: string): Promise<boolean> {
+    if (!this.ubill) {
+      if (this.config.get<string>("NODE_ENV") === "production") return false;
+      this.logger.warn(`[stub, development only] reminder text: ${text}`);
+      return true;
+    }
+    return this.sendSms(phoneNumber, text, { otp: false, kind: "reminder" });
   }
 
   /**

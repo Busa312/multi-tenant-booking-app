@@ -10,6 +10,9 @@ export interface JwtClaims {
   // when it was issued (a bump ends every older session).
   jti: string;
   sv: number;
+  // R320: when the person signed in (seconds). Renewals carry it over, so a
+  // session ends 90 days after it, however active. Absent on older tokens.
+  authTime?: number;
   iat: number;
   exp: number;
 }

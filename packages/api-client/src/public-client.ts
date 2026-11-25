@@ -110,6 +110,11 @@ export class PublicApiClient {
     return this.http.post<Visit>(`/public/manage/${token}/cancel`);
   }
 
+  // R610: "I'll be there", from the reminder's link
+  confirmAppointment(token: string) {
+    return this.http.post<Visit>(`/public/manage/${token}/confirm`);
+  }
+
   resendMagicLink(payload: ResendMagicLinkRequest) {
     return this.http.post<void>("/public/manage/resend", payload);
   }

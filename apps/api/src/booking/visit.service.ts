@@ -275,6 +275,9 @@ export class VisitService {
             startAt: new Date(planned.start),
             endAt: new Date(planned.end),
             professionalId: planned.professionalId,
+            // R610: a new time gets its own reminder, and needs confirming again
+            reminderSentAt: null,
+            confirmedAt: null,
           },
         });
       }
@@ -311,6 +314,32 @@ export class VisitService {
         include: VISIT_INCLUDE,
       });
       return { visit: updated, cancelled: true };
+    });
+  }
+
+  /**
+   * R610: the customer says they're coming. Any time before the start — the
+   * change deadline (R300) is about changing, not confirming. Marks every
+   * still-booked segment; confirming twice changes nothing.
+   */
+  async confirm(token: string): Promise<PrismaVisit> {
+    const { tenantId } = this.tenantContext.current;
+    const now = new Date();
+
+    return this.prisma.forTenant(async (tx) => {
+      const visit = await this.findByTokenIn(tx, token);
+      const booked = visit.appointments.filter((appointment) => appointment.status === "booked");
+      if (booked.length === 0) {
+        throw new BadRequestException("only a booked visit can be confirmed");
+      }
+      if (booked.every((appointment) => appointment.startAt <= now)) {
+        throw new BadRequestException("this visit has already started");
+      }
+      await tx.appointment.updateMany({
+        where: { tenantId, visitId: visit.id, status: "booked", confirmedAt: null },
+        data: { confirmedAt: now },
+      });
+      return tx.visit.findFirstOrThrow({ where: { id: visit.id, tenantId }, include: VISIT_INCLUDE });
     });
   }
 

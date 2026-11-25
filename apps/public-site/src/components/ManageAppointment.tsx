@@ -5,7 +5,7 @@ import { useCallback, useMemo, useState } from "react";
 import { localized } from "@booking/shared-types";
 import type { Visit } from "@booking/shared-types";
 import { translator, type Locale, type Messages } from "@/i18n/locales";
-import { cancelBooking, rescheduleBooking } from "@/lib/actions";
+import { cancelBooking, confirmBooking, rescheduleBooking } from "@/lib/actions";
 import { addDays, formatInstant, todayInTimezone } from "@/lib/tenant-time";
 import { PAGE_HEADING, SUMMARY, SUMMARY_ROW, SUMMARY_TERM } from "@/lib/wizardClasses";
 import { RescheduleDialog } from "./RescheduleDialog";
@@ -57,6 +57,21 @@ export function ManageAppointment({
   const [locked, setLocked] = useState(false);
   const pastCutoff = Date.now() >= new Date(current.startAt).getTime() - changeCutoffHours * 3_600_000;
   const canChange = isActionable && !pastCutoff && !locked;
+  // R610: confirming isn't changing — offered until the start, past the cutoff too
+  const canConfirm = isActionable && !current.confirmedAt;
+  const [confirming, setConfirming] = useState(false);
+
+  const confirm = async () => {
+    setConfirming(true);
+    const result = await confirmBooking(token);
+    setConfirming(false);
+    if (!result.ok) {
+      setError(t("common.somethingWrong"));
+      return;
+    }
+    setCurrent(result.visit);
+    setError(null);
+  };
 
   const reschedule = async (date: string, time: string) => {
     const result = await rescheduleBooking(token, date, time);
@@ -146,6 +161,18 @@ export function ManageAppointment({
         </p>
       )}
 
+      {isActionable && current.confirmedAt && (
+        <p className="alert alert-soft alert-success" role="status">
+          {t("manage.confirmed")}
+        </p>
+      )}
+
+      {canConfirm && (
+        <button type="button" className="btn btn-primary self-start" disabled={confirming} onClick={() => void confirm()}>
+          {confirming ? t("manage.confirming") : t("manage.confirm")}
+        </button>
+      )}
+
       {isActionable && !canChange && (
         <p className="alert alert-soft alert-info" role="status">
           {t("manage.tooLate")}
@@ -154,7 +181,12 @@ export function ManageAppointment({
 
       {canChange && (
         <div className="flex flex-col gap-3 sm:flex-row">
-          <button type="button" className="btn btn-primary" onClick={() => setDialog("reschedule")}>
+          {/* Outlined while "I'll be there" is the one primary action */}
+          <button
+            type="button"
+            className={canConfirm ? "btn btn-outline" : "btn btn-primary"}
+            onClick={() => setDialog("reschedule")}
+          >
             {t("manage.reschedule")}
           </button>
           <button type="button" className="btn btn-outline btn-error" onClick={() => setDialog("cancel")}>

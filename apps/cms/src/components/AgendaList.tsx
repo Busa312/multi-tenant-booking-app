@@ -8,6 +8,7 @@ import { usePagination } from "../lib/usePagination.js";
 import { BookingStatusPill } from "./BookingStatusPill.js";
 import { Pagination } from "./ui/index.js";
 import { NoShowBadge } from "./NoShowBadge.js";
+import { ConfirmedBadge } from "./ConfirmedBadge.js";
 
 // The dashboard is a glance: the rest of a long day is a page away.
 const PAGE_SIZE = 8;
@@ -52,6 +53,8 @@ export function AgendaList({ appointments, timezone }: AgendaListProps) {
               <div className="mt-0.5 line-clamp-2 text-xs text-base-content/60 italic">{appointment.notes}</div>
             )}
             {appointment.status === "booked" && <NoShowBadge history={appointment.noShowHistory} className="mt-1" />}
+            {/* R610 */}
+            <ConfirmedBadge appointment={appointment} className="mt-1 block" />
           </div>
           <div className="hidden truncate text-[13px] text-base-content/60 sm:block">{appointment.professionalName ? nameOf(appointment.professionalName, appointment.professionalNameI18n) : t("bookings.anyProfessional")}</div>
           <div className="justify-self-end">

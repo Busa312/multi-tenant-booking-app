@@ -7,7 +7,9 @@ import type { TenantContextService } from "../../tenant/tenant-context.service.j
 
 // R320: a valid signature isn't enough — the session must still be live
 const TENANT_ID = "11111111-1111-1111-1111-111111111111";
-const claims = { sub: "u1", tenantId: TENANT_ID, role: "owner", jti: "s1", sv: 3, iat: 0, exp: 0 };
+const NOW = Math.floor(Date.now() / 1000);
+const DAY = 24 * 60 * 60;
+const claims = { sub: "u1", tenantId: TENANT_ID, role: "owner", jti: "s1", sv: 3, authTime: NOW - DAY, iat: NOW, exp: NOW + 7 * DAY };
 
 const setup = (opts: { revoked?: boolean; user?: { isActive: boolean; sessionVersion: number } | null; claims?: object }) => {
   const passport = Object.getPrototypeOf(JwtAuthGuard.prototype) as { canActivate: () => Promise<boolean> };
@@ -40,12 +42,20 @@ describe("JwtAuthGuard", () => {
     expect(tenantContext.update).toHaveBeenCalledWith({ tenantId: TENANT_ID, role: "owner", professionalId: undefined });
   });
 
+  it("lets a session through until its 90th day", async () => {
+    const { guard, context } = setup({ claims: { ...claims, authTime: NOW - 89 * DAY } });
+    await expect(guard.canActivate(context)).resolves.toBe(true);
+  });
+
   it.each([
     ["a logged-out session", { revoked: true }],
     ["a deactivated login", { user: { isActive: false, sessionVersion: 3 } }],
     ["a session from before a password change", { user: { isActive: true, sessionVersion: 4 } }],
     ["a deleted user", { user: null }],
     ["a token from before sessions were tracked", { claims: { ...claims, jti: undefined, sv: undefined } }],
+    // R320: the 90-day limit, however active the session
+    ["a session signed in 90 days ago", { claims: { ...claims, authTime: NOW - 90 * DAY } }],
+    ["an older token, issued 90 days ago, without a sign-in time", { claims: { ...claims, authTime: undefined, iat: NOW - 90 * DAY } }],
   ])("refuses %s", async (_label, opts) => {
     const { guard, context } = setup(opts);
 

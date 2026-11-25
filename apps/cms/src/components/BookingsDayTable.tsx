@@ -8,6 +8,7 @@ import { formatTimeLabel } from "../lib/tenantTime.js";
 import { BookingStatusPill } from "./BookingStatusPill.js";
 import { NoShowBadge } from "./NoShowBadge.js";
 import { BlockedBadge } from "./BlockedBadge.js";
+import { ConfirmedBadge } from "./ConfirmedBadge.js";
 import { ActionMenu, type ActionMenuItem, Table, TableEmpty, TableHead, TableRow, Pagination } from "./ui/index.js";
 import { formatPhone } from "../lib/formatPhone.js";
 
@@ -58,6 +59,7 @@ export function BookingsDayTable({ appointments, listKey, timezone, actionsFor }
               <div className="font-semibold">{appointment.userName}</div>
               <div className="mt-0.5 text-xs text-base-content/60">{formatPhone(appointment.phoneNumber)}</div>
               <div className="mt-1 flex flex-wrap gap-1 empty:hidden">
+                <ConfirmedBadge appointment={appointment} />
                 <BlockedBadge blocked={appointment.phoneBlocked} />
                 <NoShowBadge history={appointment.noShowHistory} />
               </div>

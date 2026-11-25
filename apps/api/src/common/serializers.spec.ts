@@ -26,6 +26,7 @@ const prismaTenant = (overrides: Partial<Parameters<typeof serializeTenant>[0]> 
   maxBookingAdvanceDays: 365,
   changeCutoffHours: 0,
   customersChooseProfessional: true,
+  reminderHoursBefore: 24,
   onboardingSkipped: [],
   onboardingDismissedAt: null,
   onboardingFinishedAt: null,
@@ -63,6 +64,8 @@ const prismaAppointment = (overrides: Partial<Parameters<typeof serializeAppoint
   visitId: null,
   createdByUserId: null,
   notes: null,
+  reminderSentAt: null,
+  confirmedAt: null,
   createdAt: new Date("2026-08-01T10:00:00Z"),
   updatedAt: new Date("2026-08-02T11:00:00Z"),
   ...overrides,
@@ -347,6 +350,17 @@ describe("serializeVisit", () => {
     startAt: new Date("2026-08-05T06:30:00Z"),
     endAt: new Date("2026-08-05T07:15:00Z"),
     price: new Prisma.Decimal("40.10"),
+  });
+
+  // R610
+  it("is confirmed once every segment still happening is, and not before", () => {
+    const early = new Date("2026-08-04T09:00:00Z");
+    const late = new Date("2026-08-04T10:00:00Z");
+    expect(serializeVisit(visit([colour, cut])).confirmedAt).toBeNull();
+    expect(serializeVisit(visit([{ ...colour, confirmedAt: early }, cut])).confirmedAt).toBeNull();
+    expect(serializeVisit(visit([{ ...colour, confirmedAt: early }, { ...cut, confirmedAt: late }])).confirmedAt).toBe(late.toISOString());
+    // A segment staff cancelled doesn't need confirming
+    expect(serializeVisit(visit([{ ...colour, confirmedAt: early }, { ...cut, status: "cancelled" }])).confirmedAt).toBe(early.toISOString());
   });
 
   it("spans every segment, sums their prices exactly, and names who does each", () => {

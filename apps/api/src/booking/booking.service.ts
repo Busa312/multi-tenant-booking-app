@@ -208,6 +208,8 @@ export class BookingService {
           startAt,
           endAt,
           price: totalPrice(lines),
+          // R610: a new time gets its own reminder, and needs confirming again
+          ...(startAt.getTime() !== existing.startAt.getTime() ? { reminderSentAt: null, confirmedAt: null } : {}),
         },
         include: APPOINTMENT_SUMMARY_INCLUDE,
       });

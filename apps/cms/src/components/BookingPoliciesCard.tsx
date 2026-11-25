@@ -3,6 +3,7 @@ import {
   BOOKING_ADVANCE_OPTIONS,
   BOOKING_NOTICE_OPTIONS,
   CHANGE_CUTOFF_OPTIONS,
+  REMINDER_HOURS_OPTIONS,
   VISIT_GAP_OPTIONS,
 } from "@booking/shared-types";
 import type { Tenant, UpdateTenantBookingRulesRequest } from "@booking/shared-types";
@@ -19,12 +20,14 @@ const rulesOf = (tenant: Tenant): Rules => ({
   maxBookingAdvanceDays: tenant.maxBookingAdvanceDays,
   changeCutoffHours: tenant.changeCutoffHours,
   customersChooseProfessional: tenant.customersChooseProfessional,
+  reminderHoursBefore: tenant.reminderHoursBefore,
 });
 
 /**
  * What customers may do on the booking site: R220 (gap between specialists),
  * R280 (minimum notice), R290 (how far ahead), R300 (until when they can change
- * or cancel), R440 (whether they pick who serves them). Owner only. Staff in the CMS are bound by none of these.
+ * or cancel), R440 (whether they pick who serves them), R610 (when the reminder
+ * text goes out). Owner only. Staff in the CMS are bound by none of these.
  * Self-contained — loads and saves the tenant's rules itself.
  */
 export function BookingPoliciesCard() {
@@ -67,7 +70,7 @@ export function BookingPoliciesCard() {
   const duration = (minutes: number) =>
     minutes < 60 ? t("hours.durationMinutes", { count: minutes }) : t("hours.durationHours", { count: minutes / 60 });
 
-  const fields: { key: NumericRule; id: string; label: string; options: { value: string; label: string }[] }[] = [
+  const fields: { key: NumericRule; id: string; label: string; hint?: string; options: { value: string; label: string }[] }[] = [
     {
       key: "minBookingNoticeMinutes",
       id: "policy-notice",
@@ -89,6 +92,17 @@ export function BookingPoliciesCard() {
         label: h === 0 ? t("hours.cutoffNone") : t("hours.cutoffHours", { count: h }),
       })),
     },
+    // R610
+    {
+      key: "reminderHoursBefore",
+      id: "policy-reminder",
+      label: t("hours.reminderLabel"),
+      hint: t("hours.reminderHint"),
+      options: REMINDER_HOURS_OPTIONS.map((h) => ({
+        value: String(h),
+        label: h === 0 ? t("hours.reminderOff") : t("hours.cutoffHours", { count: h }),
+      })),
+    },
     {
       key: "maxVisitGapMinutes",
       id: "policy-gap",
@@ -107,7 +121,7 @@ export function BookingPoliciesCard() {
 
       <div className="grid gap-x-4 sm:grid-cols-2">
         {fields.map((field) => (
-          <Field key={field.key} label={field.label} htmlFor={field.id}>
+          <Field key={field.key} label={field.label} htmlFor={field.id} hint={field.hint}>
             <Select
               id={field.id}
               value={draft ? String(draft[field.key]) : ""}

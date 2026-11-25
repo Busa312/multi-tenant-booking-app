@@ -15,6 +15,7 @@ import { SlotPicker } from "./SlotPicker.js";
 import { BookingServiceRows } from "./BookingServiceRows.js";
 import { BookingConflictNotice } from "./BookingConflictNotice.js";
 import { NoShowBadge } from "./NoShowBadge.js";
+import { ConfirmedBadge } from "./ConfirmedBadge.js";
 import { Alert, Button, Field, Select, TextInput } from "./ui/index.js";
 
 interface EditBookingModalProps {
@@ -139,6 +140,8 @@ export function EditBookingModal({
       }
     >
       <form id="edit-booking-form" onSubmit={handleSubmit} noValidate>
+        {/* R610: moving it clears this — the customer is asked again */}
+        <ConfirmedBadge appointment={appointment} className="mb-4 block" />
         {/* R360 */}
         <NoShowBadge history={appointment.noShowHistory} className="mb-4" />
         <BookingServiceRows

@@ -88,6 +88,7 @@ const setup = (overrides: Overrides = {}) => {
     getByToken: jest.fn().mockResolvedValue(visitRow()),
     reschedule: jest.fn().mockResolvedValue(visitRow()),
     cancel: jest.fn().mockResolvedValue({ visit: visitRow({ status: "cancelled" }), cancelled: true }),
+    confirm: jest.fn().mockResolvedValue(visitRow({ confirmedAt: NOW })),
     findResendable: jest.fn().mockResolvedValue(overrides.resendable ?? []),
     reissue: jest.fn().mockResolvedValue(overrides.reissued === undefined ? "fresh" : overrides.reissued),
     hold: jest.fn().mockResolvedValue({ holdId: HOLD, expiresAt: FUTURE, slot: { startAt: "x", endAt: "y", segments: [] } }),
@@ -539,6 +540,20 @@ describe("staff push alerts", () => {
     const { controller, alerts, visits } = setup();
     visits.create.mockRejectedValueOnce(new ConflictException("slot taken"));
     await expect(controller.createAppointment(bookingInput())).rejects.toThrow(ConflictException);
+    expect(alerts.notifyInBackground).not.toHaveBeenCalled();
+  });
+});
+
+// R610: "I'll be there"
+describe("confirming from the reminder", () => {
+  it("confirms the visit behind the token and answers it like the manage lookup", async () => {
+    const { controller, visits, alerts } = setup();
+
+    const result = await controller.confirmAppointment(TOKEN);
+
+    expect(visits.confirm).toHaveBeenCalledWith(TOKEN);
+    expect(result).toMatchObject({ id: "v1", confirmedAt: NOW.toISOString() });
+    // Staff see it on the booking; it isn't a change worth a push
     expect(alerts.notifyInBackground).not.toHaveBeenCalled();
   });
 });

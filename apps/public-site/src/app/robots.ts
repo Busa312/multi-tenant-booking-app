@@ -13,7 +13,7 @@ export default async function robots(): Promise<MetadataRoute.Robots> {
     // A host no salon owns: nothing here to index.
     return { rules: { userAgent: "*", disallow: "/" } };
   }
-  const rules = { userAgent: "*", allow: "/", disallow: ["/manage/", "/*/manage/", "/embed/", "/*/embed/", "/api/"] };
+  const rules = { userAgent: "*", allow: "/", disallow: ["/manage/", "/*/manage/", "/m/", "/*/m/", "/embed/", "/*/embed/", "/api/"] };
   // R390: on staging no sitemap is offered; pages carry X-Robots-Tag noindex
   // instead of being disallowed here, since a crawler must fetch a page to see it.
   if (searchEnginesBlocked()) return { rules };

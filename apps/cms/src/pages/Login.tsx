@@ -6,6 +6,7 @@ import { useI18n } from "../i18n/I18nContext.js";
 import { cmsApiClient } from "../lib/api.js";
 import { AuthLayout } from "../components/AuthLayout.js";
 import { Alert, Button, Field, Icon, InputGroup, TextInput } from "../components/ui/index.js";
+import { runningInstalled } from "../lib/installPrompt.js";
 
 const PUBLIC_SITE_BASE_DOMAIN = import.meta.env.VITE_PUBLIC_SITE_BASE_DOMAIN as string | undefined;
 
@@ -100,6 +101,16 @@ export function LoginPage() {
         {submitting ? t("login.submitting") : t("login.submit")}
         <Icon name="arrow_forward" size={19} />
       </Button>
+
+      {/* R620: not inside the installed app itself */}
+      {!runningInstalled() && (
+        <div className="mt-5 text-center">
+          <Link to="/install" className="link link-hover inline-flex items-center gap-1.5 text-sm">
+            <Icon name="download" size={18} />
+            {t("login.getApp")}
+          </Link>
+        </div>
+      )}
     </AuthLayout>
   );
 }

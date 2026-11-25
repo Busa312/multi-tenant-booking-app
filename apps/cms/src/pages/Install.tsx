@@ -3,6 +3,7 @@ import { useSearchParams } from "react-router-dom";
 import { useI18n, type Lang } from "../i18n/I18nContext.js";
 import { AuthLayout } from "../components/AuthLayout.js";
 import { IosInstallSteps } from "../components/IosInstallSteps.js";
+import { SharePointer } from "../components/SharePointer.js";
 import { Alert, Button, ButtonLink } from "../components/ui/index.js";
 import { brandName } from "../lib/brand.js";
 import { useInstallApp } from "../lib/useInstallApp.js";
@@ -53,6 +54,7 @@ export function InstallPage() {
         <>
           <p className="mb-3">{t("install.iosIntro")}</p>
           <IosInstallSteps />
+          <SharePointer />
         </>
       )}
 

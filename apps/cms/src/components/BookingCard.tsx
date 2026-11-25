@@ -7,6 +7,7 @@ import { formatTimeLabel } from "../lib/tenantTime.js";
 import { BookingStatusPill } from "./BookingStatusPill.js";
 import { NoShowBadge } from "./NoShowBadge.js";
 import { BlockedBadge } from "./BlockedBadge.js";
+import { ConfirmedBadge } from "./ConfirmedBadge.js";
 import { ActionMenu, type ActionMenuItem } from "./ui/index.js";
 
 interface BookingCardProps {
@@ -58,6 +59,8 @@ export function BookingCard({ appointment, timezone, actions }: BookingCardProps
       {/* R360: only worth the room on a booking that is still to happen */}
       {appointment.status === "booked" && <NoShowBadge history={appointment.noShowHistory} className="mt-1 max-w-full" />}
       {appointment.status === "booked" && <BlockedBadge blocked={appointment.phoneBlocked} className="mt-1" />}
+      {/* R610 */}
+      <ConfirmedBadge appointment={appointment} className="mt-1 block" />
     </article>
   );
 }

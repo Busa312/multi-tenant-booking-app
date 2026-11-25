@@ -690,6 +690,29 @@ describe("BookingService.update", () => {
     });
   });
 
+  // R610: a move to a new time gets its own reminder and needs confirming again
+  describe("reminders", () => {
+    const updatedData = (tx: { appointment: { update: jest.Mock } }) =>
+      (tx.appointment.update.mock.calls[0]?.[0] as { data: Record<string, unknown> }).data;
+
+    it("clears the reminder and the confirmation when the time changes", async () => {
+      const { service, tx } = setup();
+
+      await service.update(updateInput({ date: "2026-08-06", time: "11:00" }));
+
+      expect(updatedData(tx)).toMatchObject({ reminderSentAt: null, confirmedAt: null });
+    });
+
+    it("keeps them when only the services change, at the same time", async () => {
+      const { service, tx } = setup({ services: [defaultService, beardTrim] });
+
+      await service.update(updateInput({ serviceIds: ["s1", "s2"] }));
+
+      expect(updatedData(tx)).not.toHaveProperty("reminderSentAt");
+      expect(updatedData(tx)).not.toHaveProperty("confirmedAt");
+    });
+  });
+
   describe("scoping", () => {
     // R20: a professional may only touch their own appointments
     it("restricts the lookup to the caller's own appointments", async () => {

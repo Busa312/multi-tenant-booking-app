@@ -49,6 +49,7 @@ export class TenantDto {
   @ApiProperty({ description: "R280: minutes" }) minBookingNoticeMinutes!: number;
   @ApiProperty({ description: "R290: days" }) maxBookingAdvanceDays!: number;
   @ApiProperty({ description: "R300: hours" }) changeCutoffHours!: number;
+  @ApiProperty({ description: "R610: hours before a visit its reminder goes out; 0 = off" }) reminderHoursBefore!: number;
   @ApiProperty({ description: "R440: false = the booking site never offers or names a professional" })
   customersChooseProfessional!: boolean;
   @ApiProperty() createdAt!: string;
@@ -384,6 +385,8 @@ export class AppointmentSummaryDto extends AppointmentDto {
     description: "R200: the customer visit this is one segment of; null = staff-created",
   })
   visitId!: string | null;
+  @ApiProperty({ nullable: true, type: String, description: "R610: when the customer confirmed; null = not (yet)" })
+  confirmedAt!: string | null;
 }
 
 export class VisitSegmentDto {
@@ -414,6 +417,8 @@ export class VisitDto {
   @ApiProperty({ nullable: true, ...LOCALIZED_MAP, description: "R160" }) locationNameI18n!: Record<string, string> | null;
   @ApiProperty({ type: [VisitSegmentDto], description: "R200: one per professional appointment, in time order" })
   segments!: VisitSegmentDto[];
+  @ApiProperty({ nullable: true, type: String, description: "R610: when every live segment was confirmed; null = not (yet)" })
+  confirmedAt!: string | null;
 }
 
 export class CreateCmsAppointmentRequestDto {
@@ -578,6 +583,7 @@ export class UpdateTenantBookingRulesRequestDto {
   @ApiPropertyOptional({ description: "R280: minutes; one of BOOKING_NOTICE_OPTIONS" }) minBookingNoticeMinutes?: number;
   @ApiPropertyOptional({ description: "R290: days; one of BOOKING_ADVANCE_OPTIONS" }) maxBookingAdvanceDays?: number;
   @ApiPropertyOptional({ description: "R300: hours; one of CHANGE_CUTOFF_OPTIONS" }) changeCutoffHours?: number;
+  @ApiPropertyOptional({ description: "R610: hours; one of REMINDER_HOURS_OPTIONS (0 = off)" }) reminderHoursBefore?: number;
   @ApiPropertyOptional({ description: "R440: whether customers pick who serves them online" })
   customersChooseProfessional?: boolean;
 }

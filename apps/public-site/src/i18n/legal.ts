@@ -40,7 +40,7 @@ export const LEGAL: Record<Locale, { privacy: LegalText; terms: LegalText }> = {
         {
           heading: "Why we use it",
           paragraphs: [
-            "To make, change and cancel your booking, to send you your booking link by SMS, and to let {salon} prepare for your visit. This is necessary to provide the booking you asked for.",
+            "To make, change and cancel your booking, to send you your booking link and a reminder before your visit by SMS, and to let {salon} prepare for your visit. This is necessary to provide the booking you asked for.",
             "To show {salon}'s staff whether your recent visits there were attended or missed, so they can confirm a booking with you by phone. This record is worked out from your past bookings at {salon} only and is never shared with any other business.",
             "To keep the service secure and working — for example limiting repeated requests and investigating errors. This is in our legitimate interest and yours.",
           ],
@@ -137,7 +137,7 @@ export const LEGAL: Record<Locale, { privacy: LegalText; terms: LegalText }> = {
         {
           heading: "რისთვის ვიყენებთ",
           paragraphs: [
-            "ჯავშნის გასაკეთებლად, შესაცვლელად და გასაუქმებლად, ჯავშნის ბმულის SMS-ით გამოსაგზავნად და იმისთვის, რომ {salon} თქვენი ვიზიტისთვის მოემზადოს. ეს აუცილებელია თქვენ მიერ მოთხოვნილი ჯავშნის შესასრულებლად.",
+            "ჯავშნის გასაკეთებლად, შესაცვლელად და გასაუქმებლად, ჯავშნის ბმულისა და ვიზიტის წინ შეხსენების SMS-ით გამოსაგზავნად და იმისთვის, რომ {salon} თქვენი ვიზიტისთვის მოემზადოს. ეს აუცილებელია თქვენ მიერ მოთხოვნილი ჯავშნის შესასრულებლად.",
             "იმისთვის, რომ {salon}-ის თანამშრომლებმა დაინახონ, მობრძანდით თუ არა ბოლო ვიზიტებზე, და შეძლონ ჯავშნის ტელეფონით დადასტურება. ეს ჩანაწერი დგება მხოლოდ {salon}-ში თქვენი წინა ჯავშნებიდან და არასოდეს გადაეცემა სხვა ბიზნესს.",
             "სერვისის უსაფრთხოებისა და გამართული მუშაობისთვის — მაგალითად, განმეორებითი მოთხოვნების შეზღუდვისა და შეცდომების გამოძიებისთვის. ეს ჩვენს და თქვენს კანონიერ ინტერესშია.",
           ],
@@ -236,7 +236,7 @@ export const LEGAL: Record<Locale, { privacy: LegalText; terms: LegalText }> = {
         {
           heading: "Зачем мы их используем",
           paragraphs: [
-            "Чтобы оформить, изменить и отменить запись, отправить вам ссылку на запись по SMS и чтобы {salon} мог подготовиться к вашему визиту. Это необходимо для выполнения записи, о которой вы попросили.",
+            "Чтобы оформить, изменить и отменить запись, отправить вам по SMS ссылку на запись и напоминание перед визитом и чтобы {salon} мог подготовиться к вашему визиту. Это необходимо для выполнения записи, о которой вы попросили.",
             "Чтобы сотрудники видели, приходили ли вы на свои последние визиты сюда, и могли подтвердить запись по телефону. Эти сведения вычисляются только по вашим прошлым записям здесь и никогда не передаются другим бизнесам.",
             "Чтобы сервис оставался безопасным и работал — например, ограничивать повторяющиеся запросы и разбирать ошибки. Это отвечает нашим и вашим законным интересам.",
           ],

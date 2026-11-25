@@ -106,6 +106,7 @@ const setup = (overrides: Overrides = {}) => {
       create: jest.fn().mockResolvedValue({ id: "v-new" }),
       update: jest.fn(({ data }: { data: Record<string, unknown> }) => Promise.resolve(visitRow(data))),
       findUniqueOrThrow: jest.fn().mockResolvedValue(visitRow({ id: "v-new" })),
+      findFirstOrThrow: jest.fn().mockResolvedValue(visitRow()),
     },
     appointment: {
       create: jest.fn().mockResolvedValue({}),
@@ -241,6 +242,18 @@ describe("cancel", () => {
 });
 
 describe("reschedule", () => {
+  // R610
+  it("clears each segment's reminder and confirmation, so the new time gets its own", async () => {
+    const { service, tx } = setup();
+
+    await service.reschedule(TOKEN, "2026-08-07", "10:00");
+
+    for (const [args] of tx.appointment.update.mock.calls as [{ data: Record<string, unknown> }][]) {
+      expect(args.data).toMatchObject({ reminderSentAt: null, confirmedAt: null });
+    }
+    expect(tx.appointment.update).toHaveBeenCalledTimes(2);
+  });
+
   it("moves the whole visit, each segment keeping its professional (R230)", async () => {
     const { service, availability } = setup();
 
@@ -614,5 +627,36 @@ describe("resend lookup", () => {
         some: { phoneKey: "995555123456", status: { not: "cancelled" }, startAt: { gt: NOW } },
       },
     });
+  });
+});
+
+// R610: "I'll be there", from the reminder's link
+describe("confirm", () => {
+  it("marks every still-booked segment confirmed, once", async () => {
+    const { service, tx } = setup();
+
+    await service.confirm(TOKEN);
+
+    expect(tx.appointment.updateMany).toHaveBeenCalledWith({
+      where: { tenantId: TENANT_ID, visitId: "v1", status: "booked", confirmedAt: null },
+      data: { confirmedAt: NOW },
+    });
+  });
+
+  it("is allowed past the change deadline — confirming isn't changing (R300)", async () => {
+    const { service, tx } = setup({ cutoffHours: 48 });
+    await expect(service.confirm(TOKEN)).resolves.toBeDefined();
+    expect(tx.appointment.updateMany).toHaveBeenCalled();
+  });
+
+  it("refuses a visit with nothing still booked", async () => {
+    const { service, tx } = setup({ visit: visitRow({ appointments: [segment({ status: "cancelled" })] }) });
+    await expect(service.confirm(TOKEN)).rejects.toThrow(BadRequestException);
+    expect(tx.appointment.updateMany).not.toHaveBeenCalled();
+  });
+
+  it("refuses a visit that has already started", async () => {
+    const { service } = setup({ visit: visitRow({ appointments: [segment({ startAt: PAST })] }) });
+    await expect(service.confirm(TOKEN)).rejects.toThrow(BadRequestException);
   });
 });

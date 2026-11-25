@@ -48,6 +48,9 @@ model Tenant {
   // R440: false = customers book a service, not a person (a car wash): the
   // booking site never offers or names a professional.
   customersChooseProfessional Boolean @default(true) @map("customers_choose_professional")
+  // R610: hours before a visit its reminder text goes out; 0 = off. One of
+  // 0/2/12/24/48 (CHECK constraint in the migration).
+  reminderHoursBefore   Int       @default(24) @map("reminder_hours_before") @db.SmallInt
   // R420: the guided setup's own state. Whether a step is done is read from
   // the salon's data; only skips and finishing/dismissing are kept.
   onboardingSkipped     String[]  @default([]) @map("onboarding_skipped")
@@ -346,6 +349,10 @@ model Appointment {
   createdByUserId      String?           @map("created_by_user_id") @db.Uuid
   // Free-text context a phone booking carries ("regular client", "arriving late").
   notes                String?           @db.Text
+  // R610: when its reminder went out (or was claimed for sending), and when
+  // the customer confirmed through their link. Moving it clears both.
+  reminderSentAt       DateTime?         @map("reminder_sent_at") @db.Timestamptz
+  confirmedAt          DateTime?         @map("confirmed_at") @db.Timestamptz
   createdAt            DateTime          @default(now()) @map("created_at") @db.Timestamptz
   updatedAt            DateTime          @updatedAt @map("updated_at") @db.Timestamptz
 

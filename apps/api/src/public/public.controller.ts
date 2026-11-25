@@ -377,6 +377,15 @@ export class PublicController {
     return serializeVisit(visit);
   }
 
+  // R610: "I'll be there", from the reminder's link. Staff see it; nobody is notified.
+  @Post("manage/:token/confirm")
+  @RateLimit({ name: "manage-write", max: 30, windowSeconds: 60 * 60 })
+  @ApiParam({ name: "token" })
+  @ApiOkResponse({ type: VisitDto })
+  async confirmAppointment(@Param("token") token: string): Promise<Visit> {
+    return serializeVisit(await this.visits.confirm(token));
+  }
+
   // R230: the customer cancels the whole visit; R90: rows stay as history
   @Post("manage/:token/cancel")
   @RateLimit({ name: "manage-write", max: 30, windowSeconds: 60 * 60 })

@@ -7,9 +7,11 @@ import { AuthController } from "./auth.controller.js";
 import { JwtStrategy } from "./strategies/jwt.strategy.js";
 import { JwtAuthGuard } from "./guards/jwt-auth.guard.js";
 import { RolesGuard } from "./guards/roles.guard.js";
-import { APP_GUARD } from "@nestjs/core";
+import { APP_GUARD, APP_INTERCEPTOR } from "@nestjs/core";
 import { CsrfGuard } from "./guards/csrf.guard.js";
 import { NotificationModule } from "../notifications/notification.module.js";
+import { SESSION_IDLE_TIMEOUT_SECONDS } from "./session-lifetime.js";
+import { SessionRenewalInterceptor } from "./session-renewal.interceptor.js";
 
 @Module({
   imports: [
@@ -19,13 +21,22 @@ import { NotificationModule } from "../notifications/notification.module.js";
       inject: [ConfigService],
       useFactory: (config: ConfigService) => ({
         secret: config.getOrThrow<string>("JWT_SECRET"),
-        signOptions: { expiresIn: config.get<string>("JWT_EXPIRES_IN", "8h") },
+        // R320: 7 days, renewed while in use (session-lifetime.ts)
+        signOptions: { expiresIn: SESSION_IDLE_TIMEOUT_SECONDS },
       }),
     }),
   ],
   controllers: [AuthController],
-  // CsrfGuard is global (R320) — it only acts on state-changing /cms requests.
-  providers: [AuthService, JwtStrategy, JwtAuthGuard, RolesGuard, { provide: APP_GUARD, useClass: CsrfGuard }],
+  // Both global (R320): CsrfGuard only acts on state-changing /cms requests,
+  // SessionRenewalInterceptor only on requests JwtAuthGuard let through.
+  providers: [
+    AuthService,
+    JwtStrategy,
+    JwtAuthGuard,
+    RolesGuard,
+    { provide: APP_GUARD, useClass: CsrfGuard },
+    { provide: APP_INTERCEPTOR, useClass: SessionRenewalInterceptor },
+  ],
   exports: [JwtAuthGuard, RolesGuard],
 })
 export class AuthModule {}

@@ -292,6 +292,8 @@ export class AuthService {
       tenantId: user.tenantId,
       role: user.role,
       sv: user.sessionVersion,
+      // R320: the 90-day limit counts from here; renewals carry it over
+      authTime: Math.floor(Date.now() / 1000),
       ...(user.professionalId ? { professionalId: user.professionalId } : {}),
     };
     const token = await this.jwt.signAsync(claims, { jwtid: randomUUID() });

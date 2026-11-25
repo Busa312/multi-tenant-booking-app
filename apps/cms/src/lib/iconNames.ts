@@ -8,6 +8,7 @@
  */
 export const ICON_NAMES = [
   "add",
+  "add_box",
   "arrow_downward",
   "arrow_forward",
   "arrow_upward",
@@ -33,6 +34,7 @@ export const ICON_NAMES = [
   "expand_more",
   "flag",
   "info",
+  "ios_share",
   "light_mode",
   "location_off",
   "location_on",
@@ -42,6 +44,7 @@ export const ICON_NAMES = [
   "menu",
   "more_vert",
   "my_location",
+  "north_east",
   "notifications",
   "notifications_active",
   "notifications_off",
@@ -52,6 +55,7 @@ export const ICON_NAMES = [
   "person_off",
   "refresh",
   "schedule",
+  "south_east",
   "space_dashboard",
   "storefront",
   "undo",

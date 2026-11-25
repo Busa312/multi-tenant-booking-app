@@ -18,6 +18,9 @@ export const BOOKING_NOTICE_OPTIONS: readonly number[] = [0, 30, 60, 120, 180, 2
 export const BOOKING_ADVANCE_OPTIONS: readonly number[] = [7, 14, 30, 60, 90, 180, 365];
 export const CHANGE_CUTOFF_OPTIONS: readonly number[] = [0, 1, 2, 3, 6, 12, 24, 48];
 
+// R610: twin of REMINDER_HOURS_OPTIONS. 0 = off.
+export const REMINDER_HOURS_OPTIONS: readonly number[] = [0, 2, 12, 24, 48];
+
 // R310: twins of MIN_PASSWORD_LENGTH and MAX_PASSWORD_BYTES.
 export const MIN_PASSWORD_LENGTH = 10;
 export const MAX_PASSWORD_BYTES = 72;

@@ -138,6 +138,9 @@
       "completed": "Completed",
       "no_show": "Missed"
     },
+    "confirm": "I'll be there",
+    "confirming": "Confirming…",
+    "confirmed": "Thanks, you've confirmed. See you then!",
     "reschedule": "Change the time",
     "rescheduleHeading": "Pick a new time",
     "rescheduleNote": "This link keeps working after you change the time.",

@@ -70,6 +70,7 @@ export const serializeTenant = (t: PrismaTenant): Tenant => ({
   maxBookingAdvanceDays: t.maxBookingAdvanceDays,
   changeCutoffHours: t.changeCutoffHours,
   customersChooseProfessional: t.customersChooseProfessional,
+  reminderHoursBefore: t.reminderHoursBefore,
   createdAt: t.createdAt.toISOString(),
 });
 
@@ -220,6 +221,8 @@ export const serializeAppointmentSummary = (
   locationNameI18n: serializeLocalizedText(a.location?.nameI18n ?? null),
   hasMagicLink: a.visit?.accessTokenHash != null,
   visitId: a.visitId,
+  // R610
+  confirmedAt: a.confirmedAt?.toISOString() ?? null,
 });
 
 /** R230: a customer visit with every segment, in time order. */
@@ -274,5 +277,13 @@ export const serializeVisit = (v: PrismaVisit): Visit => {
       endAt: appointment.endAt.toISOString(),
       status: appointment.status,
     })),
+    // R610: confirmed once every segment still happening is
+    confirmedAt: visitConfirmedAt(live),
   };
 };
+
+/** R610: the latest confirmation, when every live segment carries one; else null. */
+function visitConfirmedAt(live: PrismaVisit["appointments"]): string | null {
+  if (live.length === 0 || live.some((appointment) => !appointment.confirmedAt)) return null;
+  return new Date(Math.max(...live.map((appointment) => appointment.confirmedAt?.getTime() ?? 0))).toISOString();
+}

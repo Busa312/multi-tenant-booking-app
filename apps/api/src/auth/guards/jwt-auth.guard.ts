@@ -6,6 +6,7 @@ import { TenantContextService } from "../../tenant/tenant-context.service.js";
 import { PrismaService } from "../../prisma/prisma.service.js";
 import { RedisService } from "../../redis/redis.service.js";
 import { revokedSessionKey } from "../auth.service.js";
+import { pastAbsoluteLimit } from "../session-lifetime.js";
 
 /**
  * CMS routes' equivalent of HostTenantMiddleware: tenant identity here comes
@@ -14,10 +15,11 @@ import { revokedSessionKey } from "../auth.service.js";
  * seeds TenantContextService from the resulting claims so PrismaService.forTenant
  * and RolesGuard downstream both see it.
  *
- * R320: a valid signature isn't enough. The session must not have been logged
- * out (its `jti` in Redis), and the user must still be active with the session
- * version the token was issued under — a password change, reset or
- * deactivation ends every older token at once.
+ * R320: a valid signature isn't enough. The session must be under 90 days
+ * old (from signing in), must not have been logged out (its `jti` in Redis),
+ * and the user must still be active with the session version the token was
+ * issued under — a password change, reset or deactivation ends every older
+ * token at once.
  */
 @Injectable()
 export class JwtAuthGuard extends AuthGuard("jwt") {
@@ -39,6 +41,11 @@ export class JwtAuthGuard extends AuthGuard("jwt") {
     const claims = request.user;
     // Tokens from before R320 carry neither; they're simply signed in again.
     if (!claims.jti || typeof claims.sv !== "number") {
+      throw new UnauthorizedException("Session expired");
+    }
+
+    // R320: 90 days after signing in, however active — sign in again
+    if (pastAbsoluteLimit(claims, Date.now())) {
       throw new UnauthorizedException("Session expired");
     }
 

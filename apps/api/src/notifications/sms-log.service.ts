@@ -2,7 +2,8 @@ import { Injectable, Logger } from "@nestjs/common";
 import { PrismaService } from "../prisma/prisma.service.js";
 import { TenantContextService } from "../tenant/tenant-context.service.js";
 
-export type SmsKind = "otp" | "manage_link";
+// R610: reminders are counted as their own kind
+export type SmsKind = "otp" | "manage_link" | "reminder";
 
 /**
  * R500: one row per text the provider accepted, in the sending salon's

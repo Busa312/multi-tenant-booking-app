@@ -196,6 +196,16 @@ export async function fetchRescheduleAvailability(
   }
 }
 
+// R610: the customer confirms they're coming
+export async function confirmBooking(token: string): Promise<ActionResult<{ visit: Visit }>> {
+  try {
+    const visit = await getPublicApiClient().confirmAppointment(token);
+    return { ok: true, visit };
+  } catch (error) {
+    return toFailure(error);
+  }
+}
+
 export async function cancelBooking(token: string): Promise<ActionResult<{ visit: Visit }>> {
   try {
     const visit = await getPublicApiClient().cancelAppointment(token);

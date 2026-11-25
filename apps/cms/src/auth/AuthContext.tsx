@@ -101,11 +101,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => window.removeEventListener(SESSION_EXPIRED_EVENT, endSession);
   }, [endSession]);
 
-  // Expire on schedule too, so a tab left open overnight lands on the login
-  // screen by itself instead of waiting for the next request to fail.
+  // Check again when the session would expire, so a tab left open for a week
+  // lands on the login screen by itself. R320: the API renews a session in use
+  // (7 days from the last request), so the expiry known here may be stale —
+  // ask before ending it; a renewed session just carries on.
   useEffect(() => {
     if (!session) return undefined;
-    const timer = setTimeout(endSession, Math.min(Date.parse(session.expiresAt) - Date.now(), MAX_TIMEOUT_MS));
+    const timer = setTimeout(() => {
+      cmsApiClient.me().then(setSession, endSession);
+    }, Math.min(Date.parse(session.expiresAt) - Date.now(), MAX_TIMEOUT_MS));
     return () => clearTimeout(timer);
   }, [session, endSession]);
 

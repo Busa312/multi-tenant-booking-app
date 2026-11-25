@@ -29,6 +29,8 @@ export interface UpdateTenantBookingRulesRequest {
   changeCutoffHours?: number;
   // R440
   customersChooseProfessional?: boolean;
+  // R610: one of REMINDER_HOURS_OPTIONS
+  reminderHoursBefore?: number;
 }
 
 export interface UpdateTenantCopyRequest {

@@ -23,6 +23,8 @@ export interface Tenant {
   changeCutoffHours: number;
   // R440: false = the booking site never offers or names a professional
   customersChooseProfessional: boolean;
+  // R610: hours before a visit its reminder text goes out; 0 = off
+  reminderHoursBefore: number;
   /**
    * R490: the salon's subscription has lapsed, so its booking site takes no new
    * online bookings. Only on `GET /public/tenant`.
@@ -254,6 +256,8 @@ export interface AppointmentSummary extends Appointment {
   // R200: the customer visit this appointment is one segment of; null for a
   // staff-created booking. Other segments may belong to other professionals.
   visitId: string | null;
+  // R610: when the customer confirmed through their link; null = not (yet)
+  confirmedAt: string | null;
 }
 
 export interface AvailabilitySlot {
@@ -316,4 +320,6 @@ export interface Visit {
   // R160
   locationNameI18n: LocalizedText | null;
   segments: VisitSegment[];
+  /** R610: when the customer confirmed they're coming; null = not (yet). Cleared by a move. */
+  confirmedAt: string | null;
 }

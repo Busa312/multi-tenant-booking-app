@@ -27,7 +27,13 @@ import {
 import { enabledLocalesOf, validateLocalizedText, SUPPORTED_CONTENT_LOCALES } from "../common/i18n-validation.js";
 import { RevalidationService } from "./revalidation.service.js";
 import { isValidColor } from "./color-validation.js";
-import { BOOKING_ADVANCE_OPTIONS, BOOKING_NOTICE_OPTIONS, CHANGE_CUTOFF_OPTIONS, VISIT_GAP_OPTIONS } from "../booking/booking-rules.js";
+import {
+  BOOKING_ADVANCE_OPTIONS,
+  BOOKING_NOTICE_OPTIONS,
+  CHANGE_CUTOFF_OPTIONS,
+  REMINDER_HOURS_OPTIONS,
+  VISIT_GAP_OPTIONS,
+} from "../booking/booking-rules.js";
 
 const COPY_TITLE_MAX = 70;
 const COPY_DESCRIPTION_MAX = 200;
@@ -149,8 +155,8 @@ export class TenantController {
 
   /**
    * The online booking rules: R220 (the longest idle gap between two segments
-   * of a visit), R280–R300 (notice, horizon, change cutoff) and R440 (whether
-   * customers pick a professional). Only the offered values are accepted — the
+   * of a visit), R280–R300 (notice, horizon, change cutoff), R440 (whether
+   * customers pick a professional) and R610 (when the reminder text goes out). Only the offered values are accepted — the
    * database CHECKs are the backstop, this is the contract.
    */
   @Patch("booking-rules")
@@ -172,6 +178,8 @@ export class TenantController {
       minBookingNoticeMinutes: pick("minBookingNoticeMinutes", BOOKING_NOTICE_OPTIONS),
       maxBookingAdvanceDays: pick("maxBookingAdvanceDays", BOOKING_ADVANCE_OPTIONS),
       changeCutoffHours: pick("changeCutoffHours", CHANGE_CUTOFF_OPTIONS),
+      // R610
+      reminderHoursBefore: pick("reminderHoursBefore", REMINDER_HOURS_OPTIONS),
       customersChooseProfessional: pickBoolean(body?.customersChooseProfessional, "customersChooseProfessional"),
     };
     if (Object.values(data).every((value) => value === undefined)) {

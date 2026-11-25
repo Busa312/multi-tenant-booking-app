@@ -6,6 +6,7 @@ import { formatTimeLabel } from "../lib/tenantTime.js";
 import { BookingStatusPill } from "./BookingStatusPill.js";
 import { NoShowBadge } from "./NoShowBadge.js";
 import { BlockedBadge } from "./BlockedBadge.js";
+import { ConfirmedBadge } from "./ConfirmedBadge.js";
 import { Icon } from "./ui/index.js";
 
 interface AgendaNextUpProps {
@@ -27,6 +28,7 @@ export function AgendaNextUp({ appointment, timezone }: AgendaNextUpProps) {
       <div className="mb-2 flex flex-wrap items-center gap-x-2.5 gap-y-1">
         <span className="bg-accent px-1.5 py-0.5 text-xs font-bold text-accent-content">{t("dashboard.agendaNextUp")}</span>
         <BookingStatusPill status={appointment.status} />
+        <ConfirmedBadge appointment={appointment} />
         <NoShowBadge history={appointment.noShowHistory} />
         <BlockedBadge blocked={appointment.phoneBlocked} />
       </div>

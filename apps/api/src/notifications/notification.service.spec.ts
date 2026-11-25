@@ -138,3 +138,43 @@ describe("NotificationService (SMS via uBill)", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 });
+
+// R610: the reminder text
+describe("NotificationService.sendReminder", () => {
+  let fetchMock: jest.SpyInstance;
+  let smsLog: { record: jest.Mock };
+
+  beforeEach(() => {
+    fetchMock = jest.spyOn(globalThis, "fetch");
+    smsLog = { record: jest.fn().mockResolvedValue(undefined) };
+  });
+
+  afterEach(() => {
+    fetchMock.mockRestore();
+  });
+
+  it("sends it as an ordinary text and counts it as a reminder (R500)", async () => {
+    fetchMock.mockResolvedValue(reply(200, { statusID: 0, smsID: "1" }));
+    const service = new NotificationService(configOf(UBILL), smsLog as unknown as SmsLogService);
+
+    await expect(service.sendReminder("555 12 34 56", "Reminder: Tue 24 Nov 11:45. Confirm or cancel: https://a.ge/m/x")).resolves.toBe(true);
+
+    expect(JSON.parse((fetchMock.mock.calls[0] as [string, RequestInit])[1].body as string)).toMatchObject({ otp: false });
+    expect(smsLog.record).toHaveBeenCalledWith("reminder", 1);
+  });
+
+  it("sends nothing in production without a provider — a reminder would only replace the customer's link", async () => {
+    const service = new NotificationService(configOf({ NODE_ENV: "production" }), smsLog as unknown as SmsLogService);
+    expect(service.canSendReminders()).toBe(false);
+    await expect(service.sendReminder("555123456", "text")).resolves.toBe(false);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("logs it in development, so the flow can be followed without a provider", async () => {
+    const service = new NotificationService(configOf({ NODE_ENV: "development" }), smsLog as unknown as SmsLogService);
+    expect(service.canSendReminders()).toBe(true);
+    await expect(service.sendReminder("555123456", "text")).resolves.toBe(true);
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(smsLog.record).not.toHaveBeenCalled();
+  });
+});

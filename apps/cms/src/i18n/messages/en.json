@@ -73,6 +73,7 @@
     "errorInvalid": "Invalid business, email, or password",
     "sessionExpired": "Your session expired. Please sign in again.",
     "forgot": "Forgot password?",
+    "getApp": "Get the app",
     "errorLocked": "Too many sign-in attempts. Wait a few minutes and try again."
   },
   "setPassword": {
@@ -235,7 +236,9 @@
     "monthMore": "+{count} more",
     "noShowAll": "Didn't come to the last {count} visits",
     "noShowSome": "Missed {missed} of last {of} visits",
-    "noShowOnly": "Missed their only visit so far"
+    "noShowOnly": "Missed their only visit so far",
+    "confirmed": "Confirmed",
+    "confirmedTitle": "The customer confirmed through their reminder link"
   },
   "professionals": {
     "title": "Professionals",
@@ -431,7 +434,10 @@
     "durationDays": "{count} days",
     "copyToAllShort": "Copy to all days",
     "deleteTimeOff": "Delete time off",
-    "discardChanges": "Discard changes"
+    "discardChanges": "Discard changes",
+    "reminderLabel": "Reminder text to customers",
+    "reminderOff": "Off",
+    "reminderHint": "One SMS before each visit, with a link to confirm or cancel. Never sent between 21:00 and 09:00."
   },
   "branding": {
     "title": "Booking site colors",
@@ -708,8 +714,11 @@
     "failed": "Couldn't turn notifications on. Try again.",
     "installTitle": "Notifications on iPhone and iPad",
     "installIntro": "On iPhone and iPad, notifications work once the CMS is on your Home Screen.",
-    "installStep1": "In Safari, tap Share.",
-    "installStep2": "Choose “Add to Home Screen”, then tap Add.",
+    "installStepSafari": "Tap Share {share} in Safari's toolbar.",
+    "installStepSafariMore": "Tap ••• in Safari's toolbar, then Share {share}.",
+    "installStepChrome": "Tap Share {share} at the top, beside the address.",
+    "installStepOther": "Open your browser's menu and tap Share {share}.",
+    "installStep2": "Choose “Add to Home Screen” {add} (scroll down if you don't see it), then tap Add.",
     "installStep3": "Open the CMS from its Home Screen icon, sign in, and turn notifications on there.",
     "installNote": "You'll be notified when a customer books, moves or cancels online."
   },
@@ -722,7 +731,7 @@
     "installing": "Installing…",
     "installed": "The app is installed on this device. Open it from your home screen or app list.",
     "continue": "Continue",
-    "iosIntro": "On iPhone and iPad, add it from Safari:",
+    "iosIntro": "On iPhone and iPad, add it to your Home Screen:",
     "manualIntro": "Open your browser's menu and choose “Install app” or “Add to Home screen”. In Safari on a Mac: File → Add to Dock.",
     "manualOther": "Don't see it? Open this page in Chrome or Edge, or in Safari on an iPhone.",
     "forBusinesses": "The app is for businesses that already use {brand}: sign in with your work email."
